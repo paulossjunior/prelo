@@ -1,0 +1,1341 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prelo</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<style>
+/* Layout: estudo em coluna de leitura; protótipo como janela desktop larga (rola na horizontal em telas estreitas). */
+:root{
+  --bg:#f3f5f6; --surface:#ffffff; --surface-2:#eaeef0; --line:#d5dcdf; --fg:#172126; --muted:#5b6a71;
+  --accent:#0d6a73; --accent-soft:#d9eef0; --ink:#0b2a33;
+  --ins:#1f7a3d; --ins-bg:#dcf1e2; --del:#b4332b; --del-bg:#f8dfdc; --cmt:#9a6a00; --cmt-bg:#fbedc6;
+  --paper:#ffffff; --paper-fg:#1a1a1a; --code-bg:#fbfcfc;
+  --tok-fn:#7a3fb0; --tok-lbl:#a0521b; --tok-ref:#0d6a73; --tok-h:#0b2a33; --tok-cmt:#7d8a90;
+  --u-me:#0d6a73; --u-ana:#8a3ffc; --u-bruno:#d4621a; --u-carla:#2266cc;
+  --shadow:0 18px 50px -18px rgba(11,42,51,.35);
+  --f-display:"Bricolage Grotesque","IBM Plex Sans",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --f-paper:"Source Serif 4",Georgia,"Times New Roman",serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1517; --surface:#162024; --surface-2:#1d292e; --line:#2c3b41; --fg:#e3eaec; --muted:#93a3a9;
+  --accent:#4cc1c9; --accent-soft:#16383c; --ink:#e3eaec;
+  --ins:#6fd38f; --ins-bg:#173524; --del:#ff8a80; --del-bg:#3d1e1b; --cmt:#f0c35a; --cmt-bg:#3a2f12;
+  --paper:#f6f4ef; --paper-fg:#1a1a1a; --code-bg:#121b1f;
+  --tok-fn:#c79bff; --tok-lbl:#f0a46a; --tok-ref:#4cc1c9; --tok-h:#ffffff; --tok-cmt:#6f8087;
+  --u-me:#4cc1c9; --u-ana:#b48cff; --u-bruno:#ff9a52; --u-carla:#6aa5ff;
+  --shadow:0 18px 50px -18px rgba(0,0,0,.7); color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1517; --surface:#162024; --surface-2:#1d292e; --line:#2c3b41; --fg:#e3eaec; --muted:#93a3a9;
+  --accent:#4cc1c9; --accent-soft:#16383c; --ink:#e3eaec;
+  --ins:#6fd38f; --ins-bg:#173524; --del:#ff8a80; --del-bg:#3d1e1b; --cmt:#f0c35a; --cmt-bg:#3a2f12;
+  --paper:#f6f4ef; --paper-fg:#1a1a1a; --code-bg:#121b1f;
+  --tok-fn:#c79bff; --tok-lbl:#f0a46a; --tok-ref:#4cc1c9; --tok-h:#ffffff; --tok-cmt:#6f8087;
+  --u-me:#4cc1c9; --u-ana:#b48cff; --u-bruno:#ff9a52; --u-carla:#6aa5ff;
+  --shadow:0 18px 50px -18px rgba(0,0,0,.7); color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:16px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:32px 64px}
+.wrap{max-width:1240px;margin:0 auto}
+.read{max-width:760px}
+h1,h2,h3{font-family:var(--f-display);color:var(--ink);text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:clamp(2.2rem,5vw,3.4rem);font-weight:700;letter-spacing:-.02em}
+h2{font-size:1.7rem;font-weight:700;letter-spacing:-.01em}
+h3{font-size:1.15rem;font-weight:600}
+p{margin:0}
+a{color:var(--accent)}
+code,.mono{font-family:var(--f-mono);font-size:.88em}
+.eyebrow{font-family:var(--f-mono);font-size:.75rem;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
+header.top{display:grid;gap:14px;margin-bottom:28px}
+header.top .lede{font-size:1.15rem;color:var(--muted);max-width:68ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{font-size:.8rem;padding:3px 10px;border-radius:999px;background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---------- janela do protótipo ---------- */
+.stage{overflow-x:auto;padding-bottom:6px;margin-bottom:12px}
+.app{min-width:1080px;height:680px;display:grid;grid-template-rows:auto auto 1fr auto;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);overflow:hidden;font-size:13px;line-height:1.5}
+.titlebar{display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+.dots{display:flex;gap:6px}.dots i{width:11px;height:11px;border-radius:50%;background:var(--line);display:block}
+.proj{font-weight:600;color:var(--ink)}
+.proj small{font-weight:400;color:var(--muted);margin-left:6px}
+.spacer{flex:1}
+.presence{display:flex;align-items:center}
+.av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:600;color:#fff;border:2px solid var(--surface-2);margin-left:-6px;position:relative}
+.av.on::after{content:"";position:absolute;right:-2px;bottom:-2px;width:8px;height:8px;border-radius:50%;background:var(--ins);border:2px solid var(--surface-2)}
+.btn{font:inherit;font-size:12.5px;border:1px solid var(--line);background:var(--surface);color:var(--fg);padding:5px 11px;border-radius:7px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.sm{font-size:11.5px;padding:3px 8px}
+.btn.ok{color:var(--ins);border-color:color-mix(in srgb,var(--ins) 45%,var(--line))}
+.btn.no{color:var(--del);border-color:color-mix(in srgb,var(--del) 45%,var(--line))}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{font:inherit;font-size:12px;border:0;background:transparent;color:var(--muted);padding:5px 11px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.toolbar{display:flex;align-items:center;gap:10px;padding:6px 12px;border-bottom:1px solid var(--line);background:var(--surface)}
+.banner{font-size:12px;padding:3px 10px;border-radius:6px;background:var(--ins-bg);color:var(--ins)}
+.banner.read{background:var(--surface-2);color:var(--muted)}
+.selbar{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px}
+.body{display:grid;grid-template-columns:200px minmax(0,1.25fr) minmax(0,1fr) 300px;min-height:0}
+.side{border-right:1px solid var(--line);padding:10px;overflow:auto;background:var(--surface-2)}
+.side h4{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:6px 4px 6px}
+.tree,.outline{list-style:none;margin:0 0 14px;padding:0;display:grid;gap:1px}
+.tree li,.outline li{padding:3px 6px;border-radius:5px;display:flex;justify-content:space-between;gap:6px;color:var(--fg);cursor:default}
+.tree li.cur,.outline li.cur{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.tree .d{color:var(--muted)}
+.badge{font-size:10.5px;min-width:18px;text-align:center;padding:0 5px;border-radius:9px;background:var(--cmt-bg);color:var(--cmt);font-weight:600}
+.editor{overflow:auto;background:var(--code-bg);font-family:var(--f-mono);font-size:12.5px;line-height:1.7;padding:10px 0;border-right:1px solid var(--line)}
+.ln{display:grid;grid-template-columns:38px 1fr;gap:10px;padding-right:14px}
+.ln .n{color:var(--muted);text-align:right;user-select:none;opacity:.7}
+.ln .c{white-space:pre-wrap;word-break:break-word;min-height:1.7em}
+.t-h{color:var(--tok-h);font-weight:600}.t-fn{color:var(--tok-fn)}.t-lbl{color:var(--tok-lbl)}.t-ref{color:var(--tok-ref)}.t-cmt{color:var(--tok-cmt);font-style:italic}
+.s-ins{background:var(--ins-bg);color:var(--ins);text-decoration:underline;text-decoration-thickness:1.5px;text-underline-offset:3px;cursor:pointer}
+.s-del{background:var(--del-bg);color:var(--del);text-decoration:line-through;cursor:pointer}
+.s-cmt{background:var(--cmt-bg);border-bottom:2px solid var(--cmt);cursor:pointer}
+.s-ins.hot,.s-del.hot,.s-cmt.hot{outline:2px solid currentColor;outline-offset:1px;border-radius:2px}
+.s-cmt.hot{outline-color:var(--cmt)}
+.rcursor{display:inline-block;width:2px;height:1.2em;vertical-align:text-bottom;background:var(--u-bruno);position:relative;animation:blink 1s steps(2) infinite}
+.rcursor b{position:absolute;bottom:100%;left:-1px;font:600 10px/1.4 var(--f-body);color:#fff;background:var(--u-bruno);padding:0 5px;border-radius:3px 3px 3px 0;white-space:nowrap}
+@keyframes blink{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.rcursor{animation:none}}
+.preview{overflow:auto;background:var(--surface-2);padding:18px;display:grid;align-content:start;justify-items:center;gap:10px}
+.pvbar{display:flex;gap:8px;align-items:center;width:100%;justify-content:space-between;color:var(--muted);font-size:12px}
+.page{background:var(--paper);color:var(--paper-fg);width:100%;max-width:440px;padding:34px 34px 40px;box-shadow:0 2px 14px rgba(0,0,0,.18);font-family:var(--f-paper);font-size:11.5px;line-height:1.5;text-align:justify;hyphens:auto}
+.page h5{font-family:var(--f-paper);font-size:13px;font-weight:600;margin:0 0 8px;text-align:left}
+.page p{margin:0 0 7px;text-indent:1.2em}
+.page .ph{color:#777;font-size:10px;display:flex;justify-content:space-between;margin-bottom:16px;font-style:italic;text-indent:0}
+.page .p-ins{color:#1f7a3d;text-decoration:underline}
+.page .p-del{color:#b4332b;text-decoration:line-through}
+.page .p-cmt{background:#fbedc6}
+.page .pn{text-align:center;color:#777;font-size:10px;margin-top:18px;text-indent:0}
+.review{display:grid;grid-template-rows:auto 1fr;min-height:0;background:var(--surface)}
+.rtabs{display:flex;border-bottom:1px solid var(--line)}
+.rtabs button{flex:1;font:inherit;font-size:12.5px;padding:9px 6px;border:0;background:transparent;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent}
+.rtabs button[aria-selected="true"]{color:var(--ink);font-weight:600;border-bottom-color:var(--accent)}
+.rlist{overflow:auto;padding:10px;display:grid;gap:9px;align-content:start}
+.rhead{display:flex;justify-content:space-between;align-items:center;gap:6px;color:var(--muted);font-size:12px}
+.card{border:1px solid var(--line);border-radius:9px;padding:9px 10px;display:grid;gap:7px;background:var(--surface);border-left-width:3px}
+.card.k-ins,.card.k-rep{border-left-color:var(--ins)}.card.k-del{border-left-color:var(--del)}.card.k-cmt{border-left-color:var(--cmt)}
+.card.hot{box-shadow:0 0 0 2px var(--accent-soft)}
+.who{display:flex;align-items:center;gap:7px;font-size:12px}
+.who .av{margin:0;width:22px;height:22px;font-size:10px;border:0}
+.who b{color:var(--ink)}.who span{color:var(--muted)}
+.what{font-size:12.5px}
+.what q{quotes:none;font-family:var(--f-mono);font-size:11.5px;padding:0 3px;border-radius:3px}
+.what q.i{background:var(--ins-bg);color:var(--ins)}.what q.d{background:var(--del-bg);color:var(--del);text-decoration:line-through}
+.acts{display:flex;gap:6px;justify-content:flex-end}
+.msg{display:grid;gap:2px;font-size:12.5px}
+.msg + .msg{border-top:1px dashed var(--line);padding-top:6px}
+.reply{display:flex;gap:6px}
+.reply input{flex:1;min-width:0;font:inherit;font-size:12px;padding:4px 7px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--fg)}
+.empty{color:var(--muted);font-size:12.5px;text-align:center;padding:24px 8px}
+.hist{display:grid;gap:0}
+.hist .ev{display:grid;grid-template-columns:14px 1fr;gap:9px;padding:6px 0;font-size:12.5px}
+.hist .dot{width:9px;height:9px;border-radius:50%;margin-top:6px;background:var(--line)}
+.hist .ev.git .dot{background:var(--accent)}
+.hist small{color:var(--muted);display:block}
+.status{display:flex;gap:16px;align-items:center;padding:4px 12px;font-size:11.5px;color:var(--muted);background:var(--surface-2);border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.status .ok{color:var(--ins)}
+.editor.locked{opacity:.5;pointer-events:none;user-select:none}
+.seg button:disabled{opacity:.4;cursor:not-allowed}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.banner.warn{background:var(--cmt-bg);color:var(--cmt)}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.show{opacity:1}
+.note{font-size:13px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 18px}
+.legend{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:22px;height:12px;border-radius:2px}
+
+/* ---------- estudo ---------- */
+.study{display:grid;gap:56px;margin-top:64px}
+.study section{display:grid;gap:16px}
+.study p,.study li{max-width:68ch}
+.study ul,.study ol{margin:0;padding-left:1.2em;display:grid;gap:6px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:grid;gap:4px}
+.kpi b{font-family:var(--f-display);font-size:1.05rem;color:var(--ink)}
+.kpi span{color:var(--muted);font-size:.92rem}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:820px;font-size:.88rem}
+th,td{padding:9px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--f-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:500;background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+tr.us td{background:var(--accent-soft)}
+.y{color:var(--ins);font-weight:600}.n{color:var(--del)}.q{color:var(--muted)}
+.req{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+.req div{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.req h3{margin-bottom:8px}
+.req ul{font-size:.93rem}
+pre.code{background:var(--code-bg);border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;font-family:var(--f-mono);font-size:12.5px;line-height:1.6;margin:0;color:var(--fg)}
+.diagram{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;overflow-x:auto}
+.phases{list-style:none;padding:0!important;counter-reset:ph}
+.phases li{counter-increment:ph;display:grid;grid-template-columns:44px 1fr;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;max-width:none!important}
+.phases li::before{content:counter(ph);font-family:var(--f-display);font-weight:700;font-size:1.5rem;color:var(--accent);line-height:1}
+.phases b{color:var(--ink)}
+.risk{display:grid;gap:10px}
+.risk div{border-left:3px solid var(--cmt);padding:4px 0 4px 14px}
+.risk b{color:var(--ink)}
+.src{font-size:.9rem}
+.src li{word-break:break-word}
+footer{margin-top:56px;color:var(--muted);font-size:.85rem}
+
+/* ---------- fluxo de entrada ---------- */
+.flow{display:grid;gap:18px;margin-top:64px;scroll-margin-top:24px}
+.flow > p{max-width:68ch}
+.lanes{display:flex;flex-wrap:wrap;gap:8px 20px;font-size:.88rem;color:var(--muted)}
+.lane-k{display:inline-flex;align-items:center;gap:6px}
+.lane-k i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.screens{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:22px 18px}
+.step{display:grid;gap:9px;align-content:start;min-width:0}
+.step figcaption{display:grid;gap:3px;font-size:.9rem}
+.step .sn{display:flex;align-items:center;gap:8px;font-family:var(--f-mono);font-size:.74rem;letter-spacing:.06em;text-transform:uppercase}
+.step .sn b{font-family:var(--f-display);font-size:1.25rem;letter-spacing:0;color:var(--accent);line-height:1}
+.step .sn span{padding:1px 8px;border-radius:999px;font-weight:600}
+.who-owner{background:color-mix(in srgb,var(--u-me) 16%,transparent);color:var(--u-me)}
+.who-guest{background:color-mix(in srgb,var(--u-ana) 16%,transparent);color:var(--u-ana)}
+.step figcaption p{color:var(--muted)}
+.step.alt .scr{border-style:dashed}
+.scr{background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 28px -16px rgba(11,42,51,.4);overflow:hidden;font-size:12.5px;line-height:1.45;display:grid;grid-template-rows:auto 1fr;min-height:300px}
+.scr-bar{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface-2);border-bottom:1px solid var(--line);color:var(--muted);font-size:11.5px}
+.scr-bar .dots i{width:8px;height:8px}
+.scr-body{padding:14px;display:grid;gap:10px;align-content:start;position:relative}
+.scr h6{font-family:var(--f-display);font-size:1rem;margin:0;color:var(--ink);font-weight:600}
+.fld{display:grid;gap:3px}
+.fld label{font-size:11px;color:var(--muted)}
+.inp{border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--bg);color:var(--fg);font-size:12px;min-height:28px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.inp.focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.mini-seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.mini-seg span{flex:1;text-align:center;padding:4px 0;font-size:11.5px;color:var(--muted)}
+.mini-seg span.on{background:var(--accent-soft);color:var(--ink);font-weight:600}
+.tog{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
+.tog i{width:28px;height:16px;border-radius:9px;background:var(--accent);position:relative;flex:none}
+.tog i::after{content:"";position:absolute;right:2px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--surface)}
+.row{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+.fake{font-size:11.5px;padding:4px 10px;border-radius:6px;border:1px solid var(--line);color:var(--fg);background:var(--surface)}
+.fake.pri{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:600}
+.fake.ok{color:var(--ins);border-color:color-mix(in srgb,var(--ins) 45%,var(--line))}
+.fake.no{color:var(--del);border-color:color-mix(in srgb,var(--del) 45%,var(--line))}
+.codebox{font-family:var(--f-mono);font-size:11.5px;background:var(--code-bg);border:1px dashed var(--accent);border-radius:7px;padding:8px;color:var(--ink);word-break:break-all}
+.hint{font-size:11.5px;color:var(--muted)}
+.qr{width:96px;height:96px;display:grid;grid-template-columns:repeat(21,1fr);background:#fff;padding:5px;border-radius:4px;justify-self:center}
+.qr i{background:#0b2a33}.qr b{background:transparent}
+.swatches{display:flex;gap:6px}
+.swatches i{width:18px;height:18px;border-radius:50%;display:block}
+.swatches i.on{box-shadow:0 0 0 2px var(--surface),0 0 0 4px var(--fg)}
+.fp{font-family:var(--f-mono);font-size:11px;background:var(--surface-2);border-radius:5px;padding:4px 7px;color:var(--fg)}
+.home{display:grid;gap:6px}
+.home .opt{display:flex;justify-content:space-between;align-items:center;border:1px solid var(--line);border-radius:7px;padding:7px 9px}
+.home .opt.on{border-color:var(--accent);background:var(--accent-soft);color:var(--ink);font-weight:600}
+.chk{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.chk li{display:grid;grid-template-columns:18px 1fr;gap:8px;font-size:12px}
+.chk li small{display:block;color:var(--muted);font-size:11px}
+.chk .st{width:16px;height:16px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;margin-top:1px}
+.st.done{background:var(--ins-bg);color:var(--ins)}
+.st.run{border:2px solid var(--accent);border-right-color:transparent;animation:spin 1s linear infinite}
+.st.wait{border:2px solid var(--line)}
+.st.skip{background:var(--surface-2);color:var(--muted)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.st.run{animation:none}}
+.bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.notif{border:1px solid var(--line);border-left:3px solid var(--u-ana);border-radius:8px;padding:10px;display:grid;gap:7px;background:var(--surface);box-shadow:0 8px 20px -12px rgba(0,0,0,.35)}
+.ghost{opacity:.45;font-family:var(--f-mono);font-size:11px;display:grid;gap:3px}
+.ghost i{display:block;height:7px;border-radius:3px;background:var(--line)}
+.mini-ed{border:1px solid var(--line);border-radius:6px;background:var(--code-bg);font-family:var(--f-mono);font-size:10.5px;padding:7px;display:grid;gap:2px;color:var(--fg)}
+.mini-ed .s-ins{text-decoration:underline}
+.mini-status{display:flex;justify-content:space-between;font-size:10.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:6px}
+.arrow-note{font-size:.85rem;color:var(--muted);border-left:3px solid var(--line);padding:2px 0 2px 12px;max-width:68ch}
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <span class="eyebrow">Estudo e protótipo · editor desktop para Typst</span>
+    <h1>Prelo</h1>
+    <p class="lede">Um editor desktop para escrever artigos em Typst a várias mãos, com sugestões que se aceitam ou rejeitam, comentários em conversa e histórico ligado ao git. O protótipo abaixo é clicável; o estudo que o justifica vem logo depois.</p>
+    <div class="chips"><span class="chip">Typst 0.14</span><span class="chip">Tauri + Rust</span><span class="chip">CodeMirror 6</span><span class="chip">Yjs (CRDT)</span><span class="chip">iroh (P2P)</span><span class="chip">Tinymist</span><span class="chip">git</span></div>
+  </header>
+
+  <div class="stage" aria-label="Protótipo interativo do Prelo">
+    <div class="app" id="app">
+      <div class="titlebar">
+        <div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>
+        <div class="proj">sosym-continuum <small>santosjr-continuum.typ</small></div>
+        <div class="spacer"></div>
+        <div class="presence" id="presence"></div>
+        <button class="btn" id="btn-net">Simular offline</button>
+        <button class="btn" id="btn-save" title="Salvar e sincronizar (⌘S)">Salvar ⌘S</button>
+        <button class="btn" id="btn-share">Compartilhar</button>
+        <button class="btn primary" id="btn-export">Exportar PDF</button>
+      </div>
+      <div class="toolbar">
+        <div class="seg" role="group" aria-label="Modo de edição">
+          <button id="m-edit" aria-pressed="false">Editando</button>
+          <button id="m-suggest" aria-pressed="true">Sugerindo</button>
+          <button id="m-read" aria-pressed="false">Lendo</button>
+        </div>
+        <span class="banner" id="banner">Suas alterações viram sugestões para os coautores</span>
+        <div class="spacer"></div>
+        <div class="selbar" id="selbar">Selecione um trecho do código para comentar ou sugerir exclusão</div>
+        <button class="btn" id="btn-sim">Ver Bruno digitando</button>
+      </div>
+      <div class="body">
+        <aside class="side">
+          <h4>Arquivos</h4>
+          <ul class="tree">
+            <li class="cur">santosjr-continuum.typ</li>
+            <li>sn-bibliography.bib</li>
+            <li class="d">figures/</li>
+            <li class="d">Makefile</li>
+          </ul>
+          <h4>Estrutura</h4>
+          <ul class="outline" id="outline"></ul>
+        </aside>
+        <div class="editor" id="editor" aria-label="Código-fonte Typst"></div>
+        <div class="preview">
+          <div class="pvbar">
+            <span>Prévia · pág. 7</span>
+            <div class="seg" role="group" aria-label="Modo da prévia">
+              <button id="pv-mark" aria-pressed="true">Com marcações</button>
+              <button id="pv-clean" aria-pressed="false">Só aceito</button>
+            </div>
+          </div>
+          <div class="page" id="page"></div>
+        </div>
+        <aside class="review">
+          <div class="rtabs" role="tablist">
+            <button role="tab" id="t-rev" aria-selected="true">Revisão</button>
+            <button role="tab" id="t-hist" aria-selected="false">Histórico</button>
+          </div>
+          <div class="rlist" id="rlist"></div>
+        </aside>
+      </div>
+      <div class="status">
+        <span class="ok" id="st-comp">● Compilado em 41 ms</span>
+        <span id="st-net">● Sincronizado · P2P direto com 2 pessoas</span>
+        <span id="st-online">3 pessoas online</span>
+        <span>main · 0 commits a enviar</span>
+        <div class="spacer"></div>
+        <span>Ln 5, Col 212</span><span>UTF-8</span>
+      </div>
+    </div>
+  </div>
+  <div class="note">
+    <span class="legend"><i style="background:var(--ins-bg);border-bottom:2px solid var(--ins)"></i>inserção sugerida</span>
+    <span class="legend"><i style="background:var(--del-bg);border-bottom:2px solid var(--del)"></i>exclusão sugerida</span>
+    <span class="legend"><i style="background:var(--cmt-bg);border-bottom:2px solid var(--cmt)"></i>trecho comentado</span>
+    <span>Texto da seção Methodological Approach do seu artigo. Ana, Bruno e Carla são coautores fictícios.</span>
+  </div>
+
+  <section class="flow" id="fluxo">
+    <span class="eyebrow">Fluxo 1 · Entrada no projeto</span>
+    <h2>Como uma pessoa entra no projeto</h2>
+    <p>Exemplo: Paulo, dono do projeto <code>sosym-continuum</code>, convida Ana para revisar o artigo. Não há conta nem servidor. O convite carrega a chave do documento, e a conexão é feita direto entre os dois computadores.</p>
+    <div class="lanes">
+      <span class="lane-k"><i style="background:var(--u-me)"></i>Telas do dono (Paulo)</span>
+      <span class="lane-k"><i style="background:var(--u-ana)"></i>Telas da convidada (Ana)</span>
+      <span class="lane-k"><i style="border:1.5px dashed var(--muted)"></i>Caminho alternativo</span>
+    </div>
+    <div class="screens">
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Compartilhar sosym-continuum</div>
+          <div class="scr-body">
+            <h6>Convidar pessoas</h6>
+            <div class="fld"><label>Para quem (só para você lembrar)</label><div class="inp">Ana Reis</div></div>
+            <div class="fld"><label>Papel</label><div class="mini-seg"><span>Coautor</span><span class="on">Revisor</span><span>Leitor</span></div></div>
+            <div class="hint">Revisor só sugere e comenta. Nada entra no texto sem alguém aceitar.</div>
+            <div class="fld"><label>Validade do convite</label><div class="inp">7 dias · uso único</div></div>
+            <div class="tog">Exigir minha aprovação na entrada<i></i></div>
+            <div class="row"><span class="fake">Cancelar</span><span class="fake pri">Gerar convite</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>1</b><span class="who-owner">Dono</span></div><p>Paulo clica em Compartilhar e escolhe o papel de Ana.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Convite pronto</div>
+          <div class="scr-body">
+            <h6>Envie este código para Ana</h6>
+            <div class="codebox">prelo://join/sosym-continuum#K7QF-2MXD-9PLA-RW4C</div>
+            <div class="qr" id="qr" aria-label="QR code do convite (ilustração)"></div>
+            <div class="hint">O código contém a chave que decifra o documento. Mande por um canal privado, como e-mail ou mensagem direta.</div>
+            <div class="row"><span class="fake">Mostrar QR</span><span class="fake pri">Copiar código</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>2</b><span class="who-owner">Dono</span></div><p>O app gera um código de uso único. Paulo copia e envia por e-mail.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Prelo · primeira abertura</div>
+          <div class="scr-body">
+            <h6>Como os coautores vão ver você</h6>
+            <div class="fld"><label>Nome</label><div class="inp focus">Ana Reis</div></div>
+            <div class="fld"><label>Cor do cursor e das sugestões</label><div class="swatches"><i class="on" style="background:var(--u-ana)"></i><i style="background:var(--u-bruno)"></i><i style="background:var(--u-carla)"></i><i style="background:var(--ins)"></i><i style="background:var(--del)"></i></div></div>
+            <div class="fld"><label>Sua chave (criada agora, fica só neste computador)</label><span class="fp">ana · 5F2A 81C0 · 3B9E C91E</span></div>
+            <div class="hint">Não há conta nem senha. A chave identifica você em todos os projetos.</div>
+            <div class="row"><span class="fake pri">Continuar</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>3</b><span class="who-guest">Convidada</span></div><p>Ana instala o Prelo. Na primeira vez, escolhe nome e cor, e o app cria a chave dela.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Prelo</div>
+          <div class="scr-body">
+            <h6>Começar</h6>
+            <div class="home">
+              <div class="opt">Novo projeto Typst<span class="hint">⌘N</span></div>
+              <div class="opt">Abrir pasta ou repositório git<span class="hint">⌘O</span></div>
+              <div class="opt on">Entrar com convite<span class="hint">⌘J</span></div>
+            </div>
+            <div class="fld"><label>Cole o código recebido</label><div class="inp focus">prelo://join/sosym-continuum#K7QF-2MXD-9PLA-RW4C</div></div>
+            <div class="fld"><label>Salvar em</label><div class="inp">~/Documentos/sosym-continuum</div></div>
+            <div class="row"><span class="fake pri">Entrar</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>4</b><span class="who-guest">Convidada</span></div><p>Ana cola o código. Se clicar no link do e-mail, o app abre nesta tela com o código já preenchido.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Entrando em sosym-continuum</div>
+          <div class="scr-body">
+            <h6>Conectando</h6>
+            <ul class="chk">
+              <li><span class="st done">✓</span><div>Convite válido<small>Papel: revisora · expira em 7 dias</small></div></li>
+              <li><span class="st skip">–</span><div>Procurando na rede local<small>Ninguém do projeto nesta rede</small></div></li>
+              <li><span class="st done">✓</span><div>Conexão pela internet<small>Direta com Paulo, sem relay</small></div></li>
+              <li><span class="st run"></span><div>Aguardando Paulo aprovar<small>Confira com ele o código da sua chave: 5F2A…C91E</small></div></li>
+            </ul>
+          </div></div>
+        <figcaption><div class="sn"><b>5</b><span class="who-guest">Convidada</span></div><p>O app tenta primeiro a rede local, depois a internet, e só usa relay se precisar.</p></figcaption>
+      </figure>
+
+      <figure class="step alt">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Entrando em sosym-continuum</div>
+          <div class="scr-body">
+            <h6>Ninguém do projeto está online</h6>
+            <p class="hint">O convite é válido, mas nenhum computador com o projeto está ligado agora.</p>
+            <div class="home">
+              <div class="opt on">Avisar quando alguém entrar<span class="hint">padrão</span></div>
+              <div class="opt">Baixar pelo GitHub<span class="hint">precisa de acesso ao repositório</span></div>
+            </div>
+            <div class="hint">Pelo GitHub, Ana recebe o texto aceito e o arquivo de revisão. A edição em tempo real começa quando alguém ficar online.</div>
+          </div></div>
+        <figcaption><div class="sn"><b>5b</b><span class="who-guest">Convidada</span></div><p>Se Paulo e os outros coautores estiverem offline, Ana espera ou baixa pelo git.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>sosym-continuum · santosjr-continuum.typ</div>
+          <div class="scr-body">
+            <div class="ghost"><i style="width:90%"></i><i style="width:75%"></i><i style="width:84%"></i><i style="width:60%"></i></div>
+            <div class="notif">
+              <div class="who"><span class="av" style="background:var(--u-ana)">A</span><b>Ana Reis quer entrar</b></div>
+              <div class="hint">Papel: revisora · pelo convite enviado hoje<br>Chave: <span class="fp">5F2A 81C0 · 3B9E C91E</span></div>
+              <div class="row"><span class="fake no">Recusar</span><span class="fake ok">Aprovar</span></div>
+            </div>
+            <div class="ghost"><i style="width:70%"></i><i style="width:88%"></i></div>
+          </div></div>
+        <figcaption><div class="sn"><b>6</b><span class="who-owner">Dono</span></div><p>Paulo vê o pedido no editor, confere o código da chave com Ana e aprova.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Entrando em sosym-continuum</div>
+          <div class="scr-body">
+            <h6>Recebendo o projeto</h6>
+            <div class="fld"><label>Documento e sugestões · 1,2 MB</label><div class="bar"><i style="width:100%"></i></div></div>
+            <div class="fld"><label>Figuras · 118 de 131 arquivos</label><div class="bar"><i style="width:82%"></i></div></div>
+            <div class="fld"><label>Histórico git · 6 commits</label><div class="bar"><i style="width:100%"></i></div></div>
+            <div class="hint">Os dados vêm direto do computador de Paulo, criptografados. Ana já pode ler enquanto as figuras terminam.</div>
+          </div></div>
+        <figcaption><div class="sn"><b>7</b><span class="who-guest">Convidada</span></div><p>O texto chega primeiro. Figuras e histórico vêm em seguida.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>sosym-continuum · santosjr-continuum.typ</div>
+          <div class="scr-body">
+            <div class="row" style="justify-content:space-between"><span class="banner">Você entrou como revisora: suas alterações viram sugestões</span></div>
+            <div class="mini-ed">
+              <span><span class="t-h">= Methodological Approach</span></span>
+              <span>The research method adopted in this work</span>
+              <span>follows the #emph[Design Science…</span>
+            </div>
+            <div class="presence" style="justify-content:flex-end"><span class="av on" style="background:var(--u-me)">P</span><span class="av on" style="background:var(--u-ana)">A</span></div>
+            <div class="mini-status"><span>● Compilado em 39 ms</span><span>P2P · direto com Paulo</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>8</b><span class="who-guest">Convidada</span></div><p>Ana está no projeto. Os dois veem o cursor um do outro, e cada edição de Ana entra como sugestão.</p></figcaption>
+      </figure>
+    </div>
+    <p class="arrow-note">Da próxima vez, Ana só abre o projeto. O app reconecta sozinho a quem estiver online, sem novo convite. Paulo pode mudar o papel dela ou removê-la em Compartilhar; quem é removido deixa de receber as próximas atualizações.</p>
+  </section>
+
+  <section class="flow" id="revisao">
+    <span class="eyebrow">Fluxo 2 · Revisão</span>
+    <h2>Como aceitar sugestões, resolver e excluir comentários</h2>
+    <p>Sugestões e comentários funcionam de jeitos diferentes. Uma <b>sugestão</b> muda o texto e precisa ser aceita ou rejeitada. Um <b>comentário</b> não muda o texto; ele é <b>resolvido</b> quando o pedido foi atendido, que é o equivalente a "aceitar" um comentário. Comentários resolvidos podem ser reabertos ou excluídos.</p>
+    <div class="screens">
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Revisão · Methodological Approach</div>
+          <div class="scr-body">
+            <div class="mini-ed"><span>The research method adopted in this work <span class="s-del">follows</span><span class="s-ins">is grounded in</span> the #emph[Design…</span></div>
+            <div class="card k-rep">
+              <div class="who"><span class="av" style="background:var(--u-ana)">A</span><b>Ana Reis</b><span>substituição · linha 3</span></div>
+              <div class="what">Trocou <q class="d">follows</q> por <q class="i">is grounded in</q></div>
+              <div class="acts"><span class="fake no">Rejeitar ⌘⌫</span><span class="fake ok">Aceitar ⌘↵</span></div>
+            </div>
+            <div class="hint">Também dá para clicar no trecho marcado no código ou na prévia e usar os mesmos atalhos. ⌥↓ vai para a próxima sugestão.</div>
+          </div></div>
+        <figcaption><div class="sn"><b>1</b><span class="who-owner">Sugestão</span></div><p>Aceitar uma sugestão: o texto verde entra, o vermelho sai. Rejeitar faz o contrário.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Revisão · 4 sugestões</div>
+          <div class="scr-body">
+            <div class="fld"><label>Filtrar</label><div class="mini-seg"><span>Todas</span><span class="on">Ana</span><span>Bruno</span><span>Carla</span></div></div>
+            <div class="fld"><label>Onde</label><div class="inp">Seção 3 · Methodological Approach</div></div>
+            <div class="notif" style="border-left-color:var(--ins)">
+              <b>Aceitar 3 sugestões de Ana em Methodological Approach?</b>
+              <div class="hint">2 substituições e 1 inserção. A prévia mostra como fica o texto antes de confirmar.</div>
+              <div class="row"><span class="fake">Ver prévia</span><span class="fake ok">Aceitar 3</span></div>
+            </div>
+          </div></div>
+        <figcaption><div class="sn"><b>2</b><span class="who-owner">Sugestão</span></div><p>Aceitar em lote: filtre por pessoa e por seção. A confirmação aparece na própria tela, com a contagem.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Revisão</div>
+          <div class="scr-body">
+            <div class="card k-del">
+              <div class="who"><span class="av" style="background:var(--u-bruno)">B</span><b>Bruno Lima</b><span>exclusão · linha 7</span></div>
+              <div class="what">Excluiu <q class="d">]</q> em <q>#emph[Demonstration]</q></div>
+              <div class="hint" style="color:var(--del)">Esta sugestão quebra a compilação: o colchete de #emph fica aberto.</div>
+              <div class="acts"><span class="fake no">Rejeitar</span><span class="fake" style="opacity:.45">Aceitar</span></div>
+            </div>
+            <div class="hint">O app testa cada sugestão em segundo plano. Uma sugestão que não compila só pode ser aceita depois de corrigida.</div>
+          </div></div>
+        <figcaption><div class="sn"><b>3</b><span class="who-owner">Sugestão</span></div><p>Proteção: sugestões que quebrariam o artigo aparecem com aviso e o Aceitar desativado.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>sosym-continuum</div>
+          <div class="scr-body">
+            <div class="mini-ed"><span>The research method adopted in this work is grounded in the #emph[Design…</span></div>
+            <div class="notif" style="border-left-color:var(--accent)">
+              <b>3 sugestões aceitas</b>
+              <div class="row" style="justify-content:space-between"><span class="hint">Registrado no histórico</span><span class="fake">Desfazer</span></div>
+            </div>
+            <div class="fld"><label>Commit sugerido</label><div class="inp">Accept 3 suggestions from Ana in Methodological Approach</div></div>
+            <div class="row"><span class="fake pri">Fazer commit</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>4</b><span class="who-owner">Sugestão</span></div><p>Depois de aceitar: o texto fica normal, o histórico guarda quem sugeriu e quem aceitou, e o app propõe um commit.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Revisão</div>
+          <div class="scr-body">
+            <div class="card k-cmt">
+              <div class="who"><span class="av" style="background:var(--u-bruno)">B</span><b>Bruno Lima</b><span>linha 5</span></div>
+              <div class="what">Sobre <q>its evaluation is possible in a real…</q></div>
+              <div class="msg"><b style="color:var(--u-bruno);font-size:11.5px">Bruno Lima</b><span>Qual organização? Vale citar a seção do estudo de caso.</span></div>
+              <div class="msg"><b style="color:var(--u-me);font-size:11.5px">Paulo</b><span>Citei a Seção 5. @Bruno confere?</span></div>
+              <div class="acts"><span class="fake">⋯</span><span class="fake ok">Resolver</span></div>
+            </div>
+          </div></div>
+        <figcaption><div class="sn"><b>5</b><span class="who-guest">Comentário</span></div><p>Resolver um comentário: responda o que foi feito e clique em Resolver. O destaque some do texto e a conversa vai para Resolvidos.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Revisão · Resolvidos (3)</div>
+          <div class="scr-body">
+            <div class="mini-seg"><span>Abertos</span><span class="on">Resolvidos</span></div>
+            <div class="card" style="border-left-color:var(--line)">
+              <div class="who"><span class="av" style="background:var(--u-bruno)">B</span><b>Bruno Lima</b><span>resolvido por Paulo · hoje</span></div>
+              <div class="what">Qual organização? Vale citar a seção…</div>
+              <div class="acts"><span class="fake">Reabrir</span><span class="fake no">Excluir</span></div>
+            </div>
+            <div class="hint">Reabrir devolve o destaque ao trecho, se ele ainda existir.</div>
+          </div></div>
+        <figcaption><div class="sn"><b>6</b><span class="who-guest">Comentário</span></div><p>Resolvidos ficam guardados para consulta. Daqui dá para reabrir ou excluir.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Revisão</div>
+          <div class="scr-body">
+            <div class="card k-cmt">
+              <div class="who"><span class="av" style="background:var(--u-ana)">A</span><b>Ana Reis</b><span>linha 9</span></div>
+              <div class="what">Explique o ciclo de rigor em uma frase.</div>
+              <div class="notif" style="border-left-color:var(--del);box-shadow:none">
+                <b>Excluir esta conversa?</b>
+                <div class="hint">Some para todos os coautores. A exclusão fica registrada no histórico, sem o texto.</div>
+                <div class="row"><span class="fake">Cancelar</span><span class="fake no">Excluir conversa</span></div>
+              </div>
+            </div>
+          </div></div>
+        <figcaption><div class="sn"><b>7</b><span class="who-guest">Comentário</span></div><p>Excluir um comentário: menu ⋯ → Excluir, com confirmação no próprio cartão. Cada pessoa apaga as próprias mensagens; o dono pode excluir qualquer conversa.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Preparar submissão</div>
+          <div class="scr-body">
+            <h6>Antes de enviar à revista</h6>
+            <ul class="chk">
+              <li><span class="st done">✓</span><div>0 sugestões pendentes</div></li>
+              <li><span class="st wait"></span><div>2 comentários abertos<small>Resolva ou exclua para continuar</small></div></li>
+              <li><span class="st done">✓</span><div>Excluir 11 conversas resolvidas<small>Opcional · o histórico git continua com elas</small></div></li>
+            </ul>
+            <div class="hint">O PDF e o .typ exportados nunca levam comentários nem marcações.</div>
+            <div class="row"><span class="fake">PDF com comentários na margem</span><span class="fake pri">Exportar versão limpa</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>8</b><span class="who-owner">Submissão</span></div><p>Limpeza antes da submissão: o app lista o que está pendente e pode excluir todos os resolvidos de uma vez.</p></figcaption>
+      </figure>
+    </div>
+
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Ação</th><th>Quem pode</th><th>Onde</th><th>Atalho</th></tr></thead>
+        <tbody>
+          <tr><td>Aceitar ou rejeitar uma sugestão</td><td>Dono e coautores</td><td>Cartão no painel, ou clique no trecho no código ou na prévia</td><td class="mono">⌘↵ · ⌘⌫</td></tr>
+          <tr><td>Aceitar ou rejeitar em lote</td><td>Dono e coautores</td><td>Painel de revisão, com filtro por pessoa e seção</td><td class="mono">⇧⌘↵</td></tr>
+          <tr><td>Desfazer um aceite</td><td>Quem aceitou</td><td>Botão Desfazer no aviso, ou ⌘Z</td><td class="mono">⌘Z</td></tr>
+          <tr><td>Resolver comentário</td><td>Todos, menos leitor</td><td>Cartão do comentário</td><td class="mono">⌘⇧R</td></tr>
+          <tr><td>Reabrir comentário</td><td>Todos, menos leitor</td><td>Aba Resolvidos</td><td>–</td></tr>
+          <tr><td>Apagar a própria mensagem</td><td>Autor da mensagem</td><td>Menu ⋯ da mensagem</td><td>–</td></tr>
+          <tr><td>Excluir conversa inteira</td><td>Quem abriu a conversa e o dono</td><td>Menu ⋯ do cartão, ou aba Resolvidos</td><td>–</td></tr>
+          <tr><td>Excluir todos os resolvidos</td><td>Dono</td><td>Preparar submissão</td><td>–</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="arrow-note">No protótipo acima dá para testar: aceitar e rejeitar cada sugestão, filtrar por pessoa e aceitar em lote, resolver comentários, reabrir ou excluir os resolvidos, e excluir uma conversa aberta com confirmação no cartão.</p>
+  </section>
+
+  <section class="flow" id="offline">
+    <span class="eyebrow">Fluxo 3 · Offline e sincronização</span>
+    <h2>Trabalhar offline e só editar com os arquivos sincronizados</h2>
+    <p><b>Salvar (⌘S) sincroniza.</b> Com conexão, cada Salvar recebe o que os outros fizeram, envia o seu trabalho e grava um commit no git, em um ou dois segundos. Sem conexão, Salvar guarda no computador, e a sincronização acontece sozinha quando a conexão voltar.</p>
+    <p>Regra do projeto: <b>comentar e sugerir funcionam offline</b>. Tudo fica numa fila e vai para os outros quando a pessoa reconecta. <b>Editar o texto direto só é liberado com os arquivos sincronizados</b>: ao abrir o projeto ou ao voltar a ficar online, o app recebe primeiro as mudanças dos outros e mantém o editor em modo leitura até terminar.</p>
+    <div class="diagram">
+<pre class="mermaid">
+stateDiagram-v2
+  direction LR
+  [*] --> Verificando: abrir o projeto
+  Verificando --> Recebendo: há mudanças novas
+  Verificando --> Sincronizado: nada novo
+  Recebendo --> Sincronizado: tudo recebido
+  Sincronizado --> Recebendo: Salvar (⌘S)
+  Sincronizado --> Offline: perdeu a conexão
+  Offline --> Offline: Salvar (guarda local)
+  Offline --> Recebendo: reconectou
+  Sincronizado --> [*]: fechar (envia ao git)
+  note right of Recebendo: só leitura
+  note right of Sincronizado: edita, sugere e comenta
+  note right of Offline: comenta e sugere (fila)
+</pre>
+    </div>
+    <div class="tablebox">
+      <table>
+        <thead><tr><th>Estado</th><th>Ler</th><th>Comentar</th><th>Sugerir</th><th>Editar direto</th><th>Aceitar sugestões</th></tr></thead>
+        <tbody>
+          <tr><td><b>Verificando / Recebendo</b></td><td class="y">Sim</td><td class="n">Espera</td><td class="n">Espera</td><td class="n">Bloqueado</td><td class="n">Bloqueado</td></tr>
+          <tr><td><b>Sincronizado</b></td><td class="y">Sim</td><td class="y">Sim</td><td class="y">Sim</td><td class="y">Sim</td><td class="y">Sim</td></tr>
+          <tr><td><b>Offline</b></td><td class="y">Sim</td><td class="y">Sim, na fila</td><td class="y">Sim, na fila</td><td class="n">Bloqueado</td><td class="n">Bloqueado</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="screens">
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>sosym-continuum · abrindo</div>
+          <div class="scr-body">
+            <h6>Verificando versões</h6>
+            <ul class="chk">
+              <li><span class="st done">✓</span><div>GitHub · origin/main<small>2 commits novos de Bruno</small></div></li>
+              <li><span class="st done">✓</span><div>Ana está online<small>1 comentário e 1 sugestão novos</small></div></li>
+              <li><span class="st run"></span><div>Recebendo 4 alterações<small>O editor fica em modo leitura até terminar</small></div></li>
+            </ul>
+            <div class="bar"><i style="width:65%"></i></div>
+          </div></div>
+        <figcaption><div class="sn"><b>1</b><span class="who-owner">Abrir</span></div><p>Ao abrir, o app compara a sua cópia com quem está online e com o git. Se houver novidade, recebe antes de liberar a edição.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>sosym-continuum · santosjr-continuum.typ</div>
+          <div class="scr-body">
+            <div class="banner read">🔒 Recebendo alterações · edição liberada em instantes</div>
+            <div class="mini-ed" style="opacity:.55">
+              <span><span class="t-h">= Methodological Approach</span></span>
+              <span>The research method adopted in this work</span>
+              <span>is grounded in the #emph[Design Science…</span>
+            </div>
+            <div class="hint">Dá para ler e rolar o texto. Digitar, comentar e aceitar sugestões ficam desativados.</div>
+            <div class="mini-status"><span>Sincronizando 3 de 4</span><span>somente leitura</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>2</b><span class="who-owner">Bloqueio</span></div><p>Enquanto recebe, o editor mostra o texto, mas não aceita digitação. Isso evita editar em cima de uma versão antiga.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>sosym-continuum · santosjr-continuum.typ</div>
+          <div class="scr-body">
+            <div class="notif" style="border-left-color:var(--accent)">
+              <b>Sincronizado · edição liberada</b>
+              <div class="hint">Enquanto você estava fora: Bruno fez 2 commits, Ana deixou 1 comentário e 1 sugestão.</div>
+              <div class="row"><span class="fake">Ver o que mudou</span><span class="fake pri">Começar a editar</span></div>
+            </div>
+            <div class="mini-status"><span>● Sincronizado às 09:14</span><span>P2P · direto com Ana</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>3</b><span class="who-owner">Liberado</span></div><p>Com tudo recebido, o app mostra um resumo do que mudou e libera a edição.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>sosym-continuum · offline</div>
+          <div class="scr-body">
+            <div class="banner read">Offline desde 14:02 · você pode comentar e sugerir</div>
+            <div class="mini-seg"><span style="opacity:.4">Editando 🔒</span><span class="on">Sugerindo</span><span>Lendo</span></div>
+            <div class="mini-ed"><span>…an approach that uses <span class="s-cmt">networked ontologies</span> to integrate…</span></div>
+            <div class="hint">Editar direto volta quando os arquivos estiverem sincronizados. Suas sugestões serão revisadas pelos coautores, então não há risco de sobrescrever o trabalho deles.</div>
+          </div></div>
+        <figcaption><div class="sn"><b>4</b><span class="who-guest">Offline</span></div><p>Sem internet (no avião, por exemplo), a pessoa continua comentando e sugerindo. O modo Editando fica travado.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Fila de envio</div>
+          <div class="scr-body">
+            <h6>3 itens aguardando conexão</h6>
+            <ul class="chk">
+              <li><span class="st wait"></span><div>Comentário em "networked ontologies"<small>linha 5 · 14:10</small></div></li>
+              <li><span class="st wait"></span><div>Sugestão: inserir uma frase<small>linha 7 · 14:22</small></div></li>
+              <li><span class="st wait"></span><div>Resposta a Bruno<small>linha 5 · 14:31</small></div></li>
+            </ul>
+            <div class="hint">A fila fica salva no computador. Fechar o app não perde nada.</div>
+          </div></div>
+        <figcaption><div class="sn"><b>5</b><span class="who-guest">Fila</span></div><p>Tudo que foi feito offline espera na fila, com hora e linha.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Reconectando</div>
+          <div class="scr-body">
+            <h6>De volta online</h6>
+            <ul class="chk">
+              <li><span class="st done">✓</span><div>Recebido primeiro<small>1 sugestão de Bruno, 1 resolução de Paulo</small></div></li>
+              <li><span class="st done">✓</span><div>Fila enviada<small>3 itens seus chegaram a Paulo e Bruno</small></div></li>
+              <li><span class="st done">✓</span><div>Enviado ao git<small>Para quem abrir depois, mesmo sem ninguém online</small></div></li>
+            </ul>
+            <div class="row"><span class="fake pri">Edição liberada</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>6</b><span class="who-guest">Reconectar</span></div><p>Ao reconectar, a ordem é sempre a mesma: receber, enviar a fila, gravar no git e então liberar a edição.</p></figcaption>
+      </figure>
+
+      <figure class="step alt">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Revisão</div>
+          <div class="scr-body">
+            <div class="card k-cmt">
+              <div class="who"><span class="av" style="background:var(--u-bruno)">B</span><b>Trecho mudou enquanto você estava offline</b></div>
+              <div class="what">Seu comentário era sobre <q>networked ontologies</q>. Bruno trocou o trecho por <q class="i">an ontology network</q>.</div>
+              <div class="acts"><span class="fake">Excluir</span><span class="fake ok">Manter no trecho novo</span></div>
+            </div>
+          </div></div>
+        <figcaption><div class="sn"><b>6b</b><span class="who-guest">Conflito</span></div><p>Se o trecho comentado ou sugerido mudou, o item não é perdido. O app pergunta onde ele deve ficar.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>sosym-continuum · santosjr-continuum.typ</div>
+          <div class="scr-body">
+            <div class="row" style="justify-content:space-between"><span class="banner read">🔒 Salvando e sincronizando…</span><span class="fake" style="opacity:.6">Sincronizando…</span></div>
+            <ul class="chk">
+              <li><span class="st done">✓</span><div>Recebido<small>1 sugestão de Bruno</small></div></li>
+              <li><span class="st done">✓</span><div>Enviado<small>2 parágrafos editados, 1 comentário</small></div></li>
+              <li><span class="st run"></span><div>Commit no git<small>Prelo sync · Paulo · Methodological Approach</small></div></li>
+            </ul>
+            <div class="mini-status"><span>⌘S às 15:47</span><span>leva cerca de 1 s</span></div>
+          </div></div>
+        <figcaption><div class="sn"><b>7</b><span class="who-owner">Salvar</span></div><p>Clicar em Salvar ou apertar ⌘S sincroniza na hora: recebe, envia e grava no git. Durante esse segundo, o editor fica em leitura.</p></figcaption>
+      </figure>
+
+      <figure class="step">
+        <div class="scr"><div class="scr-bar"><div class="dots"><i></i><i></i><i></i></div>Fechando sosym-continuum</div>
+          <div class="scr-body">
+            <h6>Enviando antes de fechar</h6>
+            <div class="fld"><label>Suas alterações · 2 comentários, 1 sugestão</label><div class="bar"><i style="width:100%"></i></div></div>
+            <div class="fld"><label>Commit automático em prelo/sync</label><div class="inp">Prelo sync · Ana · 2 comments, 1 suggestion</div></div>
+            <div class="hint">Assim, quem abrir amanhã recebe o seu trabalho pelo git, mesmo com o seu computador desligado.</div>
+          </div></div>
+        <figcaption><div class="sn"><b>8</b><span class="who-guest">Fechar</span></div><p>Ao fechar, o app faz um último Salvar e grava as mudanças no git. Por isso a sincronização funciona mesmo que as pessoas nunca estejam online ao mesmo tempo.</p></figcaption>
+      </figure>
+    </div>
+    <p class="arrow-note">Decisão tomada aqui: offline só se comenta e sugere, porque sugestões passam por revisão e não sobrescrevem o trabalho de ninguém. Se o grupo quiser editar direto offline, basta liberar o modo Editando nesse estado; o Yjs junta as edições, mas os trechos alterados pelos dois lados precisariam de revisão manual.</p>
+    <p class="arrow-note">No protótipo: clique em "Salvar ⌘S" (ou aperte ⌘S) para ver a sincronização com bloqueio rápido e o commit no histórico. Depois clique em "Simular offline", comente ou sugira uma exclusão (vai para a fila), salve offline e clique em "Reconectar".</p>
+  </section>
+
+  <main class="study read">
+    <section>
+      <span class="eyebrow">1 · O problema</span>
+      <h2>Typst escreve bem, mas revisar a várias mãos ainda é difícil</h2>
+      <p>Typst compila em milissegundos e tem uma sintaxe mais limpa que a do LaTeX. Para um artigo com coautores e orientadores, porém, o trabalho que mais consome tempo é a revisão: alguém sugere uma frase, outro comenta uma figura, o autor principal aceita parte e rejeita o resto. Hoje esse ciclo acontece em ferramentas que não juntam tudo isso para Typst.</p>
+      <div class="kpis">
+        <div class="kpi"><b>Overleaf</b><span>Tem controle de alterações e papel de revisor, mas só para LaTeX.</span></div>
+        <div class="kpi"><b>Typst web app</b><span>Tem edição em tempo real e comentários (no plano Pro), sem controle de alterações documentado.</span></div>
+        <div class="kpi"><b>VS Code + Tinymist + git</b><span>Funciona offline e tem prévia ótima, mas revisão vira diff de git e comentário no código.</span></div>
+      </div>
+    </section>
+
+    <section>
+      <span class="eyebrow">2 · O que existe hoje</span>
+      <h2>Comparação das alternativas</h2>
+      <p>Levantamento feito em novembro de 2026 a partir da documentação de cada ferramenta. Onde a documentação não confirma um recurso, a célula diz "não verificado".</p>
+      <div class="tablebox">
+        <table>
+          <thead><tr><th>Ferramenta</th><th>Typst</th><th>Tempo real</th><th>Comentários</th><th>Controle de alterações</th><th>Offline / desktop</th><th>Git</th><th>Auto-hospedagem</th></tr></thead>
+          <tbody>
+            <tr><td><b>Overleaf</b></td><td class="n">Não</td><td class="y">Sim</td><td class="y">Sim, em todos os planos</td><td class="y">Sim, recurso premium; papel "pode revisar"</td><td class="n">Não</td><td>Sim, nos planos pagos</td><td>Community Edition, sem controle de alterações</td></tr>
+            <tr><td><b>Typst web app</b></td><td class="y">Sim</td><td class="y">Sim</td><td>Sim, se o dono do projeto for Pro; sem menções</td><td class="q">Não documentado</td><td class="n">Não</td><td class="q">Não verificado</td><td class="n">Não</td></tr>
+            <tr><td><b>VS Code + Tinymist + git</b></td><td class="y">Sim</td><td>Via Live Share</td><td class="n">Só comentários no código</td><td class="n">Só diff do git</td><td class="y">Sim</td><td class="y">Sim</td><td>Não se aplica</td></tr>
+            <tr><td><b>TeXlyre</b></td><td class="y">Sim, e LaTeX</td><td class="y">Sim</td><td class="q">Não verificado</td><td class="q">Não verificado</td><td class="y">Local-first, no navegador</td><td class="q">Não verificado</td><td class="y">Sim</td></tr>
+            <tr><td><b>Collabst · TINO</b></td><td class="y">Sim</td><td class="y">Sim</td><td>Collabst: sim</td><td class="q">Não verificado</td><td class="n">Web</td><td class="q">Não verificado</td><td class="y">Sim</td></tr>
+            <tr class="us"><td><b>Prelo (proposta)</b></td><td class="y">Sim</td><td class="y">Sim</td><td class="y">Sim, com menções e conversa</td><td class="y">Sim, com aceitar e rejeitar</td><td class="y">Sim, app desktop</td><td class="y">Sim, nativo</td><td class="y">Não precisa: conexão direta entre os computadores</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>A lacuna é clara: nenhuma opção documentada junta Typst, controle de alterações estilo Overleaf e trabalho offline com git. É esse o espaço do Prelo.</p>
+    </section>
+
+    <section>
+      <span class="eyebrow">3 · Requisitos</span>
+      <h2>O que a ferramenta precisa fazer</h2>
+      <div class="req">
+        <div><h3>Escrita</h3><ul><li>Editor com realce, autocompletar e erros do Tinymist</li><li>Prévia ao lado que atualiza enquanto se digita</li><li>Clique na prévia leva à linha do código, e o contrário</li><li>Bibliografia <code>.bib</code> e figuras no mesmo projeto</li></ul></div>
+        <div><h3>Revisão</h3><ul><li>Modos Editando, Sugerindo e Lendo</li><li>Aceitar ou rejeitar uma sugestão, todas de uma pessoa ou todas da seção</li><li>Comentários presos ao trecho, com respostas, menções e "resolver"</li><li>Prévia com marcações ou só com o texto aceito</li></ul></div>
+        <div><h3>Colaboração</h3><ul><li>Várias pessoas editando ao mesmo tempo, com cursores visíveis</li><li>Offline: comentar e sugerir ficam numa fila; editar direto só com os arquivos sincronizados</li><li>Ao abrir ou reconectar, recebe as mudanças dos outros antes de liberar a edição</li><li>Salvar (⌘S) sincroniza na hora: recebe, envia e grava no git</li><li>Ao fechar, faz um último Salvar para quem abrir depois</li><li>Papéis: dono, coautor, revisor (só sugere e comenta) e leitor</li><li>Convite por link</li></ul></div>
+        <div><h3>Entrega</h3><ul><li>Commit e push pelo próprio app, com mensagem sugerida</li><li>PDF final e PDF de diferenças entre duas versões</li><li>Exportar <code>.typ</code> limpo, sem marcas de revisão</li><li>Histórico com versões nomeadas ("Submissão 1", "Revisão R1")</li></ul></div>
+      </div>
+    </section>
+
+    <section>
+      <span class="eyebrow">4 · Arquitetura proposta</span>
+      <h2>Rust no núcleo, web na interface</h2>
+      <p>O app é um shell <b>Tauri</b>: interface em HTML/TypeScript e núcleo em Rust, o que dá instaladores leves para macOS, Windows e Linux. O compilador Typst e o Tinymist já são escritos em Rust, então rodam no mesmo processo, sem servidor externo.</p>
+      <div class="diagram">
+<pre class="mermaid">
+flowchart LR
+  subgraph Desktop["App desktop (Tauri)"]
+    UI["Interface<br/>CodeMirror 6 + painel de revisão"]
+    Y["Documento Yjs<br/>texto + sugestões + comentários"]
+    Core["Núcleo Rust<br/>yrs · Tinymist · typst"]
+    Git["git<br/>(gitoxide)"]
+    UI <--> Y
+    Y <--> Core
+    Core --> PV["Prévia SVG incremental"]
+    Core <--> Git
+    Core <--> Net["Rede P2P<br/>(iroh · mDNS)"]
+  end
+  Net <-- "atualizações CRDT<br/>direto, criptografado" --> Peer["App de outro coautor"]
+  Net -. "só para conectar,<br/>quando o NAT bloqueia" .-> Relay["Relay iroh<br/>(público ou próprio)"]
+  Git <-- "push / pull<br/>quem não está online junto" --> Remote["GitHub / GitLab"]
+</pre>
+      </div>
+      <ul>
+        <li><b>CodeMirror 6 + y-codemirror.next</b>: editor com cursores de outras pessoas e desfazer por usuário.</li>
+        <li><b>Yjs no front, yrs no Rust</b>: o mesmo documento CRDT nos dois lados. Edições simultâneas se fundem sem travar ninguém, também depois de horas offline.</li>
+        <li><b>Tinymist</b>: diagnósticos, autocompletar e a prévia SVG incremental, que só redesenha o que mudou.</li>
+        <li><b>Rede peer-to-peer</b>: cada app conversa direto com os apps dos coautores. Não existe servidor guardando o artigo; a seção a seguir explica como isso funciona.</li>
+        <li><b>git</b>: o arquivo <code>.typ</code> continua sendo a fonte de verdade no repositório. Cada commit grava o texto aceito; sugestões e comentários vão num arquivo à parte, <code>.prelo/review.json</code>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <span class="eyebrow">5 · Sem servidor</span>
+      <h2>Coautores conectados direto, computador a computador</h2>
+      <p>O Yjs junta as edições dentro de cada computador. Por isso não é preciso um servidor central para resolver conflitos. O que falta é um jeito de os computadores se encontrarem e trocarem dados, e isso depende de onde as pessoas estão.</p>
+      <div class="tablebox">
+        <table>
+          <thead><tr><th>Situação</th><th>Como conecta</th><th>Precisa de servidor?</th></tr></thead>
+          <tbody>
+            <tr><td><b>Mesma rede</b> (laboratório, Wi-Fi da universidade)</td><td>Os apps se descobrem por mDNS e conectam direto. Se a rede bloquear a descoberta, digita-se o endereço do colega.</td><td class="y">Nenhum</td></tr>
+            <tr><td><b>Internet, conexão direta possível</b></td><td>O iroh abre uma conexão QUIC e atravessa o NAT dos roteadores (hole punching).</td><td>Só um relay para o primeiro contato. Os dados vão direto depois.</td></tr>
+            <tr><td><b>Internet, rede muito fechada</b></td><td>O tráfego passa pelo relay do iroh, criptografado de ponta a ponta. O relay não consegue ler o artigo.</td><td>Um relay, público ou hospedado pelo grupo</td></tr>
+            <tr><td><b>Rede privada já existente</b> (Tailscale, ZeroTier, VPN da universidade)</td><td>Os computadores já se enxergam como se estivessem na mesma rede.</td><td class="y">Nenhum além da própria VPN</td></tr>
+            <tr><td><b>Ninguém online ao mesmo tempo</b></td><td>Quem editou faz push no git. Quem abre depois faz pull, e o Yjs junta o que mudou.</td><td>O GitHub ou GitLab que o grupo já usa</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>A limitação real do peer-to-peer é a última linha da tabela. Se a Ana edita à noite e você abre o app de manhã, nenhum computador ficou ligado para entregar as mudanças dela. O Prelo resolve isso com o git que o projeto já usa: o peer-to-peer cuida da edição simultânea, e o push e pull cuidam de quem trabalhou sozinho.</p>
+      <ul>
+        <li><b>Por que iroh</b>: é uma biblioteca Rust e roda no mesmo núcleo do Tauri, ao lado do yrs. Conecta pela chave pública de cada pessoa, sem depender de endereço IP.</li>
+        <li><b>Alternativas</b>: y-webrtc, que já vem pronto para Yjs mas precisa de um servidor de sinalização e de TURN em redes fechadas; e libp2p, que faz o mesmo que o iroh com mais complexidade.</li>
+        <li><b>Convite</b>: o dono gera um código com a chave do documento. Só quem tem o código consegue se conectar e decifrar as atualizações.</li>
+        <li><b>Servidor próprio continua possível</b>: um grupo que queira entrega mesmo sem ninguém online pode rodar um "par" sempre ligado, num computador do laboratório. Ele é só mais um participante, com o mesmo código do app.</li>
+      </ul>
+    </section>
+
+    <section>
+      <span class="eyebrow">6 · O ponto difícil</span>
+      <h2>Como guardar sugestões sem sujar o código Typst</h2>
+      <p>No Overleaf, o código-fonte fica limpo e as sugestões vivem numa camada à parte. O Prelo segue a mesma ideia. Uma sugestão é um atributo sobre um trecho do texto CRDT, nunca uma marcação dentro do <code>.typ</code>. Uma exclusão sugerida mantém o texto, marcado como "excluído", até alguém aceitar.</p>
+<pre class="code">// Trecho do documento Yjs (Y.Text com atributos)
+text.format(start, length, {
+  suggestion: { id: "s1", kind: "delete", author: "ana", at: "2026-11-18T14:02" }
+})
+text.insert(pos, "is grounded in", {
+  suggestion: { id: "s1", kind: "insert", author: "ana", at: "2026-11-18T14:02" }
+})
+
+// Comentário ancorado em posições relativas: continua no lugar certo
+// mesmo que alguém edite o texto antes dele
+comments.set("c1", {
+  start: Y.createRelativePositionFromTypeIndex(text, 212),
+  end:   Y.createRelativePositionFromTypeIndex(text, 275),
+  thread: [{ author: "bruno", body: "Qual organização?" }]
+})</pre>
+      <p>Para compilar, o núcleo gera duas versões do texto:</p>
+      <ul>
+        <li><b>Texto aceito</b>: ignora inserções pendentes e mantém o texto das exclusões pendentes. É o que vai para o git e para o PDF final.</li>
+        <li><b>Texto com marcações</b>: envolve cada sugestão em <code>#highlight</code> e <code>#strike</code> antes de compilar. Serve só para a prévia e para o PDF de revisão.</li>
+      </ul>
+      <p>Uma sugestão pode quebrar a sintaxe, por exemplo ao apagar um <code>]</code>. O núcleo compila a versão "aceito + esta sugestão" em segundo plano e marca o cartão com um aviso se ela não compilar. Assim ninguém aceita algo que quebra o artigo.</p>
+    </section>
+
+    <section>
+      <span class="eyebrow">7 · Para a submissão</span>
+      <h2>PDF de diferenças para a resposta aos revisores</h2>
+      <p>Revistas como a SoSyM costumam pedir, na resubmissão, uma versão com as mudanças marcadas. No LaTeX isso se faz com <code>latexdiff</code>; para Typst não há ferramenta equivalente consolidada. O Prelo compara duas versões nomeadas do histórico ("Submissão 1" e "Revisão R1"), aplica a diferença como sugestões temporárias e compila o resultado com marcações. A resposta aos revisores pode citar as mudanças pelo número de linha desse PDF.</p>
+    </section>
+
+    <section>
+      <span class="eyebrow">8 · Riscos e decisões em aberto</span>
+      <h2>O que ainda precisa ser decidido</h2>
+      <div class="risk">
+        <div><b>Edição fora do app.</b> Se alguém editar o <code>.typ</code> no VS Code e fizer push, o Prelo precisa transformar o diff em sugestões de um autor "externo". Ainda não está definido como tratar trechos que mudaram nos dois lados.</div>
+        <div><b>Redes que bloqueiam peer-to-peer.</b> Algumas redes corporativas e de universidades bloqueiam UDP. Nesses casos o tráfego passa sempre pelo relay. É preciso decidir se o grupo usa os relays públicos do iroh ou hospeda um próprio.</div>
+        <div><b>Bloqueio enquanto sincroniza.</b> A regra "só editar com os arquivos sincronizados" evita edições sobre versões antigas, mas o app só sabe o que recebeu de quem está online e do git. Se alguém trabalhou offline e ainda não reconectou, essas mudanças chegam depois. Por isso o app grava no git ao fechar, e um comentário ou sugestão sobre trecho que mudou é realocado com a ajuda do usuário, nunca descartado.</div>
+        <div><b>Sincronização lenta.</b> Um projeto com muitas figuras pode demorar a sincronizar. O bloqueio vale só para o texto: o documento chega primeiro, e as figuras terminam depois sem travar a edição.</div>
+        <div><b>Conteúdo gerado.</b> Texto que vem de funções ou de <code>#include</code> aparece na prévia mas não existe no arquivo aberto. Comentar na prévia precisa levar ao arquivo de origem.</div>
+        <div><b>Compatibilidade com o Typst web app.</b> Não há API pública documentada para sincronizar com projetos do typst.app. A interoperação ficaria pelo git.</div>
+        <div><b>Licenças.</b> Typst, Tinymist, Yjs e CodeMirror têm licenças permissivas (Apache-2.0 ou MIT), o que permite um app próprio. Vale confirmar a licença de cada versão usada.</div>
+      </div>
+    </section>
+
+    <section>
+      <span class="eyebrow">9 · Plano de construção</span>
+      <h2>Do editor local à revisão em tempo real</h2>
+      <ol class="phases">
+        <li><div><b>Editor local.</b> Tauri, CodeMirror 6, Tinymist, prévia SVG e sincronização código ↔ prévia. Já substitui o VS Code para quem só escreve.</div></li>
+        <li><div><b>Comentários e histórico.</b> Comentários em <code>.prelo/review.json</code>, commit e push pelo app, versões nomeadas. Colaboração ainda assíncrona, via git.</div></li>
+        <li><div><b>Tempo real sem servidor.</b> Documento Yjs, conexão direta na rede local (mDNS) e pela internet (iroh), convite por código, cursores e presença. Quem não está online junto sincroniza pelo git. Fila offline para comentários e sugestões, e edição liberada só após sincronizar.</div></li>
+        <li><div><b>Modo sugestão.</b> Sugestões como atributos, aceitar e rejeitar, prévia com marcações, aviso de sugestão que não compila, PDF de diferenças.</div></li>
+        <li><div><b>Papéis e convites.</b> Revisor que só sugere, leitor, convite por link, notificações por e-mail.</div></li>
+      </ol>
+    </section>
+
+    <section>
+      <span class="eyebrow">Fontes</span>
+      <ul class="src">
+        <li><a href="https://docs.overleaf.com/collaborating/track-changes" target="_blank" rel="noopener">Overleaf: Track changes</a></li>
+        <li><a href="https://www.overleaf.com/learn/how-to/Reviewing_and_reviewers_on_Overleaf" target="_blank" rel="noopener">Overleaf: Reviewing and reviewers</a></li>
+        <li><a href="https://docs.overleaf.com/collaborating/commenting" target="_blank" rel="noopener">Overleaf: Commenting</a></li>
+        <li><a href="https://typst.app/docs/web-app/comments/" target="_blank" rel="noopener">Typst: comentários no web app</a></li>
+        <li><a href="https://typst.app/blog/2025/folders-reviews" target="_blank" rel="noopener">Typst blog: pastas e compartilhamento só para revisão</a></li>
+        <li><a href="https://forum.typst.app/t/how-can-i-mention-other-users-in-comments/4048" target="_blank" rel="noopener">Fórum Typst: menções em comentários</a></li>
+        <li><a href="https://forum.typst.app/t/introducing-collabst-a-self-hosted-collaborative-workspace-for-typst/8856" target="_blank" rel="noopener">Collabst</a> · <a href="https://forum.typst.app/t/tino-a-collaborative-self-hosted-editing-platform-around-typst/8914" target="_blank" rel="noopener">TINO</a> · <a href="https://texlyre.github.io/texlyre/" target="_blank" rel="noopener">TeXlyre</a></li>
+        <li><a href="https://docs.yjs.dev/ecosystem/editor-bindings/codemirror" target="_blank" rel="noopener">Yjs: binding para CodeMirror</a></li>
+        <li><a href="https://github.com/Enter-tainer/typst-preview" target="_blank" rel="noopener">typst-preview (incorporado ao Tinymist)</a></li>
+        <li><a href="https://www.iroh.computer/" target="_blank" rel="noopener">iroh: conexões P2P em Rust</a> · <a href="https://github.com/yjs/y-webrtc" target="_blank" rel="noopener">y-webrtc</a> · <a href="https://libp2p.io/" target="_blank" rel="noopener">libp2p</a></li>
+      </ul>
+    </section>
+  </main>
+  <footer>Protótipo sem back-end: as ações funcionam só nesta página e voltam ao estado inicial ao recarregar.</footer>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+const USERS={
+  me:{name:'Você',ini:'V',color:'var(--u-me)',role:'dono'},
+  ana:{name:'Ana Reis',ini:'A',color:'var(--u-ana)',role:'revisora'},
+  bruno:{name:'Bruno Lima',ini:'B',color:'var(--u-bruno)',role:'coautor'},
+  carla:{name:'Carla Mota',ini:'C',color:'var(--u-carla)',role:'coautora'}
+};
+const ONLINE=['me','ana','bruno'];
+let lines=[
+ [{t:'x',v:'= Methodological Approach <methodological_approach>'}],
+ [],
+ [{t:'x',v:'The research method adopted in this work '},{t:'del',id:'s1',v:'follows'},{t:'ins',id:'s1',v:'is grounded in'},{t:'x',v:' the #emph[Design Science Research] (DSR) paradigm, which concerns extending “#emph[human and organizational capabilities by creating new and innovative artifacts]” #cite(<Hevn07>).'}],
+ [],
+ [{t:'x',v:'DSR was selected as the research approach because the object of study is an artifact---specifically, an approach that uses networked ontologies to integrate application data'},{t:'del',id:'s3',v:' to support data-driven software development in CSE'},{t:'x',v:'---and '},{t:'cmt',id:'c1',v:'its evaluation is possible in a real organizational environment'},{t:'x',v:'.'}],
+ [],
+ [{t:'x',v:'DSR comprises the following steps #cite(<Peffers2007>): (i) #emph[Problem identification and Motivation], (ii) #emph[Definition of the objectives for a solution], (iii) #emph[Design and Development], (iv) #emph[Demonstration], (v) #emph[Evaluation], and (vi) #emph[Communication].'},{t:'ins',id:'s2',v:' Each step was performed in three iterations, described in Section~@continuum.'}],
+ [],
+ [{t:'x',v:'These steps are organized in an iterative process, with three cycles: #emph[Relevance Cycle], #emph[Design Cycle], and '},{t:'cmt',id:'c2',v:'#emph[Rigor Cycle]'},{t:'x',v:' #cite(<Hevn07>).'}],
+ [],
+ [{t:'x',v:'// TODO: descrever o estudo na organização (Section 5)'}]
+];
+const meta={
+ s1:{author:'ana',when:'há 2 h',kind:'rep'},
+ s2:{author:'carla',when:'ontem',kind:'ins'},
+ s3:{author:'bruno',when:'há 20 min',kind:'del'},
+ c1:{author:'bruno',when:'há 1 h',kind:'cmt',msgs:[{a:'bruno',v:'Qual organização? Vale citar aqui a seção do estudo de caso.'},{a:'me',v:'Vou detalhar na Seção 5 e coloco a referência quando ela existir.'}]},
+ c2:{author:'ana',when:'há 3 h',kind:'cmt',msgs:[{a:'ana',v:'Explique o ciclo de rigor em uma frase. Revisores da SoSyM costumam pedir isso.'}]}
+};
+const resolved=[];
+const history=[
+ {git:true,t:'dd0c73c · Restore lists in Typst and sync LaTeX source',w:'Você · hoje, 10:12'},
+ {t:'Bruno sugeriu 1 exclusão em Methodological Approach',w:'há 20 min'},
+ {t:'Ana sugeriu 1 substituição e comentou "Rigor Cycle"',w:'há 2 h'},
+ {git:true,t:'d965c36 · Rework Introduction and reorder final sections',w:'Você · ontem'},
+ {t:'Carla sugeriu 1 inserção em Methodological Approach',w:'ontem'},
+ {git:true,t:'f0fcbff · Add Introduction and Methodological Approach',w:'Você · 12 nov'},
+ {t:'Versão nomeada "Rascunho para coautores"',w:'12 nov'}
+];
+let mode='suggest', pvMode='mark', tab='rev', seq=10, hot=null, who='all', confirmDel=null;
+const $=id=>document.getElementById(id);
+const esc=s=>s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function av(u){const x=USERS[u];return `<span class="av" style="background:${x.color}" title="${x.name}">${x.ini}</span>`}
+
+function hl(s,isHead){
+  if(isHead) return `<span class="t-h">${hlInner(s)}</span>`;
+  return hlInner(s);
+}
+function hlInner(s){
+  const re=/(\/\/.*$)|(#[a-zA-Z][\w.-]*)|(<[\w:.-]+>)|(@[\w:.-]*\w)/g;
+  let out='',i=0,m;
+  while((m=re.exec(s))){
+    out+=esc(s.slice(i,m.index));
+    const cls=m[1]?'t-cmt':m[2]?'t-fn':m[3]?'t-lbl':'t-ref';
+    out+=`<span class="${cls}">${esc(m[0])}</span>`; i=re.lastIndex;
+  }
+  return out+esc(s.slice(i));
+}
+function merge(){
+  lines=lines.map(l=>{const o=[];for(const s of l){if(!s.v)continue;const p=o[o.length-1];if(p&&p.t==='x'&&s.t==='x')p.v+=s.v;else o.push({...s});}return o;});
+}
+function renderEditor(){
+  const ed=$('editor');
+  ed.innerHTML=lines.map((l,li)=>{
+    const head=l.length&&l[0].v.startsWith('=');
+    const c=l.map((s,si)=>{
+      const inner=hl(s.v,head);
+      if(s.t==='x') return `<span data-l="${li}" data-s="${si}">${inner}</span>`;
+      const cls={ins:'s-ins',del:'s-del',cmt:'s-cmt'}[s.t];
+      const who=meta[s.id]?USERS[meta[s.id].author].name:'';
+      return `<span class="${cls}${hot===s.id?' hot':''}" data-id="${s.id}" title="${who}">${inner}</span>`;
+    }).join('');
+    const cur=(sim&&sim.line===li)?`<span class="rcursor"><b>Bruno</b></span>`:'';
+    return `<div class="ln"><span class="n">${li+1}</span><span class="c">${c}${cur}</span></div>`;
+  }).join('');
+}
+const CITE={Hevn07:'14',Peffers2007:'27'};
+const SEC={continuum:'4',methodological_approach:'3'};
+function toPaper(raw){
+  let s=esc(raw);
+  s=s.replace(/#emph\[([^\]]*)\]/g,'<em>$1</em>')
+     .replace(/#cite\(&lt;([\w:.-]+)&gt;\)/g,(m,k)=>'['+(CITE[k]||'?')+']')
+     .replace(/~@([\w:.-]*\w)/g,(m,k)=>'&nbsp;'+(SEC[k]||'?'))
+     .replace(/@([\w:.-]*\w)/g,(m,k)=>SEC[k]||'?')
+     .replace(/---/g,'—');
+  return s;
+}
+function renderPage(){
+  const parts=[`<div class="ph"><span>From a Continuous Software Engineering Ontology (sub)Network…</span><span>7</span></div>`];
+  lines.forEach(l=>{
+    if(!l.length) return;
+    const first=l[0].v;
+    if(first.startsWith('//')) return;
+    if(first.startsWith('= ')){parts.push(`<h5>3&nbsp;&nbsp;${esc(first.replace(/^=\s*/,'').replace(/\s*<[^>]+>\s*$/,''))}</h5>`);return;}
+    let raw='',spans=[];
+    l.forEach(s=>{
+      if(pvMode==='clean'){ if(s.t==='ins') return; raw+=s.v; return; }
+      if(s.t==='x'){raw+=s.v;return;}
+      spans.push({t:s.t,id:s.id}); raw+=''+(spans.length-1)+''+s.v+'';
+    });
+    let h=toPaper(raw).replace(/(\d+)/g,(m,i)=>{const sp=spans[+i];return `<span class="p-${sp.t}">`}).replace(//g,'</span>');
+    parts.push(`<p>${h}</p>`);
+  });
+  parts.push('<div class="pn">7</div>');
+  $('page').innerHTML=parts.join('');
+}
+function pending(){
+  const seen={};const items=[];
+  lines.forEach((l,li)=>l.forEach(s=>{if(s.id&&!seen[s.id]){seen[s.id]=1;items.push({id:s.id,line:li});}}));
+  return items;
+}
+function describe(id){
+  const segs=[];lines.forEach(l=>l.forEach(s=>{if(s.id===id)segs.push(s)}));
+  const d=segs.find(s=>s.t==='del'),i=segs.find(s=>s.t==='ins');
+  const q=(c,v)=>`<q class="${c}">${esc(v.length>60?v.slice(0,57)+'…':v)}</q>`;
+  if(d&&i) return `Trocou ${q('d',d.v)} por ${q('i',i.v)}`;
+  if(i) return `Inseriu ${q('i',i.v)}`;
+  if(d) return `Excluiu ${q('d',d.v)}`;
+  const c=segs[0]; return c?`Sobre ${q('',c.v)}`:'';
+}
+function renderReview(){
+  const L=$('rlist');
+  if(tab==='hist'){
+    L.innerHTML=`<div class="rhead"><span>Linha do tempo do projeto</span><button class="btn sm" id="btn-diff">PDF de diferenças</button></div><div class="hist">`+
+      history.map(h=>`<div class="ev${h.git?' git':''}"><span class="dot"></span><div>${esc(h.t)}<small>${esc(h.w)}</small></div></div>`).join('')+`</div>`;
+    $('btn-diff').onclick=()=>toast('Compara "Rascunho para coautores" com a versão atual e gera o PDF marcado');
+    return;
+  }
+  const all=pending();
+  const authors=[...new Set(all.map(x=>meta[x.id].author))];
+  if(who!=='all'&&!authors.includes(who)) who='all';
+  const items=all.filter(x=>who==='all'||meta[x.id].author===who);
+  const sugg=items.filter(x=>meta[x.id].kind!=='cmt').length;
+  const allLabel=who==='all'?'Aceitar todas':`Aceitar ${sugg} de ${USERS[who].name.split(' ')[0]}`;
+  let h=`<div class="seg" role="group" aria-label="Filtrar por pessoa" style="justify-self:start"><button data-who="all" aria-pressed="${who==='all'}">Todas</button>${authors.map(u=>`<button data-who="${u}" aria-pressed="${who===u}">${USERS[u].name.split(' ')[0]}</button>`).join('')}</div>`;
+  h+=`<div class="rhead"><span>${sugg} sugest${sugg===1?'ão':'ões'} · ${items.length-sugg} conversa${items.length-sugg===1?'':'s'}</span>${sugg&&mode!=='read'?`<button class="btn sm ok" id="btn-all">${allLabel}</button>`:''}</div>`;
+  if(!items.length) h+=`<div class="empty">Nada pendente${who==='all'?'':' desta pessoa'} nesta seção. Selecione um trecho no código para comentar.</div>`;
+  items.forEach(({id,line})=>{
+    const m=meta[id],u=USERS[m.author];
+    if(m.kind==='cmt'){
+      h+=`<div class="card k-cmt${hot===id?' hot':''}" data-card="${id}">
+        <div class="who">${av(m.author)}<b>${u.name}</b><span>linha ${line+1} · ${m.when}</span></div>
+        <div class="what">${describe(id)}</div>
+        ${m.msgs.map(x=>`<div class="msg"><b style="color:${USERS[x.a].color};font-size:11.5px">${USERS[x.a].name}</b><span>${esc(x.v)}</span></div>`).join('')}
+        <div class="reply"><input id="r-${id}" placeholder="Responder… use @ para mencionar" aria-label="Responder ao comentário"><button class="btn sm" data-reply="${id}">Enviar</button></div>
+        ${confirmDel===id?`<div class="notif" style="border-left-color:var(--del);box-shadow:none"><b>Excluir esta conversa?</b><span class="hint">Some para todos os coautores. O histórico registra a exclusão, sem o texto.</span><div class="acts"><button class="btn sm" data-delno="${id}">Cancelar</button><button class="btn sm no" data-delyes="${id}">Excluir conversa</button></div></div>`
+        :`<div class="acts"><button class="btn sm no" data-del="${id}">Excluir</button><button class="btn sm ok" data-resolve="${id}">Resolver</button></div>`}
+      </div>`;
+    } else {
+      const roleNote=m.kind==='rep'?'substituição':m.kind==='ins'?'inserção':'exclusão';
+      h+=`<div class="card k-${m.kind}${hot===id?' hot':''}" data-card="${id}">
+        <div class="who">${av(m.author)}<b>${u.name}</b><span>${roleNote} · linha ${line+1} · ${m.when}</span></div>
+        <div class="what">${describe(id)}</div>
+        ${mode==='read'?'':`<div class="acts"><button class="btn sm no" data-reject="${id}">Rejeitar</button><button class="btn sm ok" data-accept="${id}">Aceitar</button></div>`}
+      </div>`;
+    }
+  });
+  if(resolved.length){
+    h+=`<div class="rhead" style="margin-top:6px"><span>Resolvidos (${resolved.length})</span></div>`;
+    resolved.forEach(r=>{
+      const m=meta[r.id];
+      h+=`<div class="card" style="border-left-color:var(--line)">
+        <div class="who">${av(m.author)}<b>${USERS[m.author].name}</b><span>resolvido por você · ${r.when}</span></div>
+        <div class="what">${esc(m.msgs.length?m.msgs[0].v:r.v)}</div>
+        <div class="acts"><button class="btn sm no" data-rdel="${r.id}">Excluir</button><button class="btn sm" data-reopen="${r.id}">Reabrir</button></div>
+      </div>`;
+    });
+  }
+  L.innerHTML=h;
+  const ba=$('btn-all'); if(ba) ba.onclick=()=>{if(!online||syncing){toast(OFF_MSG);return;}const ids=items.filter(x=>meta[x.id].kind!=='cmt').map(x=>x.id);ids.forEach(id=>apply(id,true,true));refresh();toast(`${ids.length} sugest${ids.length===1?'ão aceita':'ões aceitas'}`)};
+}
+function anchorOf(id){let r=null;lines.forEach((l,li)=>l.forEach(s=>{if(s.id===id&&s.t==='cmt')r={l:li,v:s.v};}));return r;}
+function dropComment(id){
+  lines=lines.map(l=>l.map(s=>s.id===id?{t:'x',v:s.v}:s)); merge();
+  const m=meta[id]; enqueue(); history.unshift({t:`Você excluiu uma conversa de ${USERS[m.author].name}`,w:'agora'});
+  delete meta[id]; confirmDel=null; refresh(); toast('Conversa excluída');
+}
+function reopen(id){
+  const i=resolved.findIndex(r=>r.id===id); if(i<0) return;
+  const r=resolved[i], l=lines[r.l]||[];
+  const si=l.findIndex(s=>s.t==='x'&&s.v.includes(r.v));
+  if(si<0){toast('O trecho comentado mudou. Comente de novo no texto atual.');return;}
+  const s=l[si], k=s.v.indexOf(r.v);
+  l.splice(si,1,{t:'x',v:s.v.slice(0,k)},{t:'cmt',id,v:r.v},{t:'x',v:s.v.slice(k+r.v.length)}); merge();
+  resolved.splice(i,1); history.unshift({t:'Você reabriu uma conversa',w:'agora'}); hot=id; refresh(); toast('Conversa reaberta');
+}
+function apply(id,accept,silent){
+  if(syncing){toast('Aguarde a sincronização terminar');return;}
+  if(!online&&meta[id]&&meta[id].kind!=='cmt'){toast(OFF_MSG);return;}
+  if(meta[id]&&meta[id].kind==='cmt') enqueue();
+  if(meta[id]&&meta[id].kind==='cmt'){const a=anchorOf(id); if(a) resolved.unshift({id,l:a.l,v:a.v,when:'agora'});}
+  lines=lines.map(l=>l.flatMap(s=>{
+    if(s.id!==id) return [s];
+    if(s.t==='ins') return accept?[{t:'x',v:s.v}]:[];
+    if(s.t==='del') return accept?[]:[{t:'x',v:s.v}];
+    if(s.t==='cmt') return [{t:'x',v:s.v}];
+    return [s];
+  }));
+  merge();
+  const m=meta[id];
+  if(m.kind==='cmt'){history.unshift({t:`Você resolveu o comentário de ${USERS[m.author].name}`,w:'agora'});}
+  else history.unshift({t:`Você ${accept?'aceitou':'rejeitou'} a sugestão de ${USERS[m.author].name}`,w:'agora'});
+  if(!silent){refresh();toast(m.kind==='cmt'?'Comentário resolvido':accept?'Sugestão aceita':'Sugestão rejeitada');}
+}
+function renderOutline(){
+  const n=pending().length;
+  const secs=[['1','Introduction'],['2','Background'],['3','Methodological Approach',n,true],['4','Continuum Overview',2],['5','Using Continuum…'],['6','Related Work',1],['7','Conclusion']];
+  $('outline').innerHTML=secs.map(([k,t,c,cur])=>`<li class="${cur?'cur':''}"><span>${k} ${t}</span>${c?`<span class="badge">${c}</span>`:''}</li>`).join('');
+}
+function renderPresence(){
+  $('presence').innerHTML=Object.keys(USERS).map(u=>`<span class="av${ONLINE.includes(u)?' on':''}" style="background:${USERS[u].color}" title="${USERS[u].name} · ${USERS[u].role}${ONLINE.includes(u)?' · online':''}">${USERS[u].ini}</span>`).join('');
+}
+function compileStatus(){$('st-comp').textContent='● Compilado em '+(28+Math.floor(Math.random()*30))+' ms';}
+function refresh(){renderEditor();renderPage();renderReview();renderOutline();compileStatus();}
+
+function setMode(m){
+  if(m==='edit'&&(!online||syncing)){toast('Editar direto só com os arquivos sincronizados');return;}
+  mode=m;
+  ['edit','suggest','read'].forEach(k=>$('m-'+k).setAttribute('aria-pressed',k===m));
+  paintBanner(); clearSel(); renderReview();
+}
+function paintBanner(){
+  const b=$('banner');
+  if(syncing){b.className='banner read';b.textContent='🔒 Recebendo alterações · edição liberada em instantes';return;}
+  if(!online){b.className='banner warn';b.textContent=`Offline · comentar e sugerir vão para a fila (${queue})`;return;}
+  b.className='banner'+(mode==='read'?' read':'');
+  b.textContent=mode==='suggest'?'Suas alterações viram sugestões para os coautores':mode==='edit'?'Suas alterações entram direto no texto':'Só leitura: dá para comentar, não para editar';
+}
+let online=true, syncing=false, queue=0;
+const OFF_MSG='Aceitar ou rejeitar muda o texto: fica disponível depois de sincronizar';
+function enqueue(){ if(online) return; queue++; netStatus(); paintBanner(); }
+function netStatus(){
+  const s=$('st-net');
+  s.textContent=syncing?'◌ Recebendo alterações…':online?'● Sincronizado · P2P direto com 2 pessoas':`○ Offline · ${queue} ${queue===1?'item':'itens'} na fila`;
+  $('m-edit').disabled=!online||syncing;
+  $('btn-sim').disabled=!online||syncing||!!sim;
+  $('btn-net').textContent=online?'Simular offline':'Reconectar';
+  $('btn-net').disabled=syncing;
+  $('btn-save').disabled=syncing;
+  $('btn-save').textContent=syncing?'Sincronizando…':'Salvar ⌘S';
+  $('editor').classList.toggle('locked',syncing);
+}
+$('btn-net').onclick=()=>{
+  if(online){
+    online=false; if(mode==='edit'){mode='suggest';['edit','suggest','read'].forEach(k=>$('m-'+k).setAttribute('aria-pressed',k==='suggest'));}
+    netStatus(); paintBanner(); renderReview(); toast('Offline: comente e sugira à vontade, tudo vai para a fila');
+    return;
+  }
+  online=true; doSync('reconnect');
+};
+let injected=false, saves=0;
+function save(){
+  if(syncing) return;
+  if(!online){toast(`Salvo neste computador. ${queue} ${queue===1?'item vai':'itens vão'} para os outros quando a conexão voltar.`);return;}
+  doSync('save');
+}
+$('btn-save').onclick=save;
+document.addEventListener('keydown',e=>{if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='s'){e.preventDefault();save();}});
+function doSync(reason){
+  syncing=true; netStatus(); paintBanner(); renderReview();
+  setTimeout(()=>{
+    let got=0;
+    if(!injected){
+      injected=true;
+      // recebe primeiro: uma sugestão de Bruno e um comentário de Ana feitos por eles enquanto isso
+      const id1='s'+(++seq), id2='c'+(++seq);
+      const l8=lines[8]; if(l8){l8.push({t:'ins',id:id1,v:' Table 2 summarizes how each cycle was applied.'});got++;}
+      meta[id1]={author:'bruno',when:'recebida agora',kind:'ins'};
+      const l4=lines[4], si=l4?l4.findIndex(s=>s.t==='x'&&s.v.includes('networked ontologies')):-1;
+      if(si>=0){const s=l4[si],k=s.v.indexOf('networked ontologies');l4.splice(si,1,{t:'x',v:s.v.slice(0,k)},{t:'cmt',id:id2,v:'networked ontologies'},{t:'x',v:s.v.slice(k+20)});
+        meta[id2]={author:'ana',when:'recebido agora',kind:'cmt',msgs:[{a:'ana',v:'Use "ontology network", como no resto do artigo.'}]};got++;}
+      merge();
+    }
+    const sent=queue; queue=0; syncing=false; saves++;
+    const commit=(0x3f1a2c+saves*7919).toString(16).slice(0,7);
+    history.unshift({git:true,t:`${commit} · Prelo sync (${reason==='save'?'salvar':'reconectar'})`,w:'Você · agora'});
+    if(got) history.unshift({t:`Recebidas ${got} alterações de Bruno e Ana`,w:'agora'});
+    netStatus(); paintBanner(); refresh();
+    const parts=[];
+    if(got) parts.push(`Recebidas ${got} alterações de Bruno e Ana`);
+    else parts.push('Nada novo dos coautores');
+    if(sent) parts.push(`enviados ${sent} ${sent===1?'item':'itens'} da fila`);
+    parts.push(`gravado no git (${commit})`);
+    toast((reason==='save'?'Salvo e sincronizado: ':'Reconectado: ')+parts.join(', ')+'.');
+  },reason==='save'?1100:1800);
+}
+$('m-edit').onclick=()=>setMode('edit');
+$('m-suggest').onclick=()=>setMode('suggest');
+$('m-read').onclick=()=>setMode('read');
+$('pv-mark').onclick=()=>{pvMode='mark';$('pv-mark').setAttribute('aria-pressed','true');$('pv-clean').setAttribute('aria-pressed','false');renderPage();};
+$('pv-clean').onclick=()=>{pvMode='clean';$('pv-clean').setAttribute('aria-pressed','true');$('pv-mark').setAttribute('aria-pressed','false');renderPage();};
+$('t-rev').onclick=()=>{tab='rev';$('t-rev').setAttribute('aria-selected','true');$('t-hist').setAttribute('aria-selected','false');renderReview();};
+$('t-hist').onclick=()=>{tab='hist';$('t-hist').setAttribute('aria-selected','true');$('t-rev').setAttribute('aria-selected','false');renderReview();};
+$('btn-export').onclick=()=>toast('No app real: salva o PDF com o texto aceito');
+$('btn-share').onclick=()=>{document.getElementById('fluxo').scrollIntoView({behavior:'smooth'});toast('Veja abaixo o fluxo de convite, passo a passo');};
+(function qr(){const q=$('qr');if(!q)return;let x=7;const cells=[];for(let r=0;r<21;r++)for(let c=0;c<21;c++){const f=(rr,cc)=>r>=rr&&r<rr+7&&c>=cc&&c<cc+7;let on;if(f(0,0)||f(0,14)||f(14,0)){const rr=r>=14?r-14:r,cc=c>=14?c-14:c;on=rr===0||rr===6||cc===0||cc===6||(rr>=2&&rr<=4&&cc>=2&&cc<=4);}else{x=(x*1103515245+12345)&0x7fffffff;on=(x>>16)%2===0;}cells.push(on?'<i></i>':'<b></b>');}q.innerHTML=cells.join('');})();
+
+$('rlist').addEventListener('click',e=>{
+  const t=e.target;
+  if(t.dataset.who){who=t.dataset.who;renderReview();}
+  else if(t.dataset.del){confirmDel=t.dataset.del;renderReview();}
+  else if(t.dataset.delno){confirmDel=null;renderReview();}
+  else if(t.dataset.delyes) dropComment(t.dataset.delyes);
+  else if(t.dataset.reopen) reopen(t.dataset.reopen);
+  else if(t.dataset.rdel){const i=resolved.findIndex(r=>r.id===t.dataset.rdel);if(i>=0){resolved.splice(i,1);delete meta[t.dataset.rdel];history.unshift({t:'Você excluiu uma conversa resolvida',w:'agora'});renderReview();toast('Conversa resolvida excluída');}}
+  else if(t.dataset.accept) apply(t.dataset.accept,true);
+  else if(t.dataset.reject) apply(t.dataset.reject,false);
+  else if(t.dataset.resolve) apply(t.dataset.resolve,true);
+  else if(t.dataset.reply){
+    const id=t.dataset.reply,inp=$('r-'+id),v=inp.value.trim();
+    if(!v){inp.focus();return;}
+    meta[id].msgs.push({a:'me',v});enqueue();renderReview();toast(/@\w/.test(v)?'Resposta enviada e pessoa mencionada notificada':'Resposta enviada');
+  }
+});
+$('rlist').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.tagName==='INPUT'){const b=e.target.nextElementSibling;b&&b.click();}});
+$('rlist').addEventListener('mouseover',e=>{const c=e.target.closest('[data-card]');setHot(c?c.dataset.card:null);});
+$('editor').addEventListener('click',e=>{
+  const s=e.target.closest('[data-id]'); if(!s) return;
+  if(tab!=='rev') $('t-rev').click();
+  setHot(s.dataset.id);
+  const card=document.querySelector(`[data-card="${s.dataset.id}"]`); card&&card.scrollIntoView({block:'nearest',behavior:'smooth'});
+});
+function setHot(id){
+  if(hot===id) return; hot=id;
+  document.querySelectorAll('.hot').forEach(x=>x.classList.remove('hot'));
+  if(id) document.querySelectorAll(`[data-id="${id}"],[data-card="${id}"]`).forEach(x=>x.classList.add('hot'));
+}
+
+/* seleção no editor → comentar ou sugerir exclusão */
+let sel=null;
+function clearSel(){sel=null;$('selbar').innerHTML='Selecione um trecho do código para comentar'+(mode==='suggest'?' ou sugerir exclusão':'');}
+function offsetIn(seg,node,off){const r=document.createRange();r.setStart(seg,0);r.setEnd(node,off);return r.toString().length;}
+document.addEventListener('selectionchange',()=>{
+  const s=window.getSelection();
+  if(!s||s.isCollapsed||!s.rangeCount){return;}
+  const a=s.anchorNode&&s.anchorNode.parentElement&&s.anchorNode.parentElement.closest('[data-s]');
+  const f=s.focusNode&&s.focusNode.parentElement&&s.focusNode.parentElement.closest('[data-s]');
+  if(!a||a!==f){ if($('editor').contains(s.anchorNode)) { sel=null; $('selbar').textContent='Selecione dentro de um mesmo trecho sem marcação'; } return; }
+  let x=offsetIn(a,s.anchorNode,s.anchorOffset),y=offsetIn(a,s.focusNode,s.focusOffset);
+  if(x>y)[x,y]=[y,x];
+  if(y-x<2) return;
+  sel={l:+a.dataset.l,s:+a.dataset.s,x,y};
+  const txt=lines[sel.l][sel.s].v.slice(x,y);
+  $('selbar').innerHTML=`<span class="mono">“${esc(txt.length>28?txt.slice(0,26)+'…':txt)}”</span><button class="btn sm" id="sel-c">Comentar</button>`+(mode==='suggest'?`<button class="btn sm no" id="sel-d">Sugerir exclusão</button>`:'');
+  $('sel-c').onmousedown=e=>{e.preventDefault();wrapSel('cmt');};
+  const d=$('sel-d'); if(d) d.onmousedown=e=>{e.preventDefault();wrapSel('del');};
+});
+function wrapSel(kind){
+  if(!sel) return;
+  const seg=lines[sel.l][sel.s], id=(kind==='cmt'?'c':'s')+(++seq);
+  const parts=[{t:'x',v:seg.v.slice(0,sel.x)},{t:kind,id,v:seg.v.slice(sel.x,sel.y)},{t:'x',v:seg.v.slice(sel.y)}];
+  lines[sel.l].splice(sel.s,1,...parts); merge();
+  meta[id]=kind==='cmt'?{author:'me',when:'agora',kind:'cmt',msgs:[{a:'me',v:'Novo comentário. Escreva a primeira mensagem na resposta abaixo.'}]}:{author:'me',when:'agora',kind:'del'};
+  if(syncing){toast('Aguarde a sincronização terminar');return;}
+  history.unshift({t:kind==='cmt'?'Você abriu um comentário':'Você sugeriu uma exclusão',w:'agora'});
+  enqueue();
+  window.getSelection().removeAllRanges(); clearSel();
+  if(tab!=='rev') $('t-rev').click();
+  hot=id; refresh();
+  if(kind==='cmt'){const i=$('r-'+id); if(i){meta[id].msgs=[];renderReview();const j=$('r-'+id);j.placeholder='Escreva o comentário…';j.focus();}}
+  toast(kind==='cmt'?'Comentário criado':'Exclusão sugerida');
+}
+
+/* simulação: Bruno digitando uma sugestão em tempo real */
+let sim=null;
+$('btn-sim').onclick=()=>{
+  if(sim||!online||syncing) return;
+  const text=' Table 2 maps each cycle to the activities performed.';
+  const li=8, id='s'+(++seq);
+  meta[id]={author:'bruno',when:'agora',kind:'ins'};
+  lines[li].push({t:'ins',id,v:''});
+  sim={line:li}; $('btn-sim').disabled=true;
+  let k=0;
+  const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const step=()=>{
+    const seg=lines[li].find(s=>s.id===id); if(!seg){sim=null;$('btn-sim').disabled=false;renderEditor();return;}
+    seg.v=text.slice(0,++k); renderEditor(); renderPage(); compileStatus();
+    if(k<text.length) setTimeout(step,reduce?0:45); else {sim=null;renderEditor();renderReview();renderOutline();history.unshift({t:'Bruno sugeriu 1 inserção',w:'agora'});toast('Bruno sugeriu uma inserção na linha 9');$('btn-sim').disabled=false;}
+  };
+  step();
+};
+
+let tt; function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2400);}
+renderPresence(); clearSel(); refresh();
+})();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>mermaid.initialize({startOnLoad:true,theme:window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"default"});</script>
+</html>
