@@ -1,6 +1,8 @@
 #[cfg(feature = "self-test")]
 mod self_test;
 
+mod app_info;
+
 use tauri::{Builder, Runtime};
 
 /// Builder com os comandos IPC do contrato (specs/001-app-skeleton/contracts/ipc.md).

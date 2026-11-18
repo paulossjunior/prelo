@@ -42,15 +42,28 @@ fn check(rendered: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::check;
+    use super::{check, MAX_ELAPSED_MS};
 
-    #[test]
-    fn aceita_texto_com_prelo() {
-        assert!(check("Prelo").is_ok());
+    const V: &str = env!("CARGO_PKG_VERSION");
+
+    fn expected() -> String {
+        format!("Prelo {V} · {}", crate::app_info::Os::current().unwrap().as_str())
     }
 
     #[test]
-    fn recusa_texto_sem_prelo() {
-        assert!(check("").is_err());
+    fn aceita_texto_exato_dentro_do_tempo() {
+        assert!(check(&expected(), V, MAX_ELAPSED_MS).is_ok());
+    }
+
+    #[test]
+    fn recusa_texto_diferente() {
+        assert!(check("Prelo", V, 10).is_err());
+        assert!(check(&format!("{} extra", expected()), V, 10).is_err());
+        assert!(check("Carregando…", V, 10).is_err());
+    }
+
+    #[test]
+    fn recusa_acima_de_3_segundos() {
+        assert!(check(&expected(), V, MAX_ELAPSED_MS + 1).is_err());
     }
 }
