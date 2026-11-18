@@ -1,6 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
 import { mountAppInfo } from "./app-info";
-import { reportSelfTest } from "./self-test";
+import { installSelfTestErrorReporter, reportSelfTest } from "./self-test";
+
+installSelfTestErrorReporter();
 
 const root = document.querySelector<HTMLElement>("#app");
 if (!root) {

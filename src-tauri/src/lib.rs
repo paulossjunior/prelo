@@ -14,10 +14,20 @@ pub fn configure<R: Runtime>(builder: Builder<R>) -> Builder<R> {
 /// Variante de teste: acrescenta `self_test_report` (nunca em release).
 #[cfg(feature = "self-test")]
 pub fn configure<R: Runtime>(builder: Builder<R>) -> Builder<R> {
-    builder.invoke_handler(tauri::generate_handler![
-        app_info::get_app_info,
-        self_test::self_test_report
-    ])
+    builder
+        .on_page_load(|webview, payload| {
+            // Diagnóstico do autoteste: mostra se a página chegou a carregar.
+            eprintln!(
+                "self-test: página {:?} em {} ({})",
+                payload.event(),
+                payload.url(),
+                webview.label()
+            );
+        })
+        .invoke_handler(tauri::generate_handler![
+            app_info::get_app_info,
+            self_test::self_test_report
+        ])
 }
 
 /// Inicia o app.

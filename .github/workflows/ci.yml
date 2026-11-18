@@ -51,10 +51,34 @@ jobs:
           cargo install cargo-deny --locked
           if [ "$RUNNER_OS" != "macOS" ]; then cargo install tauri-driver --locked; fi
 
+      - name: msedgedriver da mesma versão do WebView2 (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $key = "HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
+          $ver = (Get-ItemProperty $key -ErrorAction SilentlyContinue).pv
+          if (-not $ver) {
+            $ver = (Get-Item "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe").VersionInfo.ProductVersion
+          }
+          Write-Host "WebView2 $ver"
+          $dir = Join-Path $env:RUNNER_TEMP "msedgedriver"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $zip = Join-Path $dir "edgedriver.zip"
+          try {
+            Invoke-WebRequest "https://msedgedriver.microsoft.com/$ver/edgedriver_win64.zip" -OutFile $zip
+          } catch {
+            Invoke-WebRequest "https://msedgedriver.azureedge.net/$ver/edgedriver_win64.zip" -OutFile $zip
+          }
+          Expand-Archive $zip -DestinationPath $dir -Force
+          "EDGEWEBDRIVER=$dir" >> $env:GITHUB_ENV
+
       - run: npm ci
 
       - name: npm run verify (Linux, tela virtual)
         if: runner.os == 'Linux'
+        env:
+          # WebKitGTK sob xvfb pode não renderizar com o renderizador DMABUF.
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
         run: xvfb-run --auto-servernum npm run verify
 
       - name: npm run verify
