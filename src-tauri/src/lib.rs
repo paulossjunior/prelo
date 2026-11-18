@@ -1,4 +1,5 @@
 mod app_info;
+mod webview_args;
 #[cfg(feature = "self-test")]
 mod self_test;
 
