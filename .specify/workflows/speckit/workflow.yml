@@ -4,7 +4,7 @@ workflow:
   name: "Full SDD Cycle"
   version: "1.0.2"
   author: "GitHub"
-  description: "Runs specify → plan → tasks → implement with review gates"
+  description: "Runs specify → plan → tasks → tasks-to-issues → implement with review gates"
 
 requires:
   # Gate verdict inputs require CLI 0.15.1 or later.
@@ -69,6 +69,12 @@ steps:
 
   - id: tasks
     command: speckit.tasks
+    integration: "{{ inputs.integration }}"
+    input:
+      args: "{{ inputs.spec }}"
+
+  - id: tasks-to-issues
+    command: speckit.github.taskstoissues
     integration: "{{ inputs.integration }}"
     input:
       args: "{{ inputs.spec }}"

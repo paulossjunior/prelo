@@ -1,0 +1,12 @@
+installed:
+- github
+settings:
+  auto_execute_hooks: true
+hooks:
+  after_tasks:
+  - extension: github
+    command: speckit.github.taskstoissues
+    description: "Cria uma issue no GitHub para cada tarefa do tasks.md"
+    prompt: "Criar as issues das tarefas no GitHub. Sem GitHub MCP server, use o gh CLI mantendo a deduplicação por ID T0xx; aplique milestone e label agente:* da issue-mãe e cite 'Parte de #N'."
+    optional: false
+    enabled: true

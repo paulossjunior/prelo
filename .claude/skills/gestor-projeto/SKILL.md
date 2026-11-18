@@ -36,7 +36,7 @@ delegada ao `doc-tecnica`.
 | Fase (milestone) | `F1 Editor local`, `F2 Comentários e git`, `F3 Tempo real`, `F4 Modo sugestão`, `F5 Papéis e convites` | Fases do plano, na ordem da constituição |
 | Prioridade (label) | `P0` bloqueia tudo, `P1` próxima, `P2` nesta fase, `P3` depois | Uma por issue |
 | Tipo (label) | `feature`, `documentation`, `bug`, `decisão`, `risco`, `infra` | Uma por issue |
-| Agente (label) | `agente:doc-tecnica`, `agente:speckit`, `agente:builder`, `agente:humano` | Quem executa |
+| Agente (label) | `agente:doc-tecnica`, `agente:speckit`, `agente:builder`, `agente:qa`, `agente:humano` | Quem executa |
 
 Antes de usar um label ou milestone, confira com `gh label list` / `gh api repos/{owner}/{repo}/milestones`.
 Se faltar, proponha a criação junto com o resto do lote (ver Confirmação).
@@ -50,7 +50,7 @@ Ordene nesta sequência; o primeiro critério que diferenciar decide:
 2. **Bloqueio**: o que destrava outras issues sobe (ex.: decisão em aberto que impede o plano).
 3. **Risco**: itens de `docs/arquitetura.md` §6 que podem invalidar a arquitetura sobem cedo
    (spike antes de construir em cima).
-4. **Princípio**: trabalho que garante um princípio da constituição (I–V) vence trabalho de
+4. **Princípio**: trabalho que garante um princípio da constituição (I–VI) vence trabalho de
    conveniência.
 5. **Tamanho**: entre empates, o menor primeiro.
 
@@ -84,15 +84,30 @@ Depende de #N · Bloqueia #M
 | Trabalho | Executor | Como |
 |---|---|---|
 | Requisitos, UML, arquitetura, ADR, auditoria de docs | agente `doc-tecnica` | Agent tool, prompt com nº da issue, IDs de origem e critérios de aceite |
-| Feature nova (do zero ao código) | skills spec-kit | `/speckit-specify` → `/speckit-clarify` (se houver dúvida) → `/speckit-plan` → `/speckit-tasks` → `/speckit-analyze` → `/speckit-implement` |
+| Feature nova (do zero ao código) | skills spec-kit | `/speckit-specify` → `/speckit-clarify` (se houver dúvida) → `/speckit-plan` → `/speckit-tasks` → `/speckit-analyze` → `/speckit-github-taskstoissues` → agente `qa` (modo projetar: testes vermelhos) → `/speckit-implement` → agente `qa` (modo validar) |
 | Edição pequena em 1–2 arquivos | agente `caveman:cavecrew-builder` | Agent tool, escopo exato |
 | Localizar código ou mapear impacto | agente `caveman:cavecrew-investigator` ou `Explore` | Agent tool |
+| Testes de negócio e segurança: projetar antes, validar depois de implementar | agente `qa` | Agent tool, prompt com modo (projetar/validar), feature em `specs/`, issue e critérios de aceite |
 | Revisar diff antes de fechar | agente `caveman:cavecrew-reviewer` ou `/code-review` | Agent tool / skill |
 | Decisão de produto, marca, licença, prioridade de negócio | humano | Pergunte ao usuário; label `agente:humano` |
 
 Ao delegar:
 
 - Uma issue por agente por vez; agentes independentes podem rodar em paralelo.
+- Features: a issue-mãe (ex.: #1) descreve o objetivo; as tarefas `T0xx` do `tasks.md` viram
+  issues filhas via `/speckit-github-taskstoissues`. Ao criá-las, aplique a mesma milestone e
+  label `agente:*` da issue-mãe e cite `Parte de #N` no corpo. Feche a issue-mãe só quando
+  todas as filhas estiverem fechadas.
+- O `taskstoissues` foi escrito para o GitHub MCP server; sem ele, use os equivalentes do `gh`
+  (`gh issue list --state all --search T0`, `gh issue create`), mantendo a deduplicação por ID.
+- **QA obrigatório após implementar.** Sempre que `/speckit-implement`, `cavecrew-builder` ou
+  qualquer agente terminar tarefas de código, chame o agente `qa` em modo **validar** antes de
+  registrar progresso, fechar issue ou fazer push. Sem exceção, inclusive para edições pequenas.
+  - **REPROVADO**: não feche nem faça push; comente os achados na issue e devolva ao executor
+    (ou abra issue `bug` para achado fora do escopo). Depois da correção, chame o `qa` de novo.
+  - **APROVADO**: anexe o relatório do `qa` (veredito, suíte, cobertura) no comentário da issue.
+- Antes de `/speckit-implement`, chame o `qa` em modo **projetar** para escrever os testes que
+  devem falhar primeiro (TDD, Princípio VI).
 - O prompt do agente deve trazer: número e título da issue, IDs de origem, critérios de aceite,
   arquivos relevantes e o que **não** fazer (sem commit, sem fechar issue).
 - Quando o agente terminar, confira o resultado contra os critérios antes de registrar progresso.
@@ -111,6 +126,8 @@ Ao delegar:
 - **abrir <assunto>**: rascunhe a issue no formato acima, procure duplicatas
   (`gh issue list --search`), confirme e crie (`gh issue create --body-file`).
 - **fechar #N**: confira cada critério de aceite com evidência (arquivo, commit, PR, teste).
+  Issue de código só fecha com veredito **APROVADO** do agente `qa` no estado atual do código
+  (suíte verde, incluindo testes de segurança, Princípio VI).
   Feche com comentário de evidência (`gh issue close N --comment`). Critério não atendido:
   não feche; comente o que falta. Use `--reason "not planned"` só para descarte decidido.
 - **proxima**: a issue de maior prioridade sem bloqueio, com o executor e o primeiro comando.

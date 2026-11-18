@@ -56,6 +56,27 @@ Motivo: evita editar sobre versão antiga e sobrescrever trabalho alheio (D-06, 
 
 Motivo: modelo de revisão no estilo do Overleaf, sem estado ambíguo (RF-10 a RF-17, D-03).
 
+### VI. Testes Primeiro e Segurança Testada (NÃO NEGOCIÁVEL)
+
+- Todo código MUST ser escrito em TDD: teste escrito → teste falha (vermelho) → implementação
+  mínima passa (verde) → refatoração com testes verdes. Código de produção sem teste que o
+  exercite MUST NOT ser aceito.
+- Bug corrigido MUST vir com teste que reproduz o bug e falhava antes da correção.
+- Toda feature MUST ter testes de segurança junto com os funcionais, cobrindo no que se aplicar:
+  - criptografia de ponta a ponta do tráfego entre pares e via relay (Princípio II);
+  - identidade por chave: entrada sem chave aprovada, chave trocada ou código de convite
+    reutilizado, expirado ou adulterado MUST ser recusado;
+  - permissões por papel: cada ação proibida na tabela de papéis MUST ter teste de recusa;
+  - entrada não confiável: atualizações CRDT de pares, links `prelo://`, arquivos `.prelo/`,
+    `.typ`, `.bib` e pacotes MUST ser validados, com testes de entrada malformada;
+  - dependências: auditoria de vulnerabilidades conhecidas (ex.: `cargo audit`, `npm audit`)
+    MUST passar sem achados de severidade alta ou crítica não justificados.
+- `tasks.md` MUST listar as tarefas de teste (funcionais e de segurança) antes das tarefas de
+  implementação que elas cobrem.
+
+Motivo: textos inéditos e conexão direta entre computadores tornam falha de segurança e
+regressão caras; TDD mantém o comportamento especificado verificável desde o início.
+
 ## Restrições Técnicas
 
 - Stack: Tauri (shell), Rust (núcleo), CodeMirror 6, Yjs/yrs, typst + Tinymist, iroh + mDNS,
@@ -78,8 +99,12 @@ Motivo: modelo de revisão no estilo do Overleaf, sem estado ambíguo (RF-10 a R
 - Construção MUST seguir a ordem do plano (docs/especificacao.md §4): editor local → comentários e git →
   tempo real → modo sugestão → papéis e convites. Pular fase exige justificativa no plan.md.
 - Sincronização, merge CRDT, fila offline e geração do texto aceito MUST ter testes
-  automatizados de integração, incluindo cenários de dois pares e de reconexão.
-- Toda PR MUST verificar conformidade com os princípios I–V; violação MUST ser justificada na
+  automatizados de integração, incluindo cenários de dois pares e de reconexão (Princípio VI).
+- Push MUST acontecer só com a suíte completa verde: testes unitários, de integração, de
+  segurança e auditoria de dependências. Teste falhando, pulado sem justificativa escrita ou
+  desativado bloqueia o push. Vale para pessoas e agentes; `--no-verify` e equivalentes MUST
+  NOT ser usados para contornar.
+- Toda PR MUST verificar conformidade com os princípios I–VI; violação MUST ser justificada na
   seção de complexidade do plan.md.
 
 ## Governance
@@ -89,7 +114,7 @@ Motivo: modelo de revisão no estilo do Overleaf, sem estado ambíguo (RF-10 a R
   docs/adrs.md quando mudarem decisões D-xx.
 - Versão segue SemVer: MAJOR remove ou redefine princípio; MINOR adiciona princípio ou seção;
   PATCH esclarece redação.
-- Revisões de plan.md e PRs MUST checar os princípios no Constitution Check.
+- Revisões de plan.md e PRs MUST checar os princípios I–VI no Constitution Check.
 - Pendente: TODO(LICENSE) — escolher a licença do Prelo antes da primeira release pública.
 
-**Version**: 1.1.1 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-18
+**Version**: 1.2.0 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-18

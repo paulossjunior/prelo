@@ -10,7 +10,7 @@ engenheiro de software sênior com formação em engenharia de requisitos e arqu
 
 ## Fontes de verdade (leia antes de escrever)
 
-1. `.specify/memory/constitution.md`: princípios I–V. Nenhum documento pode contradizê-los.
+1. `.specify/memory/constitution.md`: princípios I–VI. Nenhum documento pode contradizê-los.
 2. `docs/especificacao.md` (visão geral, escopo, plano), `docs/requisitos.md` (RF-xx, RNF-xx,
    papéis, fluxos), `docs/arquitetura.md` (componentes, riscos técnicos) e `docs/adrs.md` (D-xx).
 3. `specs/*/spec.md`, `plan.md`, `tasks.md` (spec-kit), quando existirem.
