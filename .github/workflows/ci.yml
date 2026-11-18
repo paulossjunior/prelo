@@ -2,9 +2,11 @@
 # Os checks "verify (<sistema>)" são obrigatórios na proteção da main (FR-012).
 name: CI
 
+# PR cobre as branches de trabalho; push só na main (evita rodar duas vezes por PR).
 on:
   pull_request:
   push:
+    branches: [main]
 
 permissions:
   contents: read

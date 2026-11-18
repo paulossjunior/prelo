@@ -26,7 +26,7 @@
 ## Trava remota
 
 - Workflow `CI`, job `verify`, matriz `ubuntu-22.04`, `windows-latest`, `macos-latest`; roda
-  em `pull_request` e em `push` para qualquer branch.
+  em todo `pull_request` e em `push` na `main`.
 - Proteção da `main`: PR obrigatório; checks `verify (ubuntu-22.04)`,
   `verify (windows-latest)`, `verify (macos-latest)` obrigatórios e atualizados com a `main`;
   `enforce_admins: true`; sem force-push nem exclusão.
