@@ -1,7 +1,7 @@
 mod app_info;
-mod webview_args;
 #[cfg(feature = "self-test")]
 mod self_test;
+mod webview_args;
 
 use tauri::{Builder, Runtime};
 
@@ -21,9 +21,24 @@ pub fn configure<R: Runtime>(builder: Builder<R>) -> Builder<R> {
     ])
 }
 
-/// Inicia o app.
+/// Inicia o app. A janela principal sai do tauri.conf.json (`create: false`) e é criada aqui
+/// para receber os argumentos do WebView2 calculados em `webview_args`.
 pub fn run() {
     configure(Builder::default())
+        .setup(|app| {
+            let config = app
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|w| w.label == "main")
+                .cloned()
+                .ok_or("janela \"main\" ausente em tauri.conf.json")?;
+            tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?
+                .additional_browser_args(&webview_args::current())
+                .build()?;
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("falha ao iniciar o Prelo");
 }
