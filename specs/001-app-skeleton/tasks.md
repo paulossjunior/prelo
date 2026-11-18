@@ -34,10 +34,10 @@ Layout Tauri 2 do [plan.md](plan.md#source-code-repository-root): interface em `
 
 **Purpose**: projeto compilando e abrindo uma janela vazia, sem comportamento.
 
-- [ ] T001 Criar configuração raiz: `package.json` (nome `prelo`, versão `0.1.0`, `engines.node >=24`, script `prepare` com `git config core.hooksPath .githooks`), `.nvmrc` (24), `rust-toolchain.toml` (1.95, componentes `rustfmt` e `clippy`), `tsconfig.json` (strict) e entradas `node_modules/`, `dist/`, `src-tauri/target/` em `.gitignore`
-- [ ] T002 Criar o núcleo Tauri 2 mínimo: `src-tauri/Cargo.toml` (`tauri` 2.12, `tauri-build`, feature opcional `self-test`, `tauri` com feature `test` em dev-dependencies, versão `0.1.0`), `src-tauri/build.rs`, `src-tauri/src/main.rs`, `src-tauri/src/lib.rs` com `run()` sem comandos, e `src-tauri/tauri.conf.json` (`productName` "Prelo", `version` "0.1.0", identifier `org.prelo.app`)
-- [ ] T003 Criar a interface mínima: `index.html`, `vite.config.ts` e `src/main.ts` vazio montando um elemento raiz; adicionar `@tauri-apps/api`, `@tauri-apps/cli`, `vite`, `typescript` em `package.json` e scripts `dev` e `build`
-- [ ] T004 [P] Configurar Vitest com jsdom em `vitest.config.ts` e adicionar `vitest`, `jsdom` em `package.json`
+- [X] T001 Criar configuração raiz: `package.json` (nome `prelo`, versão `0.1.0`, `engines.node >=24`, script `prepare` com `git config core.hooksPath .githooks`), `.nvmrc` (24), `rust-toolchain.toml` (1.95, componentes `rustfmt` e `clippy`), `tsconfig.json` (strict) e entradas `node_modules/`, `dist/`, `src-tauri/target/` em `.gitignore`
+- [X] T002 Criar o núcleo Tauri 2 mínimo: `src-tauri/Cargo.toml` (`tauri` 2.12, `tauri-build`, feature opcional `self-test`, `tauri` com feature `test` em dev-dependencies, versão `0.1.0`), `src-tauri/build.rs`, `src-tauri/src/main.rs`, `src-tauri/src/lib.rs` com `run()` sem comandos, e `src-tauri/tauri.conf.json` (`productName` "Prelo", `version` "0.1.0", identifier `org.prelo.app`)
+- [X] T003 Criar a interface mínima: `index.html`, `vite.config.ts` e `src/main.ts` vazio montando um elemento raiz; adicionar `@tauri-apps/api`, `@tauri-apps/cli`, `vite`, `typescript` em `package.json` e scripts `dev` e `build`
+- [X] T004 [P] Configurar Vitest com jsdom em `vitest.config.ts` e adicionar `vitest`, `jsdom` em `package.json`
 
 **Checkpoint**: `npm run dev` abre uma janela em branco.
 
