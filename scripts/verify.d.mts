@@ -23,3 +23,4 @@ export declare function exitCode(results: StepResult[]): number;
 export declare function summarize(results: StepResult[]): string;
 export declare function findUnjustifiedSkips(file: string, text: string): SkipFinding[];
 export declare function scanSkips(root: string): SkipFinding[];
+export declare function isMain(moduleUrl: string, argv1: string | undefined): boolean;

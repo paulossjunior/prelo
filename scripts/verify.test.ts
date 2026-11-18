@@ -77,3 +77,115 @@ describe("findUnjustifiedSkips", () => {
     expect(findUnjustifiedSkips("c.ts", ts)).toEqual([]);
   });
 });
+
+// Casos adicionados pelo QA (validação da Phase 2): variações de skip/only previstas no
+// contrato (contracts/dev-workflow.md), CRLF, falsos positivos e varredura em disco.
+describe("findUnjustifiedSkips: variações do contrato", () => {
+  it("acha test.only e it.only", () => {
+    const ts = 'test.only("a", () => {});\n  it.only("b", () => {});\n';
+    expect(findUnjustifiedSkips("d.test.ts", ts)).toEqual([
+      { file: "d.test.ts", line: 1 },
+      { file: "d.test.ts", line: 2 },
+    ]);
+  });
+
+  it('acha #[ignore = "motivo"] e #[ignore] indentado', () => {
+    const rust = '#[test]\n#[ignore = "lento"]\nfn a() {}\nmod m {\n    #[ignore]\n    fn b() {}\n}\n';
+    expect(findUnjustifiedSkips("e.rs", rust)).toEqual([
+      { file: "e.rs", line: 2 },
+      { file: "e.rs", line: 5 },
+    ]);
+  });
+
+  it("trata arquivos com CRLF (linha correta, justificativa na linha anterior vale)", () => {
+    const ts = 'import x;\r\nit.skip("a", () => {});\r\n';
+    const rust = "// justificativa: issue #99\r\n#[ignore]\r\nfn t() {}\r\n";
+    expect(findUnjustifiedSkips("f.test.ts", ts)).toEqual([{ file: "f.test.ts", line: 2 }]);
+    expect(findUnjustifiedSkips("f.rs", rust)).toEqual([]);
+  });
+
+  it("acha .skip/.only encadeados (each, concurrent) e o alias suite do Vitest", () => {
+    const ts = [
+      'it.skip.each([1])("a", () => {});',
+      'test.concurrent.skip("b", () => {});',
+      'describe.concurrent.only("c", () => {});',
+      'suite.skip("d", () => {});',
+    ].join("\n");
+    expect(findUnjustifiedSkips("g.test.ts", ts).map((f) => f.line)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("acha .skip quando a cadeia quebra linha", () => {
+    const ts = 'it\n  .skip("a", () => {});\n';
+    expect(findUnjustifiedSkips("h.test.ts", ts)).toHaveLength(1);
+  });
+
+  it("não gera falso positivo em comentário, string ou código de produção", () => {
+    const ts = [
+      "// it.skip(\"exemplo em comentário\")",
+      "const s = 'it.only(\"x\")';",
+      "list.skip(2).only(1);",
+      "const ignore = true;",
+    ].join("\n");
+    const rust = '// #[ignore]\nlet s = "#[ignore]";\nfn ignore_me() {}\n';
+    expect(findUnjustifiedSkips("src/x.ts", ts)).toEqual([]);
+    expect(findUnjustifiedSkips("src/x.rs", rust)).toEqual([]);
+  });
+});
+
+describe("scanSkips em disco", () => {
+  it("varre src, src-tauri/src, src-tauri/tests, scripts e e2e", async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { scanSkips } = await import("./verify.mjs");
+    const root = mkdtempSync(join(tmpdir(), "prelo-scan-"));
+    try {
+      const put = (rel: string, text: string) => {
+        mkdirSync(join(root, rel, ".."), { recursive: true });
+        writeFileSync(join(root, rel), text);
+      };
+      put("src/a.test.ts", 'it.only("a", () => {});\n');
+      put("src-tauri/src/b.rs", "#[ignore]\nfn b() {}\n");
+      put("src-tauri/tests/c.rs", "#[ignore]\nfn c() {}\n");
+      put("scripts/d.test.ts", 'describe.skip("d", () => {});\n');
+      put("e2e/e.e2e.ts", 'it.skip("e", () => {});\n');
+      put("node_modules/z/z.test.ts", 'it.skip("z", () => {});\n');
+      const files = scanSkips(root).map((f) => f.file.replaceAll("\\", "/")).sort();
+      expect(files).toEqual([
+        "e2e/e.e2e.ts",
+        "scripts/d.test.ts",
+        "src-tauri/src/b.rs",
+        "src-tauri/tests/c.rs",
+        "src/a.test.ts",
+      ]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});
+
+// Regressão do achado alto do QA: com o repositório acessado por link simbólico, o guarda
+// de entrada não reconhecia o script como principal e `verify` saía com 0 sem rodar nada.
+describe("isMain", () => {
+  it("reconhece o script principal mesmo por caminho com link simbólico", async () => {
+    const { mkdtempSync, symlinkSync, writeFileSync, rmSync } = await import("node:fs");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { pathToFileURL } = await import("node:url");
+    const { isMain } = await import("./verify.mjs");
+    const real = mkdtempSync(join(tmpdir(), "prelo-real-"));
+    const link = `${real}-link`;
+    try {
+      writeFileSync(join(real, "v.mjs"), "");
+      symlinkSync(real, link, "junction");
+      const moduleUrl = pathToFileURL(join(real, "v.mjs")).href;
+      expect(isMain(moduleUrl, join(link, "v.mjs"))).toBe(true);
+      expect(isMain(moduleUrl, join(real, "v.mjs"))).toBe(true);
+      expect(isMain(moduleUrl, join(real, "outro.mjs"))).toBe(false);
+      expect(isMain(moduleUrl, undefined)).toBe(false);
+    } finally {
+      rmSync(link, { force: true, recursive: true });
+      rmSync(real, { recursive: true, force: true });
+    }
+  });
+});
