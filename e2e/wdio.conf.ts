@@ -27,9 +27,11 @@ export const config: WebdriverIO.Config = {
   reporters: ["spec"],
   mochaOpts: { ui: "bdd", timeout: 60_000 },
   beforeSession: () => {
-    // No Windows, os runners do GitHub expõem o msedgedriver em EDGEWEBDRIVER.
+    // No Windows: PRELO_NATIVE_DRIVER (wrapper do CI com log detalhado) ou o msedgedriver
+    // em EDGEWEBDRIVER.
     const edge = process.env.EDGEWEBDRIVER;
-    const args = process.platform === "win32" && edge ? ["--native-driver", join(edge, "msedgedriver.exe")] : [];
+    const native = process.env.PRELO_NATIVE_DRIVER ?? (edge ? join(edge, "msedgedriver.exe") : undefined);
+    const args = process.platform === "win32" && native ? ["--native-driver", native] : [];
     driver = spawn(driverBin, args, { stdio: [null, process.stdout, process.stderr] });
   },
   afterSession: () => {

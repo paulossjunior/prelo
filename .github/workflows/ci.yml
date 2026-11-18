@@ -71,6 +71,12 @@ jobs:
           }
           Expand-Archive $zip -DestinationPath $dir -Force
           "EDGEWEBDRIVER=$dir" >> $env:GITHUB_ENV
+          # Wrapper com log detalhado do msedgedriver (diagnóstico do WebDriver no Windows).
+          $log = Join-Path $env:RUNNER_TEMP "msedgedriver.log"
+          $wrapper = Join-Path $dir "msedgedriver-verbose.cmd"
+          Set-Content $wrapper -Encoding ascii -Value "@echo off`r`n`"$dir\msedgedriver.exe`" %* --verbose --log-path=`"$log`""
+          "PRELO_NATIVE_DRIVER=$wrapper" >> $env:GITHUB_ENV
+          "PRELO_NATIVE_DRIVER_LOG=$log" >> $env:GITHUB_ENV
 
       - run: npm ci
 
@@ -84,3 +90,11 @@ jobs:
       - name: npm run verify
         if: runner.os != 'Linux'
         run: npm run verify
+
+      - name: Log do msedgedriver (Windows, em falha)
+        if: failure() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: msedgedriver-log
+          path: ${{ runner.temp }}/msedgedriver.log
+          if-no-files-found: ignore
