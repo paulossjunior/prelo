@@ -36,7 +36,7 @@ delegada ao `doc-tecnica`.
 | Fase (milestone) | `F1 Editor local`, `F2 Comentários e git`, `F3 Tempo real`, `F4 Modo sugestão`, `F5 Papéis e convites` | Fases do plano, na ordem da constituição |
 | Prioridade (label) | `P0` bloqueia tudo, `P1` próxima, `P2` nesta fase, `P3` depois | Uma por issue |
 | Tipo (label) | `feature`, `documentation`, `bug`, `decisão`, `risco`, `infra` | Uma por issue |
-| Agente (label) | `agente:doc-tecnica`, `agente:speckit`, `agente:builder`, `agente:qa`, `agente:humano` | Quem executa |
+| Agente (label) | `agente:doc-tecnica`, `agente:speckit`, `agente:builder`, `agente:qa`, `agente:site`, `agente:humano` | Quem executa |
 
 Antes de usar um label ou milestone, confira com `gh label list` / `gh api repos/{owner}/{repo}/milestones`.
 Se faltar, proponha a criação junto com o resto do lote (ver Confirmação).
@@ -88,6 +88,7 @@ Depende de #N · Bloqueia #M
 | Edição pequena em 1–2 arquivos | agente `caveman:cavecrew-builder` | Agent tool, escopo exato |
 | Localizar código ou mapear impacto | agente `caveman:cavecrew-investigator` ou `Explore` | Agent tool |
 | Testes de negócio e segurança: projetar antes, validar depois de implementar | agente `qa` | Agent tool, prompt com modo (projetar/validar), feature em `specs/`, issue e critérios de aceite |
+| Página pública no GitHub Pages: texto e front-end | agente `site` | Agent tool, prompt com a issue, seções desejadas e o que já existe em `site/` |
 | Revisar diff antes de fechar | agente `caveman:cavecrew-reviewer` ou `/code-review` | Agent tool / skill |
 | Decisão de produto, marca, licença, prioridade de negócio | humano | Pergunte ao usuário; label `agente:humano` |
 
