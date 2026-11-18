@@ -101,6 +101,13 @@ describe("exceções de vulnerabilidade", () => {
     expect(validateExceptions([{ ...valid, ecosystem: "pip" }], TODAY)).toHaveLength(1);
   });
 
+  it("id fora do formato de aviso (GHSA/RUSTSEC/CVE) invalida a auditoria (vai para linha de comando)", () => {
+    expect(validateExceptions([{ ...valid, id: "GHSA-1; rm -rf ~" }], TODAY)).toHaveLength(1);
+    expect(validateExceptions([{ ...valid, id: "qualquer" }], TODAY)).toHaveLength(1);
+    expect(validateExceptions([{ ...valid, id: "RUSTSEC-2026-0001" }], TODAY)).toEqual([]);
+    expect(validateExceptions([{ ...valid, id: "CVE-2026-12345" }], TODAY)).toEqual([]);
+  });
+
   it("exceção sem id invalida a auditoria", () => {
     expect(validateExceptions([{ ...valid, id: "" }], TODAY)).toHaveLength(1);
   });
