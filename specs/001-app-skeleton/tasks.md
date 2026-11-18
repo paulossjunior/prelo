@@ -47,9 +47,9 @@ Layout Tauri 2 do [plan.md](plan.md#source-code-repository-root): interface em `
 
 **Purpose**: o comando único `npm run verify` ([contracts/dev-workflow.md](contracts/dev-workflow.md)), do qual todas as histórias dependem para provar TDD.
 
-- [ ] T005 Escrever testes do orquestrador em `scripts/verify.test.ts`: roda todas as etapas mesmo após falha; código de saída ≠ 0 se qualquer etapa falhar; resumo lista etapas falhas; detecta `#[ignore]`, `.skip`, `.only` sem comentário `// justificativa:` e falha. Confirmar que falham
-- [ ] T006 Implementar `scripts/verify.mjs` conforme [contracts/dev-workflow.md](contracts/dev-workflow.md) até T005 passar, com etapas `fmt` (`cargo fmt --check`), `clippy` (`-D warnings`), `tsc` (`--noEmit`), `test:rust`, `test:ui`, `test:e2e`, `audit`; etapa ainda inexistente conta como falha
-- [ ] T007 Ligar scripts em `package.json`: `test:rust` (`cargo test --manifest-path src-tauri/Cargo.toml`), `test:ui` (`vitest run`), `test:e2e` (WebDriver em Linux/Windows, `scripts/self-test.mjs` em todos), `audit` (`node scripts/audit.mjs`), `verify` (`node scripts/verify.mjs`)
+- [X] T005 Escrever testes do orquestrador em `scripts/verify.test.ts`: roda todas as etapas mesmo após falha; código de saída ≠ 0 se qualquer etapa falhar; resumo lista etapas falhas; detecta `#[ignore]`, `.skip`, `.only` sem comentário `// justificativa:` e falha. Confirmar que falham
+- [X] T006 Implementar `scripts/verify.mjs` conforme [contracts/dev-workflow.md](contracts/dev-workflow.md) até T005 passar, com etapas `fmt` (`cargo fmt --check`), `clippy` (`-D warnings`), `tsc` (`--noEmit`), `test:rust`, `test:ui`, `test:e2e`, `audit`; etapa ainda inexistente conta como falha
+- [X] T007 Ligar scripts em `package.json`: `test:rust` (`cargo test --manifest-path src-tauri/Cargo.toml`), `test:ui` (`vitest run`), `test:e2e` (WebDriver em Linux/Windows, `scripts/self-test.mjs` em todos), `audit` (`node scripts/audit.mjs`), `verify` (`node scripts/verify.mjs`)
 
 **Checkpoint**: `npm run verify` executa e falha listando as etapas ainda sem implementação.
 
