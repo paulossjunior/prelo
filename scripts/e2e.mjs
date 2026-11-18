@@ -12,11 +12,13 @@ function step(cmd) {
   return r.status ?? 1;
 }
 
-let code = step("node scripts/self-test.mjs");
+// Roda todas as etapas mesmo após falha, para o diagnóstico ficar completo.
+const codes = [step("node scripts/self-test.mjs")];
 if (process.platform === "darwin") {
   console.log("e2e: WebDriver não disponível no macOS; coberto pelo autoteste");
 } else {
   const built = step("npx --no-install tauri build --debug --no-bundle");
-  code ||= built || step("npx --no-install wdio run e2e/wdio.conf.ts");
+  codes.push(built);
+  if (built === 0) codes.push(step("npx --no-install wdio run e2e/wdio.conf.ts"));
 }
-process.exitCode = code;
+process.exitCode = codes.every((c) => c === 0) ? 0 : 1;

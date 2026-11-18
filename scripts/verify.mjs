@@ -13,7 +13,15 @@ export const STEPS = [
     cmd: "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
   },
   { name: "tsc", cmd: "npx --no-install tsc --noEmit && npx --no-install tsc --noEmit -p e2e" },
+  {
+    name: "clippy:self-test",
+    cmd: "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --features self-test -- -D warnings",
+  },
   { name: "test:rust", cmd: "npm run test:rust" },
+  {
+    name: "test:rust:self-test",
+    cmd: "cargo test --manifest-path src-tauri/Cargo.toml --features self-test",
+  },
   { name: "test:ui", cmd: "npm run test:ui" },
   { name: "test:e2e", cmd: "npm run test:e2e" },
   { name: "audit", cmd: "npm run audit" },

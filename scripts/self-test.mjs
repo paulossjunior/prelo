@@ -33,14 +33,19 @@ function build() {
 function run() {
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn(binary, [], { cwd: root, stdio: ["ignore", "inherit", "inherit"] });
+    const child = spawn(binary, [], { cwd: root, stdio: ["ignore", "inherit", "pipe"] });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+      process.stderr.write(chunk);
+    });
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
-      resolve({ code: null, timedOut: true, ms: Date.now() - started });
+      resolve({ code: null, timedOut: true, ms: Date.now() - started, stderr });
     }, TIMEOUT_MS);
     child.on("exit", (code) => {
       clearTimeout(timer);
-      resolve({ code, timedOut: false, ms: Date.now() - started });
+      resolve({ code, timedOut: false, ms: Date.now() - started, stderr });
     });
   });
 }
@@ -48,8 +53,19 @@ function run() {
 function lingering() {
   try {
     if (process.platform === "win32") {
-      const out = execFileSync("tasklist", ["/FI", `IMAGENAME eq ${exe}`, "/NH"], { encoding: "utf8" });
-      return out.toLowerCase().includes(exe);
+      // Só o binário deste build: um Prelo instalado pelo usuário não conta.
+      const out = execFileSync(
+        "powershell",
+        [
+          "-NoProfile",
+          "-Command",
+          "Get-Process -Name prelo -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Path",
+        ],
+        { encoding: "utf8" },
+      );
+      return out
+        .split(/\r?\n/)
+        .some((p) => p.trim().toLowerCase() === binary.toLowerCase());
     }
     execFileSync("pgrep", ["-f", binary], { stdio: "ignore" });
     return true;
@@ -62,5 +78,10 @@ build();
 const result = await run();
 if (result.timedOut) fail(`o app não se encerrou em ${TIMEOUT_MS / 1000} s`);
 if (result.code !== 0) fail(`o app saiu com código ${result.code}`);
+// US1 cenário 2: fechar sem mensagem de erro.
+// Só sinais do próprio Prelo: ruído do WebKit/WebView2 no stderr não conta.
+if (/panicked|self-test: FALHA/.test(result.stderr)) {
+  fail("o app escreveu erro no stderr");
+}
 if (lingering()) fail("processo do app continua em execução depois de fechar a janela");
 console.log(`self-test: ok em ${result.ms} ms`);
