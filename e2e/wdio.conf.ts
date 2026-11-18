@@ -27,7 +27,10 @@ export const config: WebdriverIO.Config = {
   reporters: ["spec"],
   mochaOpts: { ui: "bdd", timeout: 60_000 },
   beforeSession: () => {
-    driver = spawn(driverBin, [], { stdio: [null, process.stdout, process.stderr] });
+    // No Windows, os runners do GitHub expõem o msedgedriver em EDGEWEBDRIVER.
+    const edge = process.env.EDGEWEBDRIVER;
+    const args = process.platform === "win32" && edge ? ["--native-driver", join(edge, "msedgedriver.exe")] : [];
+    driver = spawn(driverBin, args, { stdio: [null, process.stdout, process.stderr] });
   },
   afterSession: () => {
     driver?.kill();

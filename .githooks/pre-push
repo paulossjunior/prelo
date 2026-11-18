@@ -1,0 +1,10 @@
+#!/bin/sh
+# Trava local de push (FR-010, constituição: Fluxo de Desenvolvimento).
+# Roda a suíte completa; qualquer falha bloqueia o push. Não use --no-verify.
+echo "pre-push: rodando npm run verify (a trava não pode ser pulada)"
+npm run verify
+status=$?
+if [ "$status" -ne 0 ]; then
+  echo "pre-push: BLOQUEADO. npm run verify falhou; veja as etapas acima." >&2
+fi
+exit "$status"
