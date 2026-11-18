@@ -107,7 +107,7 @@ Layout Tauri 2 do [plan.md](plan.md#source-code-repository-root): interface em `
 **Independent Test**: em clone limpo, seguir o README e `npm run verify` passa (cenários 1 e 4 do [quickstart.md](quickstart.md)).
 
 - [X] T021 [P] [US3] Escrever o README: pré-requisitos por sistema (incluindo pacotes Linux de research R8), `npm install`, `npm run dev`, `npm run build`, `npm run verify`, `npm run audit`, como instalar `cargo-deny` e `tauri-driver`, e regra de PR obrigatório em `README.md` (FR-013)
-- [ ] T022 [US3] Validar em clone limpo (diretório temporário) os cenários 1, 4 e 5 do [quickstart.md](quickstart.md) e corrigir README ou scripts que divergirem
+- [X] T022 [US3] Validar em clone limpo (diretório temporário) os cenários 1, 4 e 5 do [quickstart.md](quickstart.md) e corrigir README ou scripts que divergirem
 
 **Checkpoint**: suíte completa roda com um comando.
 
