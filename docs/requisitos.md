@@ -50,6 +50,29 @@ Regras sobre comentários:
 - **RF-05** Suporte a `.bib` e figuras dentro do projeto.
 - **RF-06** O Prelo compila Typst com compilador embutido, sem exigir `typst` instalado na máquina. A mesma compilação gera prévia, diagnósticos e todos os PDFs exportados.
 - **RF-07** A versão do compilador embutido aparece no app e fica registrada em `.prelo/project.json`, para que todos os coautores compilem com a mesma versão.
+- **RF-08** O compilador embutido só lê **arquivos regulares** cujo caminho real fica dentro da raiz do projeto, depois de resolver `..` e links simbólicos. Caminho que sairia da raiz, link simbólico que aponta para fora dela e arquivo especial (dispositivo, FIFO, socket) são recusados sem ler o conteúdo, com diagnóstico que cita o caminho pedido e o motivo. A regra vale para `#include`, `#import`, `image`, `bibliography`, estilo `.csl`, `read`, funções de dados (`json`, `yaml`, `toml`, `csv`, `xml`, `cbor`), `plugin` e para o autocompletar de caminhos do Tinymist. Caminho começando com `/` é relativo à raiz do projeto, como no Typst, e é permitido. Arquivos de pacotes seguem a mesma regra, com a pasta do pacote no cache como raiz. Ver [arquitetura.md §6](arquitetura.md#6-acesso-a-arquivos-pelo-compilador).
+  - Origem: Princípio VI (o `.typ` vem de outros coautores e é entrada não confiável), RF-05, RF-06.
+  - Verificação: testes de segurança com projetos de fixture contendo `#image("../../fora.png")`, `#read("/../fora.txt")`, `#include` de caminho subindo além da raiz, link simbólico versionado apontando para fora, link simbólico interno apontando para dentro (aceito) e FIFO na raiz. Cada caso recusado deve gerar o diagnóstico e nenhuma chamada de leitura fora da raiz; o autocompletar não deve listar nada fora da raiz.
+- **RF-09** A bibliografia aceita arquivos BibLaTeX `.bib` e Hayagriva `.yml`/`.yaml`, um ou vários, e estilos de citação CSL personalizados (`.csl`), além dos estilos embutidos do Typst. Todos seguem RF-08. Arquivo malformado gera diagnóstico com arquivo e linha, sem encerrar o app.
+  - Origem: RF-05, RF-06; Princípio VI (entrada malformada).
+  - Verificação: projetos de fixture com `.bib`, `.yml` e `.csl` compilam no Prelo e geram o mesmo PDF que o `typst` de linha de comando na versão registrada em `.prelo/project.json`; fixtures malformadas (chave não fechada, YAML inválido, XML de CSL inválido) geram diagnóstico e o app continua respondendo.
+- **RF-50** Figuras aceitam os formatos de imagem suportados pela versão do compilador registrada em `.prelo/project.json`: PNG, JPEG, GIF (sempre estática) e SVG; PDF e WebP a partir do Typst 0.14.0. TODO(versão-typst): definir a versão do Typst embutida na primeira release; se for anterior à 0.14.0, PDF e WebP ficam fora.
+  - Origem: RF-05, RF-07.
+  - Verificação: um projeto de fixture com uma figura de cada formato compila e mostra todas na prévia e no PDF; arquivo com extensão de imagem e conteúdo inválido gera diagnóstico sem encerrar o app.
+- **RF-51** Uma edição que não altera os bytes de uma imagem não a decodifica de novo: o núcleo reaproveita a imagem já carregada enquanto o conteúdo do arquivo não mudar. A meta de RF-02 vale também para artigos com imagens grandes, quando a edição não toca a imagem.
+  - Origem: RF-02, RNF-03.
+  - Verificação: teste que conta decodificações de imagem ao longo de uma sequência de edições de texto (deve ser uma por imagem); medição do tempo de prévia após edição de texto num artigo de fixture com imagens grandes. TODO(imagem-grande): definir o tamanho de referência da imagem grande (pixels e bytes) e se há meta para a primeira compilação depois que a imagem chega ou muda.
+- **RF-52** Arquivo referenciado que o projeto já conhece mas que ainda não chegou ao computador (**pendente**) não impede a prévia. Imagem pendente aparece como marcador do mesmo tamanho pedido no `.typ`, com o nome do arquivo. Bibliografia, `.typ` incluído ou dado pendente mantém na prévia a última compilação bem-sucedida, com aviso "Aguardando <arquivo>". Arquivo que o projeto não conhece gera o diagnóstico normal de arquivo não encontrado. Quando o arquivo chega, a prévia recompila sem ação do usuário.
+  - Origem: RF-02, RF-05; fluxo 6.1, passo 7 (o texto chega antes das figuras); [arquitetura.md §7](arquitetura.md#7-riscos-técnicos-e-questões-em-aberto) ("Sincronização lenta").
+  - Verificação: teste de integração com dois pares em que o texto chega e a figura é retida; a prévia do receptor mostra o marcador e o aviso, e recompila ao liberar a figura. TODO(manifesto-arquivos): como o app sabe que um arquivo é "pendente" depende de D-12 (proposta). TODO(marcador-tamanho): imagem pendente sem `width`/`height` no `.typ` não tem tamanho conhecido; definir o tamanho do marcador.
+- **RF-53** Exportar o PDF final (RF-42) fica bloqueado enquanto houver arquivo pendente referenciado pelo artigo. O app lista os arquivos que faltam.
+  - Origem: RF-42 (PDF final limpo, sem marcações) e Princípio I (o `.typ` precisa compilar fora do Prelo, onde não existe marcador).
+  - Verificação: com uma figura pendente, a ação Exportar PDF final aparece desativada e lista o arquivo; ao chegar a figura, a ação é liberada. TODO(export-revisao): decidir se o PDF com comentários (RF-43) e o PDF de diferenças (RF-44) podem sair com marcador.
+- **RF-54** Erro causado só por arquivo pendente não conta como "sugestão que quebra a compilação": não desativa o Aceitar (RF-15).
+  - Origem: RF-15, Princípio V.
+  - Verificação: com uma figura pendente, uma sugestão válida de texto continua com Aceitar ativo; uma sugestão que apaga um `]` continua com Aceitar desativado.
+
+Os requisitos de escrita usam RF-01 a RF-09 e continuam em RF-50, porque RF-10 já abre a faixa de revisão.
 
 ### Revisão
 

@@ -9,8 +9,8 @@ Este documento é a visão geral. O detalhe está em:
 | Documento | Conteúdo |
 |---|---|
 | [requisitos.md](requisitos.md) | Papéis, requisitos funcionais (RF) e não funcionais (RNF), regras de revisão e de sincronização, fluxos, PDF de diferenças |
-| [arquitetura.md](arquitetura.md) | Componentes, arquivos do repositório, conexão sem servidor, modelo de revisão, sincronização, riscos técnicos |
-| [adrs.md](adrs.md) | Decisões de arquitetura D-01 a D-10, com contexto, alternativas e consequências |
+| [arquitetura.md](arquitetura.md) | Componentes, arquivos do repositório, conexão sem servidor, modelo de revisão, sincronização, acesso a arquivos pelo compilador, riscos técnicos |
+| [adrs.md](adrs.md) | Decisões de arquitetura D-01 a D-14, com contexto, alternativas e consequências |
 
 O nome vem da prensa tipográfica. Um texto "no prelo" é um texto prestes a ser publicado, que é a fase que a ferramenta atende.
 
@@ -80,7 +80,7 @@ Nenhuma opção documentada junta Typst, controle de alterações no estilo do O
 - **Nome e marca.** Verificar se "Prelo" já é marca registrada (INPI e buscas gerais) antes de divulgar.
 - **Licença do próprio Prelo.** Ainda não escolhida.
 
-Riscos técnicos estão em [arquitetura.md §6](arquitetura.md#6-riscos-técnicos-e-questões-em-aberto).
+Riscos técnicos estão em [arquitetura.md §7](arquitetura.md#7-riscos-técnicos-e-questões-em-aberto).
 
 ## 6. Fontes
 

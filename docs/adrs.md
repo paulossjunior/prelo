@@ -22,6 +22,10 @@ Status possíveis: **proposta**, **aceita**, **substituída por D-xx**.
 | [D-08](#d-08-salvar-s-sincroniza-automaticamente) | Salvar (⌘S) sincroniza automaticamente | Aceita |
 | [D-09](#d-09-aceitar-e-rejeitar-sugestões-bloqueados-offline) | Aceitar e rejeitar sugestões bloqueados offline | Aceita |
 | [D-10](#d-10-compilador-typst-embutido-no-núcleo) | Compilador Typst embutido no núcleo | Aceita |
+| [D-11](#d-11-mpl-20-só-como-exceção-por-dependência) | MPL-2.0 só como exceção por dependência | Aceita |
+| [D-12](#d-12-transporte-de-arquivos-binários-entre-coautores) | Transporte de arquivos binários entre coautores | Aceita |
+| [D-13](#d-13-arquivos-fora-do-projeto) | Arquivos fora do projeto | Aceita |
+| [D-14](#d-14-edição-concorrente-de-bibliografia) | Edição concorrente de bibliografia | Aceita |
 
 ---
 
@@ -44,7 +48,7 @@ Status possíveis: **proposta**, **aceita**, **substituída por D-xx**.
 - **Alternativas consideradas:** marcações dentro do próprio `.typ` (descartada: suja o código-fonte e quebra quem não usa o Prelo).
 - **Consequências:**
   - (+) Quem não usa o Prelo vê um repositório Typst normal.
-  - (−) Edições feitas fora do app chegam como diff do git e precisam virar sugestões de um autor "externo"; o tratamento de trechos alterados nos dois lados ainda está em aberto ([arquitetura.md §6](arquitetura.md#6-riscos-técnicos-e-questões-em-aberto)).
+  - (−) Edições feitas fora do app chegam como diff do git e precisam virar sugestões de um autor "externo"; o tratamento de trechos alterados nos dois lados ainda está em aberto ([arquitetura.md §7](arquitetura.md#7-riscos-técnicos-e-questões-em-aberto)).
 
 ## D-03 Comentários são resolvidos, não aceitos
 
@@ -128,3 +132,67 @@ Status possíveis: **proposta**, **aceita**, **substituída por D-xx**.
   - (+) Ninguém precisa instalar `typst`; prévia e PDF final batem.
   - (−) Atualizar o Typst exige nova versão do Prelo, e uma versão nova pode mudar o layout. Falta definir quem decide a troca de versão no projeto.
   - (−) Pacotes `@preview` dependem da internet. Falta definir cache local para compilar offline e quais fontes vêm embutidas.
+
+## D-11 MPL-2.0 só como exceção por dependência
+
+- **Status:** aceita · 2026-11-18
+- **Contexto:** RNF-06 exige dependências com licenças permissivas (Apache-2.0, MIT). A árvore de dependências do Tauri (D-01) costuma incluir crates sob MPL-2.0, como `cssparser` e `selectors`. MPL-2.0 é copyleft por arquivo: usar sem modificar não impõe obrigações ao código do Prelo.
+- **Decisão:** MPL-2.0 não entra na lista geral de licenças permitidas. Cada crate MPL-2.0 só é aceita como exceção nomeada em `src-tauri/deny.toml`, com motivo, e apenas se usada sem modificação. Nova exceção exige PR.
+- **Alternativas consideradas:**
+  - Recusar MPL-2.0: bloquearia o Tauri e contradiria D-01.
+  - Incluir MPL-2.0 na lista geral: permitiria novas dependências copyleft sem revisão.
+- **Consequências:**
+  - (+) O Tauri pode ser usado sem relaxar a regra para o resto do projeto.
+  - (−) Cada atualização que traga nova crate MPL-2.0 falha na auditoria até alguém registrar a exceção.
+  - (−) Modificar uma dessas crates (fork ou patch) obrigaria publicar os arquivos alterados sob MPL-2.0.
+
+## D-12 Transporte de arquivos binários entre coautores
+
+- **Status:** aceita · 2026-11-18
+- **Contexto:** o documento Yjs cobre texto, sugestões e comentários (D-02). Imagens, PDFs usados como figura, `.csl` e outros arquivos não textuais não têm transporte definido entre pares nem fora do git. O fluxo de entrada já supõe que "o texto chega primeiro, depois figuras e histórico" ([requisitos.md §6.1](requisitos.md#61-entrada-no-projeto), passo 7), e o protótipo mostra "Figuras · 118 de 131 arquivos" vindo direto do computador do dono, criptografado. A prévia precisa saber se um arquivo ausente é pendente ou inexistente (RF-52), o que exige uma lista de arquivos do projeto conhecida antes dos bytes.
+- **Decisão:** manifesto de arquivos num `Y.Map` do documento Yjs (caminho → hash do conteúdo, tamanho, autor, hora) e bytes transferidos sob demanda por iroh, de qualquer par online que os tenha, com verificação do hash ao receber. Salvar e fechar continuam gravando os arquivos no commit (D-05), para quem não está online junto.
+- **Alternativas consideradas:**
+  - Só git: binários viajam apenas por commit, push e pull. Simples e já previsto em D-05, mas durante a edição em tempo real uma figura nova só aparece para o outro coautor depois que o autor salva e o outro recebe; exige remoto git mesmo para quem está online junto; não dá a lista de arquivos pendentes antes do pull.
+  - Bytes dentro do documento Yjs (`Uint8Array` num `Y.Map`): um único canal, mas o documento CRDT cresce com cada versão de cada figura, a sincronização inicial transfere tudo junto e o texto deixa de chegar antes das figuras.
+  - Git LFS: exige servidor LFS e cotas do provedor; não serve à conexão direta entre pares.
+- **Consequências:**
+  - (+) Atende o fluxo 6.1 e o protótipo: texto primeiro, figuras depois, sem travar a edição (D-07).
+  - (+) O manifesto permite distinguir pendente de inexistente (RF-52) e bloquear o PDF final só quando necessário (RF-53).
+  - (+) Tráfego criptografado de ponta a ponta pela mesma conexão iroh (Princípio II, D-04); o hash valida bytes vindos de outro par (Princípio VI).
+  - (−) Um componente a mais no núcleo (protocolo de blobs sobre iroh). TODO(licença-blobs): confirmar a licença da biblioteca escolhida frente a RNF-06.
+  - (−) Duas escritas simultâneas no mesmo caminho do `Y.Map` ficam com uma só versão no manifesto. Para não perder trabalho (Princípio III), a outra versão **deveria** ser guardada e o usuário avisado. TODO(conflito-binario): como apresentar a versão perdedora.
+  - (−) "Sincronizado" passa a conviver com arquivos ainda pendentes; o Princípio IV fala em receber tudo antes de liberar a edição, e D-07 já limita o bloqueio ao texto. TODO(estado-arquivos): confirmar com o dono que arquivos pendentes não bloqueiam a edição.
+  - Em aberto: TODO(permissoes-arquivos): quem pode adicionar, trocar ou remover arquivos (revisor? offline?), já que a tabela de papéis só fala de texto. TODO(limite-arquivo): limite de tamanho por arquivo, se houver.
+
+## D-13 Arquivos fora do projeto
+
+- **Status:** aceita · 2026-11-18
+- **Contexto:** pesquisadores costumam manter um `.bib` único para vários artigos, fora da pasta de cada um. RF-05 fala em `.bib` e figuras "dentro do projeto", e RF-08 recusa qualquer leitura fora da raiz, porque o `.typ` é entrada não confiável (Princípio VI). Um caminho fora do projeto também não existe no computador dos outros coautores nem em quem compila o repositório fora do Prelo (Princípio I).
+- **Decisão:** não permitir arquivos fora do projeto. O app oferece copiar o arquivo para dentro do projeto quando o `.typ` aponta para fora, e a cópia passa a ser versionada e sincronizada como os demais arquivos.
+- **Alternativas consideradas:**
+  - Raízes extras declaradas em `.prelo/project.json`: o dono autoriza pastas fora do projeto. Quebra RF-08 como está escrito, depende de caminhos que só existem na máquina de quem configurou e torna o `.typ` não compilável fora do Prelo sem reproduzir a mesma estrutura de pastas.
+  - Cópia com vínculo: o app copia para dentro do projeto e guarda em `.prelo/` o caminho de origem, com um comando "Atualizar do original". Mantém o projeto autocontido, mas o caminho de origem só vale para um computador e a atualização é manual.
+  - Submódulo git com o `.bib` compartilhado: padrão do git e compilável fora do Prelo, mas exige que todos entendam submódulos e que o Prelo os suporte em commit, push e pull. TODO(gitoxide-submodulos): verificar suporte a submódulos no gitoxide.
+- **Consequências:**
+  - (+) Projeto autocontido: o mesmo `.typ` compila no Prelo, no `typst` de linha de comando e no computador de qualquer coautor (Princípio I, RNF-05).
+  - (+) Nenhuma exceção à regra de escopo (RF-08).
+  - (−) O `.bib` compartilhado vira várias cópias que divergem com o tempo; corrigir uma entrada exige repetir a correção em cada artigo.
+  - (−) Pacotes `@local`, que também ficam fora do projeto, deixam de funcionar no Prelo ou precisam ser copiados para o projeto. TODO(pacotes-local): confirmar.
+  - A cópia com vínculo pode entrar depois sem invalidar esta escolha.
+
+## D-14 Edição concorrente de bibliografia
+
+- **Status:** aceita · 2026-11-18
+- **Contexto:** `.bib` e `.yml` (RF-09) são texto e podem ser editados por dois coautores ao mesmo tempo, como o `.typ`. O documento Yjs hoje cobre o texto do artigo (D-02); a arquitetura não diz se a bibliografia entra nele. Ferramentas externas, como exportação automática de gerenciadores de referência, costumam reescrever o arquivo inteiro.
+- **Decisão:** `.bib` e `.yml` como `Y.Text` no documento Yjs, com as mesmas regras do `.typ` (edição direta só sincronizado, sugestões, comentários). `.csl` e binários como arquivo inteiro, pelo transporte de D-12.
+- **Alternativas consideradas:**
+  - Arquivo inteiro, última gravação vence: simples, mas uma das duas edições simultâneas some, o que contraria o Princípio III.
+  - Arquivo inteiro com detecção de conflito: guarda o hash da versão base e, se as duas versões mudaram, pede ao usuário que escolha ou junte. Não perde trabalho, mas exige uma tela de conflito e interrompe quem edita referências com frequência.
+  - Fusão estruturada por entrada (pela chave de citação): o resultado é sempre BibLaTeX válido entrada a entrada, mas exige analisar e regravar o arquivo, o que pode perder comentários e formatação, e não serve para `.yml` sem um segundo analisador.
+- **Consequências:**
+  - (+) Um único modelo para todo texto do projeto: CRDT, fila offline, sugestões e comentários já especificados (D-02, D-06, D-07).
+  - (+) Edições em entradas diferentes se fundem sem conflito.
+  - (+) Mudança de revisor em referência vira sugestão, como no texto (Princípio V).
+  - (−) Duas pessoas editando a mesma entrada ao mesmo tempo podem gerar BibLaTeX inválido; o erro aparece como diagnóstico (RF-09), não é evitado.
+  - (−) Reescrita do arquivo inteiro por ferramenta externa chega como diff e cai no mesmo problema em aberto da edição fora do app ([arquitetura.md §7](arquitetura.md#7-riscos-técnicos-e-questões-em-aberto)).
+  - (−) TODO(bib-grande): medir o custo de um `.bib` com milhares de entradas como `Y.Text` no carregamento e na sincronização.

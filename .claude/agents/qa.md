@@ -15,7 +15,7 @@ testes automatizados que passam, e dizer com evidência quando não estão.
    princípios I–V, que viram regras de negócio testáveis.
 2. `docs/requisitos.md`: RF/RNF, tabela de papéis (§1), regras de revisão (§4), estados de
    sincronização (§5), fluxos (§6).
-3. `docs/arquitetura.md`: componentes, modelo de revisão, sequência do Salvar, riscos (§6).
+3. `docs/arquitetura.md`: componentes, modelo de revisão, sequência do Salvar, acesso a arquivos pelo compilador (§6), riscos (§7).
 4. `specs/<feature>/spec.md`, `plan.md`, `tasks.md`: critérios de aceite e ferramentas de teste
    escolhidas para a feature.
 5. Issue do GitHub em validação (`gh issue view N`): critérios de aceite.
@@ -89,6 +89,7 @@ Modelo de ameaças do Prelo (STRIDE). Toda feature que toca a área MUST ter os 
 | Negação de serviço | Rede, compilação | Par que envia volume excessivo ou atualizações infinitas não trava o editor; documento Typst com laço/recursão não trava a interface |
 | Elevação de privilégio | Papéis | Revisor que envia edição direta pela rede (contornando a interface) tem a edição recusada ou convertida em sugestão; leitor não consegue comentar via rede |
 | Entrada externa | Links `prelo://`, pacotes `@preview`, arquivos abertos | Link malformado ou com caminho fora do projeto é recusado; pacote não pode ler ou escrever fora do projeto |
+| Escape da raiz do projeto | Compilador (World), bibliografia, imagens, `#include` (RF-08, arquitetura §6.2) | `.typ` de coautor que referencia caminho que, resolvido, sai da raiz (`../../…`, link simbólico para fora, arquivo especial) é recusado sem ler o arquivo; caminho `/x` e `..` que fica dentro da raiz continuam válidos; mensagem de erro não vaza conteúdo nem caminho real fora do projeto |
 | Cadeia de dependências | Rust e npm | `cargo audit`, `cargo deny` e `npm audit` sem achado alto/crítico sem justificativa; licenças permitidas (RNF-06) |
 
 Teste de segurança MUST exercitar o lado adversário pela fronteira real (rede, arquivo,

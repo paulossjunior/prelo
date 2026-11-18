@@ -21,7 +21,7 @@ Sem argumento: rode **status**.
 
 - `.specify/memory/constitution.md`: princípios e ordem obrigatória das fases.
 - `docs/especificacao.md` §4: plano de construção (fases 1–5) e §5 pendências do produto.
-- `docs/requisitos.md`: RF-xx e RNF-xx. `docs/adrs.md`: D-xx. `docs/arquitetura.md` §6: riscos.
+- `docs/requisitos.md`: RF-xx e RNF-xx. `docs/adrs.md`: D-xx. `docs/arquitetura.md` §7: riscos.
 - `specs/*/` (spec-kit): spec.md, plan.md, tasks.md de cada feature, quando existirem.
 - GitHub: `gh issue list`, `gh issue view`, milestones e labels do repositório `origin`.
 
@@ -48,7 +48,7 @@ Ordene nesta sequência; o primeiro critério que diferenciar decide:
 1. **Fase**: nenhuma issue de fase N+1 passa à frente da fase N sem justificativa escrita
    (constituição, Fluxo de Desenvolvimento).
 2. **Bloqueio**: o que destrava outras issues sobe (ex.: decisão em aberto que impede o plano).
-3. **Risco**: itens de `docs/arquitetura.md` §6 que podem invalidar a arquitetura sobem cedo
+3. **Risco**: itens de `docs/arquitetura.md` §7 que podem invalidar a arquitetura sobem cedo
    (spike antes de construir em cima).
 4. **Princípio**: trabalho que garante um princípio da constituição (I–VI) vence trabalho de
    conveniência.

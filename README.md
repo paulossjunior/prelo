@@ -11,7 +11,7 @@ Editor desktop para escrever artigos científicos em [Typst](https://typst.app) 
 | [`docs/especificacao.md`](docs/especificacao.md) | Visão geral: problema, alternativas, escopo, plano e pendências |
 | [`docs/requisitos.md`](docs/requisitos.md) | Requisitos: papéis, RF e RNF, regras de revisão e sincronização, fluxos |
 | [`docs/arquitetura.md`](docs/arquitetura.md) | Arquitetura: componentes, conexão sem servidor, modelo de revisão, sincronização, riscos técnicos |
-| [`docs/adrs.md`](docs/adrs.md) | Decisões de arquitetura D-01 a D-10 |
+| [`docs/adrs.md`](docs/adrs.md) | Decisões de arquitetura D-01 a D-14 |
 | [`prototype/index.html`](prototype/index.html) | Protótipo clicável da interface e telas dos fluxos. Abra no navegador |
 
 ## Ideias principais
