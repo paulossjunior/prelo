@@ -3,7 +3,9 @@
 
 use serde_json::{json, Value};
 use tauri::ipc::{CallbackFn, InvokeBody};
-use tauri::test::{get_ipc_response, mock_builder, mock_context, noop_assets, MockRuntime, INVOKE_KEY};
+use tauri::test::{
+    get_ipc_response, mock_builder, mock_context, noop_assets, MockRuntime, INVOKE_KEY,
+};
 use tauri::webview::InvokeRequest;
 use tauri::{App, WebviewWindow, WebviewWindowBuilder};
 
@@ -17,8 +19,16 @@ fn app() -> (App<MockRuntime>, WebviewWindow<MockRuntime>) {
     (app, window)
 }
 
-fn invoke(window: &WebviewWindow<MockRuntime>, cmd: &str, body: InvokeBody) -> Result<Value, Value> {
-    let url = if cfg!(windows) { "http://tauri.localhost" } else { "tauri://localhost" };
+fn invoke(
+    window: &WebviewWindow<MockRuntime>,
+    cmd: &str,
+    body: InvokeBody,
+) -> Result<Value, Value> {
+    let url = if cfg!(windows) {
+        "http://tauri.localhost"
+    } else {
+        "tauri://localhost"
+    };
     get_ipc_response(
         window,
         InvokeRequest {
@@ -62,8 +72,15 @@ fn comando_nao_registrado_e_rejeitado_e_nucleo_segue_funcionando() {
 #[test]
 fn argumentos_extras_sao_rejeitados() {
     let (_app, window) = app();
-    let res = invoke(&window, "get_app_info", InvokeBody::Json(json!({ "path": "/etc/passwd" })));
-    assert!(res.is_err(), "argumento extra deveria ser recusado: {res:?}");
+    let res = invoke(
+        &window,
+        "get_app_info",
+        InvokeBody::Json(json!({ "path": "/etc/passwd" })),
+    );
+    assert!(
+        res.is_err(),
+        "argumento extra deveria ser recusado: {res:?}"
+    );
     get_app_info_ok(&window);
 }
 

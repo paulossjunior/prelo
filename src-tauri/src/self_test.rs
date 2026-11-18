@@ -3,11 +3,17 @@
 
 use tauri::{AppHandle, Manager, Runtime};
 
+use crate::app_info::Os;
+
+/// Meta de SC-002: versão e sistema visíveis em até 3 s.
+pub const MAX_ELAPSED_MS: u64 = 3000;
+
 /// Recebe o texto que a interface renderizou. Sucesso: fecha a janela principal, e o app
 /// encerra com código 0 pelo caminho normal de fechamento (FR-005). Falha: sai com código 1.
 #[tauri::command]
 pub fn self_test_report<R: Runtime>(app: AppHandle<R>, rendered: String, elapsed_ms: u64) {
-    match check(&rendered) {
+    let version = app.package_info().version.to_string();
+    match check(&rendered, &version, elapsed_ms) {
         Ok(()) => {
             eprintln!("self-test: ok ({elapsed_ms} ms): {rendered}");
             match app.get_webview_window("main") {
@@ -30,14 +36,15 @@ pub fn self_test_report<R: Runtime>(app: AppHandle<R>, rendered: String, elapsed
     }
 }
 
-fn check(rendered: &str) -> Result<(), String> {
-    if rendered.contains("Prelo") {
-        Ok(())
-    } else {
-        Err(format!(
-            "texto renderizado não contém \"Prelo\": {rendered:?}"
-        ))
+fn check(rendered: &str, version: &str, elapsed_ms: u64) -> Result<(), String> {
+    let expected = format!("Prelo {version} · {}", Os::current()?.as_str());
+    if rendered != expected {
+        return Err(format!("esperado {expected:?}, renderizado {rendered:?}"));
     }
+    if elapsed_ms > MAX_ELAPSED_MS {
+        return Err(format!("levou {elapsed_ms} ms; limite {MAX_ELAPSED_MS} ms"));
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -47,7 +54,10 @@ mod tests {
     const V: &str = env!("CARGO_PKG_VERSION");
 
     fn expected() -> String {
-        format!("Prelo {V} · {}", crate::app_info::Os::current().unwrap().as_str())
+        format!(
+            "Prelo {V} · {}",
+            crate::app_info::Os::current().unwrap().as_str()
+        )
     }
 
     #[test]

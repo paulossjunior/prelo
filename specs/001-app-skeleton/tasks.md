@@ -84,17 +84,17 @@ Layout Tauri 2 do [plan.md](plan.md#source-code-repository-root): interface em `
 
 ### Tests for User Story 2 ⚠️ escrever primeiro, ver falhar
 
-- [ ] T013 [P] [US2] Testes unitários em `src-tauri/src/app_info.rs` (módulo `tests`): `AppInfo.version` igual a `CARGO_PKG_VERSION` e à versão de `tauri.conf.json`; `AppInfo.os` mapeado para `macos`/`windows`/`linux` e erro `unsupported_os` para outro valor; `AppInfo.arch` preenchido (data-model.md `AppInfo.version`, `AppInfo.os`, `AppInfo.arch`)
-- [ ] T014 [P] [US2] Testes de contrato IPC em `src-tauri/tests/ipc_contract.rs` com `tauri::test` mock runtime: `get_app_info` responde no formato de [contracts/ipc.md](contracts/ipc.md); comando não registrado é rejeitado; argumentos extras ou de tipo errado são rejeitados; após cada rejeição, `get_app_info` continua respondendo (FR-003, segurança)
-- [ ] T015 [P] [US2] Teste de segurança em `src-tauri/tests/ipc_contract.rs`: sem a feature `self-test`, `self_test_report` é rejeitado como comando inexistente
-- [ ] T016 [P] [US2] Testes da interface em `src/app-info.test.ts` com `invoke` simulado e relógio falso: Carregando → Pronto com texto "Prelo 0.1.0 · macos"; erro do núcleo → Erro com mensagem e botão "Tentar de novo"; sem resposta em 5 s → Erro; "Tentar de novo" volta a Carregando (data-model.md Estado da tela inicial)
-- [ ] T017 [US2] Endurecer o autoteste em `scripts/self-test.mjs` e `e2e/app.e2e.ts`: o texto renderizado MUST ser exatamente "Prelo {version} · {os}" e `elapsedMs` ≤ 3000 (SC-002)
+- [X] T013 [P] [US2] Testes unitários em `src-tauri/src/app_info.rs` (módulo `tests`): `AppInfo.version` igual a `CARGO_PKG_VERSION` e à versão de `tauri.conf.json`; `AppInfo.os` mapeado para `macos`/`windows`/`linux` e erro `unsupported_os` para outro valor; `AppInfo.arch` preenchido (data-model.md `AppInfo.version`, `AppInfo.os`, `AppInfo.arch`)
+- [X] T014 [P] [US2] Testes de contrato IPC em `src-tauri/tests/ipc_contract.rs` com `tauri::test` mock runtime: `get_app_info` responde no formato de [contracts/ipc.md](contracts/ipc.md); comando não registrado é rejeitado; argumentos extras ou de tipo errado são rejeitados; após cada rejeição, `get_app_info` continua respondendo (FR-003, segurança)
+- [X] T015 [P] [US2] Teste de segurança em `src-tauri/tests/ipc_contract.rs`: sem a feature `self-test`, `self_test_report` é rejeitado como comando inexistente
+- [X] T016 [P] [US2] Testes da interface em `src/app-info.test.ts` com `invoke` simulado e relógio falso: Carregando → Pronto com texto "Prelo 0.1.0 · macos"; erro do núcleo → Erro com mensagem e botão "Tentar de novo"; sem resposta em 5 s → Erro; "Tentar de novo" volta a Carregando (data-model.md Estado da tela inicial)
+- [X] T017 [US2] Endurecer o autoteste em `scripts/self-test.mjs` e `e2e/app.e2e.ts`: o texto renderizado MUST ser exatamente "Prelo {version} · {os}" e `elapsedMs` ≤ 3000 (SC-002)
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Implementar `AppInfo` e o comando `get_app_info` em `src-tauri/src/app_info.rs` e registrá-lo em `src-tauri/src/lib.rs` até T013–T015 passarem (data-model.md `AppInfo.version`, `AppInfo.os`, `AppInfo.arch`)
-- [ ] T019 [US2] Implementar `src/app-info.ts` (consulta com timeout de 5 s, estados Carregando/Pronto/Erro, "Tentar de novo") e montar em `src/main.ts` até T016 passar
-- [ ] T020 [US2] Atualizar `src-tauri/src/self_test.rs` e `src/self-test.ts` para comparar o texto exato e o tempo, até T017 passar ([contracts/ipc.md](contracts/ipc.md#self_test_report-só-build-de-teste))
+- [X] T018 [US2] Implementar `AppInfo` e o comando `get_app_info` em `src-tauri/src/app_info.rs` e registrá-lo em `src-tauri/src/lib.rs` até T013–T015 passarem (data-model.md `AppInfo.version`, `AppInfo.os`, `AppInfo.arch`)
+- [X] T019 [US2] Implementar `src/app-info.ts` (consulta com timeout de 5 s, estados Carregando/Pronto/Erro, "Tentar de novo") e montar em `src/main.ts` até T016 passar
+- [X] T020 [US2] Atualizar `src-tauri/src/self_test.rs` e `src/self-test.ts` para comparar o texto exato e o tempo, até T017 passar ([contracts/ipc.md](contracts/ipc.md#self_test_report-só-build-de-teste))
 
 **Checkpoint**: US1 e US2 funcionam; MVP pronto.
 

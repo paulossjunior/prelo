@@ -1,5 +1,98 @@
 //! Informação do app para a interface (FR-002). Contrato: contracts/ipc.md, `get_app_info`.
-//! Implementação em T018; por ora só os testes (TDD, T013).
+//! Campos: data-model.md `AppInfo.version`, `AppInfo.os`, `AppInfo.arch`.
+
+use serde::Serialize;
+use serde_json::Value;
+use tauri::ipc::{InvokeBody, Request};
+use tauri::{AppHandle, Runtime};
+
+/// Sistema em execução; outro valor é erro `unsupported_os`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Os {
+    Macos,
+    Windows,
+    Linux,
+}
+
+impl Os {
+    pub fn from_name(name: &str) -> Result<Self, String> {
+        match name {
+            "macos" => Ok(Self::Macos),
+            "windows" => Ok(Self::Windows),
+            "linux" => Ok(Self::Linux),
+            _ => Err("unsupported_os".to_string()),
+        }
+    }
+
+    pub fn current() -> Result<Self, String> {
+        Self::from_name(std::env::consts::OS)
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Macos => "macos",
+            Self::Windows => "windows",
+            Self::Linux => "linux",
+        }
+    }
+}
+
+/// Serializa como no contrato: `"macos"`, `"windows"`, `"linux"`.
+impl Serialize for Os {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct AppInfo {
+    pub version: String,
+    pub os: Os,
+    pub arch: String,
+}
+
+impl AppInfo {
+    pub fn new(version: &str) -> Result<Self, String> {
+        if !is_semver(version) {
+            return Err("invalid_version".to_string());
+        }
+        Ok(Self {
+            version: version.to_string(),
+            os: Os::current()?,
+            arch: std::env::consts::ARCH.to_string(),
+        })
+    }
+}
+
+/// MAJOR.MINOR.PATCH numéricos, com pré-release opcional após `-`.
+fn is_semver(version: &str) -> bool {
+    let core = version.split('-').next().unwrap_or_default();
+    let parts: Vec<&str> = core.split('.').collect();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// Sem argumentos: qualquer corpo além de objeto vazio ou nulo é recusado (FR-003).
+fn has_no_arguments(body: &InvokeBody) -> bool {
+    match body {
+        InvokeBody::Json(Value::Null) => true,
+        InvokeBody::Json(Value::Object(map)) => map.is_empty(),
+        _ => false,
+    }
+}
+
+#[tauri::command]
+pub fn get_app_info<R: Runtime>(
+    app: AppHandle<R>,
+    request: Request<'_>,
+) -> Result<AppInfo, String> {
+    if !has_no_arguments(request.body()) {
+        return Err("invalid_arguments".to_string());
+    }
+    AppInfo::new(&app.package_info().version.to_string())
+}
 
 #[cfg(test)]
 mod tests {
