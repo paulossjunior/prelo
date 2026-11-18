@@ -91,6 +91,27 @@ jobs:
         if: runner.os != 'Linux'
         run: npm run verify
 
+      - name: Diagnóstico do WebView2 (Windows, em falha)
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # O WebView2 aceita a porta de depuração pela variável de ambiente mesmo com os
+          # argumentos que o Tauri passa? Onde ele grava o DevToolsActivePort?
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=0"
+          $app = Start-Process "src-tauri\target\debug\prelo.exe" -PassThru
+          Start-Sleep -Seconds 15
+          Write-Host "== processos msedgewebview2"
+          Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" |
+            Select-Object ProcessId, CommandLine | Format-List | Out-String -Width 4000
+          Write-Host "== pasta de dados do app"
+          Get-ChildItem -Recurse -Depth 2 "$env:LOCALAPPDATA\org.prelo.app" -ErrorAction SilentlyContinue |
+            Select-Object FullName | Out-String -Width 400
+          Write-Host "== DevToolsActivePort"
+          Get-ChildItem -Recurse -Filter DevToolsActivePort -ErrorAction SilentlyContinue `
+            -Path $env:LOCALAPPDATA, $env:TEMP, "src-tauri\target\debug" |
+            ForEach-Object { $_.FullName; Get-Content $_.FullName }
+          Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue
+
       - name: Log do msedgedriver (Windows, em falha)
         if: failure() && runner.os == 'Windows'
         uses: actions/upload-artifact@v4
