@@ -94,6 +94,9 @@ Depende de #N · Bloqueia #M
 Ao delegar:
 
 - Uma issue por agente por vez; agentes independentes podem rodar em paralelo.
+- **Nada vai direto à `main`** (spec 001, FR-012): cada feature trabalha na branch
+  `NNN-nome` do `specs/`; ao fim, abra pull request (`gh pr create`) citando `Closes #N` e
+  anexando o veredito do `qa`. Merge só com CI verde nos três sistemas.
 - Features: a issue-mãe (ex.: #1) descreve o objetivo; as tarefas `T0xx` do `tasks.md` viram
   issues filhas via `/speckit-github-taskstoissues`. Ao criá-las, aplique a mesma milestone e
   label `agente:*` da issue-mãe e cite `Parte de #N` no corpo. Feche a issue-mãe só quando
