@@ -40,6 +40,7 @@ function run() {
       process.stderr.write(chunk);
     });
     const timer = setTimeout(() => {
+      diagnose(child.pid);
       child.kill("SIGKILL");
       resolve({ code: null, timedOut: true, ms: Date.now() - started, stderr });
     }, TIMEOUT_MS);
@@ -48,6 +49,27 @@ function run() {
       resolve({ code, timedOut: false, ms: Date.now() - started, stderr });
     });
   });
+}
+
+// Ao esgotar o tempo: mostra os processos do app (ex.: WebKitWebProcess, msedgewebview2)
+// para saber se a webview chegou a subir.
+function diagnose(pid) {
+  try {
+    const out =
+      process.platform === "win32"
+        ? execFileSync(
+            "powershell",
+            ["-NoProfile", "-Command", "Get-Process prelo,msedgewebview2 -ErrorAction SilentlyContinue | Format-Table Id,ProcessName,StartTime -AutoSize | Out-String"],
+            { encoding: "utf8" },
+          )
+        : execFileSync("ps", ["-e", "-o", "pid,ppid,stat,etime,args"], { encoding: "utf8" })
+            .split("\n")
+            .filter((l) => /prelo|WebKit|PID/.test(l))
+            .join("\n");
+    console.error(`self-test: processos ao esgotar o tempo (pid ${pid}):\n${out}`);
+  } catch (err) {
+    console.error(`self-test: diagnóstico indisponível: ${err}`);
+  }
 }
 
 function lingering() {
