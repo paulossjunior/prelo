@@ -189,3 +189,14 @@ describe("isMain", () => {
     }
   });
 });
+
+// Achado médio do QA (US1): código sob a feature self-test nunca era testado nem passava
+// pelo clippy dentro do verify.
+describe("STEPS", () => {
+  it("roda testes e clippy também com a feature self-test", async () => {
+    const { STEPS } = await import("./verify.mjs");
+    const cmds = STEPS.map((s) => s.cmd);
+    expect(cmds.some((c) => c.includes("clippy") && c.includes("--features self-test"))).toBe(true);
+    expect(cmds.some((c) => c.includes("cargo test") && c.includes("--features self-test"))).toBe(true);
+  });
+});
