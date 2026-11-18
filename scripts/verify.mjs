@@ -2,7 +2,7 @@
 // Orquestrador de `npm run verify` (specs/001-app-skeleton/contracts/dev-workflow.md).
 // Roda todas as etapas mesmo após falha, resume as falhas e sai com código != 0 se algo falhar.
 import { spawn } from "node:child_process";
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -12,7 +12,7 @@ export const STEPS = [
     name: "clippy",
     cmd: "cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings",
   },
-  { name: "tsc", cmd: "npx tsc --noEmit" },
+  { name: "tsc", cmd: "npx --no-install tsc --noEmit && npx --no-install tsc --noEmit -p e2e" },
   { name: "test:rust", cmd: "npm run test:rust" },
   { name: "test:ui", cmd: "npm run test:ui" },
   { name: "test:e2e", cmd: "npm run test:e2e" },
@@ -23,7 +23,11 @@ const SCAN_DIRS = ["src", "src-tauri/src", "src-tauri/tests", "scripts", "e2e"];
 const SCAN_EXT = /\.(rs|ts|mts|mjs|js)$/;
 const JUSTIFICATION = "// justificativa:";
 const RUST_SKIP = /^\s*#\[ignore\b/;
-const TS_SKIP = /^\s*(it|test|describe)\.(skip|only)\b/;
+// it/test/describe/suite/bench, com modificadores encadeados (ex.: test.concurrent.skip).
+const TS_SKIP = /^\s*(it|test|describe|suite|bench)(\.\w+)*\.(skip|only)\b/;
+// Continuação de cadeia quebrada em linhas: a anterior termina em it/test/... e esta começa em .skip.
+const TS_CONTINUATION = /^\s*(\.\w+)*\.(skip|only)\b/;
+const TS_CHAIN_HEAD = /^\s*(it|test|describe|suite|bench)(\.\w+)*\s*$/;
 
 /** Roda cada etapa em sequência; uma falha não interrompe as seguintes. */
 export async function runSteps(steps, run = runCommand) {
@@ -59,9 +63,15 @@ export function findUnjustifiedSkips(file, text) {
   const pattern = file.endsWith(".rs") ? RUST_SKIP : TS_SKIP;
   const lines = text.split(/\r?\n/);
   const found = [];
+  const isRust = file.endsWith(".rs");
   lines.forEach((line, i) => {
-    if (!pattern.test(line)) return;
-    const justified = line.includes(JUSTIFICATION) || (lines[i - 1] ?? "").includes(JUSTIFICATION);
+    const prev = lines[i - 1] ?? "";
+    const continued = !isRust && TS_CONTINUATION.test(line) && TS_CHAIN_HEAD.test(prev);
+    if (!pattern.test(line) && !continued) return;
+    const justified =
+      line.includes(JUSTIFICATION) ||
+      prev.includes(JUSTIFICATION) ||
+      (continued && (lines[i - 2] ?? "").includes(JUSTIFICATION));
     if (!justified) found.push({ file, line: i + 1 });
   });
   return found;
@@ -112,6 +122,16 @@ async function main() {
   process.exitCode = exitCode(results);
 }
 
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+/** Compara caminhos reais: link simbólico ou maiúsculas de unidade não podem pular main(). */
+export function isMain(moduleUrl, argv1) {
+  if (!argv1) return false;
+  try {
+    return realpathSync(fileURLToPath(moduleUrl)) === realpathSync(argv1);
+  } catch {
+    return false;
+  }
+}
+
+if (isMain(import.meta.url, process.argv[1])) {
   await main();
 }
