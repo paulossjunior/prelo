@@ -1,0 +1,52 @@
+# Política de dependências Rust (T026, RNF-06, FR-008, FR-009, D-11).
+# [licenses].allow MUST ser igual a security/licenses-allow.txt (testado em scripts/audit.test.ts).
+# [advisories].ignore MUST espelhar as exceções "cargo" de security/vuln-exceptions.toml.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+# FR-009 bloqueia vulnerabilidades; crate sem manutenção só é cobrada nas dependências
+# diretas (ex.: proc-macro-error chega transitivamente pelo GTK do Tauri no Linux).
+unmaintained = "workspace"
+ignore = []
+
+[licenses]
+version = 2
+confidence-threshold = 0.93
+allow = [
+  "Apache-2.0",
+  "MIT",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Zlib",
+  "Unicode-3.0",
+  "0BSD",
+  "CC0-1.0",
+  "Apache-2.0 WITH LLVM-exception",
+]
+# Exceções por crate (D-11): só crates usadas sem modificação, cada uma com motivo.
+exceptions = [
+  # Árvore do Tauri (D-01): parser de CSS/HTML do Servo, usado sem modificação.
+  { crate = "cssparser", allow = ["MPL-2.0"] },
+  { crate = "cssparser-macros", allow = ["MPL-2.0"] },
+  { crate = "selectors", allow = ["MPL-2.0"] },
+  { crate = "dtoa-short", allow = ["MPL-2.0"] },
+  # Via dirs/dirs-sys (diretórios do sistema), usado sem modificação.
+  { crate = "option-ext", allow = ["MPL-2.0"] },
+]
+
+[licenses.private]
+ignore = true
+
+[bans]
+multiple-versions = "allow"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

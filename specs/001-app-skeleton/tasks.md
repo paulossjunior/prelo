@@ -121,13 +121,13 @@ Layout Tauri 2 do [plan.md](plan.md#source-code-repository-root): interface em `
 
 ### Tests for User Story 4 ⚠️ escrever primeiro, ver falhar
 
-- [ ] T023 [P] [US4] Testes em `scripts/audit.test.ts`: lista de `security/licenses-allow.txt` idêntica à `allow` de `src-tauri/deny.toml` e à passada ao checker npm; exceção sem `reason` invalida a auditoria; exceção com `review_by` no passado invalida a auditoria; exceção com `ecosystem` fora de `cargo`/`npm` invalida (data-model.md Exceção de vulnerabilidade `id`, `ecosystem`, `reason`, `review_by`); dependência com licença fora da lista ou sem licença faz o checker falhar nomeando-a
+- [X] T023 [P] [US4] Testes em `scripts/audit.test.ts`: lista de `security/licenses-allow.txt` idêntica à `allow` de `src-tauri/deny.toml` e à passada ao checker npm; exceção sem `reason` invalida a auditoria; exceção com `review_by` no passado invalida a auditoria; exceção com `ecosystem` fora de `cargo`/`npm` invalida (data-model.md Exceção de vulnerabilidade `id`, `ecosystem`, `reason`, `review_by`); dependência com licença fora da lista ou sem licença faz o checker falhar nomeando-a
 
 ### Implementation for User Story 4
 
-- [ ] T024 [P] [US4] Criar `security/licenses-allow.txt` com a lista de research R4.1 e `security/vuln-exceptions.toml` vazio com comentário de formato (data-model.md Lista de licenças permitidas)
-- [ ] T025 [US4] Implementar `scripts/audit.mjs`: valida `security/vuln-exceptions.toml`, roda `cargo deny check` (manifest `src-tauri/Cargo.toml`), `audit-ci --high` com allowlist gerada das exceções `npm`, e `license-checker-rseidelsohn --onlyAllow` com a lista única; adicionar `audit-ci` e `license-checker-rseidelsohn` em `package.json`; até T023 passar
-- [ ] T026 [US4] Criar `src-tauri/deny.toml` (licenças da lista única, `advisories` com ignores gerados das exceções `cargo`, `sources` só crates.io) e rodar `cargo deny check`; para cada crate MPL-2.0 encontrada, adicionar `[[licenses.exceptions]]` com motivo citando D-11 (data-model.md Exceção de licença por dependência `name`, `allow`); nenhuma outra licença fora da lista é aceita
+- [X] T024 [P] [US4] Criar `security/licenses-allow.txt` com a lista de research R4.1 e `security/vuln-exceptions.toml` vazio com comentário de formato (data-model.md Lista de licenças permitidas)
+- [X] T025 [US4] Implementar `scripts/audit.mjs`: valida `security/vuln-exceptions.toml`, roda `cargo deny check` (manifest `src-tauri/Cargo.toml`), `audit-ci --high` com allowlist gerada das exceções `npm`, e `license-checker-rseidelsohn --onlyAllow` com a lista única; adicionar `audit-ci` e `license-checker-rseidelsohn` em `package.json`; até T023 passar
+- [X] T026 [US4] Criar `src-tauri/deny.toml` (licenças da lista única, `advisories` com ignores gerados das exceções `cargo`, `sources` só crates.io) e rodar `cargo deny check`; para cada crate MPL-2.0 encontrada, adicionar `[[licenses.exceptions]]` com motivo citando D-11 (data-model.md Exceção de licença por dependência `name`, `allow`); nenhuma outra licença fora da lista é aceita
 
 **Checkpoint**: `npm run audit` verde com a árvore atual.
 

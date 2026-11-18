@@ -153,6 +153,11 @@ contornando-a, e verificar que a mudança não entra no ramo principal.
 - Q: Toda mudança no ramo principal passa a exigir pull request com verificação verde, inclusive
   do dono, ou o dono mantém envio direto? → A: Pull request obrigatório para todos, inclusive o
   dono; sem exceção administrativa.
+- Q: A checagem de licenças vale para ferramentas npm de desenvolvimento (WebdriverIO, Vite),
+  que não entram no app? → A: Não. Licenças npm só nas dependências de produção; dev tools só
+  na auditoria de vulnerabilidades. Rust continua com a árvore inteira.
+- Q: `Apache-2.0 WITH LLVM-exception` (target-lexicon, via Tauri) é permitida? → A: Sim, na
+  lista geral, por ser Apache-2.0 com permissão adicional.
 
 ## Requirements *(mandatory)*
 
@@ -170,9 +175,10 @@ contornando-a, e verificar que a mudança não entra no ramo principal.
   completa: testes do núcleo, da interface, ponta a ponta e de segurança.
 - **FR-007**: A suíte MUST incluir testes de segurança aplicáveis ao esqueleto: recusa de
   consultas malformadas na ponte e ausência de permissões além das necessárias na janela.
-- **FR-008**: A auditoria MUST verificar licenças de todas as dependências contra a lista
-  permitida (Apache-2.0, MIT ou compatível) e falhar em qualquer outra ou em licença ausente
-  (RNF-06).
+- **FR-008**: A auditoria MUST verificar licenças contra a lista permitida (Apache-2.0, MIT ou
+  compatível) e falhar em qualquer outra ou em licença ausente (RNF-06). Escopo: todas as
+  dependências Rust e as dependências npm de produção (as que entram no app). Ferramentas npm
+  só de desenvolvimento passam pela auditoria de vulnerabilidades, não pela de licenças.
 - **FR-009**: A auditoria MUST verificar vulnerabilidades conhecidas e falhar em achado alto ou
   crítico sem justificativa registrada.
 - **FR-010**: Uma trava local MUST rodar suíte e auditoria antes de todo envio ao repositório

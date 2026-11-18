@@ -59,7 +59,20 @@ Versões consultadas em 2026-11-18 (npm e crates.io). Fixar no lockfile; atualiz
 
 ### R4.1 Lista inicial de licenças (proposta)
 
-Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, Unicode-3.0, 0BSD, CC0-1.0.
+Apache-2.0, MIT, BSD-2-Clause, BSD-3-Clause, ISC, Zlib, Unicode-3.0, 0BSD, CC0-1.0 e
+Apache-2.0 WITH LLVM-exception (aprovada em 2026-11-18).
+
+Escopo (decidido em 2026-11-18): licenças npm só nas dependências de produção
+(`--production`); ferramentas de desenvolvimento passam só pelo `audit-ci`. Motivo: o primeiro
+levantamento achou 25 violações, todas em dev tools que não entram no app (BlueOak-1.0.0,
+MPL-2.0 do lightningcss, CC-BY, PSF-2.0, Unlicense, metadados malformados).
+
+`cargo-deny` com `unmaintained = "workspace"`: crate sem manutenção só falha se for
+dependência direta. Primeiro caso: `proc-macro-error` (RUSTSEC-2024-0370), transitivo via GTK
+no Linux.
+
+Crates MPL-2.0 com exceção (D-11): cssparser, cssparser-macros, selectors, dtoa-short,
+option-ext.
 
 **Decidido pelo dono em 2026-11-18 (D-11)**: a árvore de dependências do Tauri historicamente inclui
 crates sob **MPL-2.0** (ex.: `cssparser`, `selectors`). MPL-2.0 é copyleft por arquivo: usar
