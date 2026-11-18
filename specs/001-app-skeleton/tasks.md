@@ -63,14 +63,14 @@ Layout Tauri 2 do [plan.md](plan.md#source-code-repository-root): interface em `
 
 ### Tests for User Story 1 ⚠️ escrever primeiro, ver falhar
 
-- [ ] T008 [P] [US1] Teste de segurança da configuração em `src-tauri/tests/security_config.rs`: janela principal com título "Prelo"; CSP com `default-src 'self'` e sem `unsafe-inline`/`unsafe-eval`; `src-tauri/capabilities/default.json` sem nenhuma permissão de sistema de arquivos, shell, HTTP, diálogo ou abertura de URL ([contracts/ipc.md](contracts/ipc.md#permissões-da-janela-capabilities))
-- [ ] T009 [P] [US1] Teste ponta a ponta por autoteste em `scripts/self-test.mjs`: compila com `--features self-test`, abre o binário, espera código de saída 0 em até 30 s, falha com 1 ou por tempo; depois confirma que nenhum processo `prelo` sobrou (FR-005)
-- [ ] T010 [P] [US1] Teste WebDriver em `e2e/app.e2e.ts` com `e2e/wdio.conf.ts` (`tauri-driver`, só Linux e Windows): título da janela é "Prelo"
+- [X] T008 [P] [US1] Teste de segurança da configuração em `src-tauri/tests/security_config.rs`: janela principal com título "Prelo"; CSP com `default-src 'self'` e sem `unsafe-inline`/`unsafe-eval`; `src-tauri/capabilities/default.json` sem nenhuma permissão de sistema de arquivos, shell, HTTP, diálogo ou abertura de URL ([contracts/ipc.md](contracts/ipc.md#permissões-da-janela-capabilities))
+- [X] T009 [P] [US1] Teste ponta a ponta por autoteste em `scripts/self-test.mjs`: compila com `--features self-test`, abre o binário, espera código de saída 0 em até 30 s, falha com 1 ou por tempo; depois confirma que nenhum processo `prelo` sobrou (FR-005)
+- [X] T010 [P] [US1] Teste WebDriver em `e2e/app.e2e.ts` com `e2e/wdio.conf.ts` (`tauri-driver`, só Linux e Windows): título da janela é "Prelo"
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Configurar janela, CSP e capabilities mínimas em `src-tauri/tauri.conf.json` e `src-tauri/capabilities/default.json` até T008 passar
-- [ ] T012 [US1] Implementar o caminho de autoteste: `src-tauri/src/self_test.rs` (`#[cfg(feature = "self-test")]`, comando `self_test_report` que por ora valida que `rendered` contém "Prelo" e encerra com 0/1) registrado em `src-tauri/src/lib.rs` só com a feature, e `src/self-test.ts` que chama o comando quando `import.meta.env.VITE_SELF_TEST` estiver definido, até T009 e T010 passarem
+- [X] T011 [US1] Configurar janela, CSP e capabilities mínimas em `src-tauri/tauri.conf.json` e `src-tauri/capabilities/default.json` até T008 passar
+- [X] T012 [US1] Implementar o caminho de autoteste: `src-tauri/src/self_test.rs` (`#[cfg(feature = "self-test")]`, comando `self_test_report` que por ora valida que `rendered` contém "Prelo" e encerra com 0/1) registrado em `src-tauri/src/lib.rs` só com a feature, e `src/self-test.ts` que chama o comando quando `import.meta.env.VITE_SELF_TEST` estiver definido, até T009 e T010 passarem
 
 **Checkpoint**: US1 funciona e é testável sozinha.
 

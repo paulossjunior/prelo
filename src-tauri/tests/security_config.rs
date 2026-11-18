@@ -14,9 +14,10 @@ fn manifest_dir() -> PathBuf {
 }
 
 fn read_json(path: &Path) -> Value {
-    let text = fs::read_to_string(path)
-        .unwrap_or_else(|e| panic!("não leu {}: {e}", path.display()));
-    serde_json::from_str(&text).unwrap_or_else(|e| panic!("JSON inválido em {}: {e}", path.display()))
+    let text =
+        fs::read_to_string(path).unwrap_or_else(|e| panic!("não leu {}: {e}", path.display()));
+    serde_json::from_str(&text)
+        .unwrap_or_else(|e| panic!("JSON inválido em {}: {e}", path.display()))
 }
 
 fn tauri_conf() -> Value {
@@ -62,7 +63,8 @@ fn csp_nao_permite_codigo_inseguro() {
     let csp = csp(&tauri_conf());
     for bad in ["unsafe-inline", "unsafe-eval", "unsafe-hashes", "*"] {
         assert!(
-            !csp.split_whitespace().any(|t| t.trim_matches(['\'', ';']) == bad),
+            !csp.split_whitespace()
+                .any(|t| t.trim_matches(['\'', ';']) == bad),
             "CSP contém {bad}: {csp}"
         );
     }
