@@ -35,6 +35,7 @@ delegada ao `doc-tecnica`.
 |---|---|---|
 | Fase (milestone) | `F1 Editor local`, `F2 Comentários e git`, `F3 Tempo real`, `F4 Modo sugestão`, `F5 Papéis e convites` | Fases do plano, na ordem da constituição |
 | Prioridade (label) | `P0` bloqueia tudo, `P1` próxima, `P2` nesta fase, `P3` depois | Uma por issue |
+| Nível (label) | `epic`, `user-story`, `task` | Uma por issue; ver Hierarquia |
 | Tipo (label) | `feature`, `documentation`, `bug`, `decisão`, `risco`, `infra` | Uma por issue |
 | Agente (label) | `agente:doc-tecnica`, `agente:speckit`, `agente:builder`, `agente:qa`, `agente:site`, `agente:humano` | Quem executa |
 
@@ -57,9 +58,50 @@ Ordene nesta sequência; o primeiro critério que diferenciar decide:
 Ao priorizar, mostre a tabela `# | título | fase | P | motivo em uma frase` e só depois altere
 labels.
 
+## Hierarquia: Epic → User Story → Task
+
+Toda issue aberta no GitHub tem um nível, indicado por label, e fica ligada à issue-mãe pelas
+**sub-issues** nativas do GitHub. Ninguém cria issue solta.
+
+| Nível | Label | O que é | Título | Mãe |
+|---|---|---|---|---|
+| Epic | `epic` | Uma feature do spec-kit (`specs/NNN-*`) ou um trabalho grande sem spec | `[Epic] <verbo + objeto>` | nenhuma |
+| User Story | `user-story` | Uma história `USn` da `spec.md`, com prioridade e critérios de aceite | `[NNN/USn] <história>` | o Epic |
+| Task | `task` | Uma tarefa `T0xx` do `tasks.md` | `T0xx: <descrição>` | a US da tarefa; tarefas de Setup, Foundational e Polish (sem `[USn]`) ficam direto no Epic |
+
+Regras:
+
+- **Mapeamento spec-kit:** a feature vira o Epic, cada `USn` da spec.md vira uma User Story e
+  cada linha do tasks.md vira uma Task. O `[USn]` da linha decide a mãe.
+- **Herança:** a User Story e a Task herdam do Epic o milestone, a prioridade e o label `agente:*`.
+  O label de tipo (`feature`, `infra`...) fica só no Epic.
+- **Corpo:** cita a mãe em texto (`Parte de #N`), além do vínculo de sub-issue.
+- **Vínculo:** o vínculo de sub-issue é feito pela API (o parâmetro é o `id` numérico da issue,
+  não o número):
+
+  ```sh
+  id=$(gh api repos/{owner}/{repo}/issues/<filha> --jq .id)
+  gh api -X POST repos/{owner}/{repo}/issues/<mãe>/sub_issues -F sub_issue_id=$id
+  ```
+
+- **Ordem de criação:** primeiro o Epic, depois as User Stories, por último as Tasks. A mãe
+  precisa existir antes da filha.
+- **Fechamento:** de baixo para cima. A User Story fecha quando todas as Tasks dela fecharem e
+  os critérios de aceite dela estiverem verificados. O Epic fecha com o merge do PR e o
+  veredito APROVADO do `qa`.
+- **Deduplicação:** procure pelo ID na mãe (`Parte de #N`), nunca só pelo `T0xx`, porque IDs se
+  repetem entre features.
+- **Labels ausentes** (`epic`, `user-story`, `task`): crie-os no primeiro lote, com
+  confirmação.
+
 ## Formato de issue
 
 Título: verbo no infinitivo + objeto, até 70 caracteres ("Embutir compilador Typst no núcleo").
+
+O formato abaixo é o do **Epic**. A **User Story** usa as mesmas seções, com "Como <papel>, quero
+<ação>, para <benefício>" no Contexto e os cenários de aceite da spec.md nos Critérios. A
+**Task** traz a linha completa do tasks.md, a fase, `Parte de #<US ou Epic>` e o link para o
+tasks.md na branch da feature.
 
 ```markdown
 ## Contexto
@@ -127,7 +169,7 @@ Ao delegar:
   issue, riscos sem spike, pendências sem dono, TODOs nos docs) e o que está obsoleto. Proponha
   o lote; crie só após confirmação.
 - **priorizar**: aplique a Priorização e proponha mudanças de label/milestone.
-- **abrir <assunto>**: rascunhe a issue no formato acima, procure duplicatas
+- **abrir <assunto>**: decida o nível (Epic, User Story ou Task) e a mãe, rascunhe a issue no formato acima, procure duplicatas
   (`gh issue list --search`), confirme e crie (`gh issue create --body-file`).
 - **fechar #N**: confira cada critério de aceite com evidência (arquivo, commit, PR, teste).
   Issue de código só fecha com veredito **APROVADO** do agente `qa` no estado atual do código
