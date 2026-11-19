@@ -37,7 +37,7 @@ instaladores de macOS, Windows e Linux.
 
 1. **Given** um commit da `main` cuja versão declarada no projeto é `X.Y.Z`, **When** o dono
    cria a tag `vX.Y.Z` nesse commit, **Then** uma release em rascunho chamada `vX.Y.Z` é criada
-   com os instaladores de macOS (`.dmg`), Windows (formato de FR-006) e Linux (`.AppImage` e
+   com os instaladores de macOS (`.dmg` universal), Windows (`.exe`) e Linux (`.AppImage` e
    `.deb`).
 2. **Given** o rascunho criado, **When** alguém de fora do projeto procura a release, **Then**
    ela não está visível ao público até o dono publicá-la manualmente.
@@ -71,6 +71,8 @@ motivo.
    processo roda, **Then** nenhum instalador é gerado nem publicado.
 4. **Given** uma tag fora do formato `vX.Y.Z` (ex.: `v1.2`, `1.2.3`, `release-1`), **When** ela
    é criada, **Then** nenhuma release é gerada.
+5. **Given** o repositório sem arquivo de licença na raiz, **When** o processo roda, **Then** ele
+   falha antes de gerar instaladores e informa que falta a licença.
 
 ---
 
@@ -133,8 +135,20 @@ instaladores e que só a etapa de publicação tem permissão de escrita.
   publica rascunho incompleto (US1, cenário 3).
 - Instalador sem assinatura: macOS e Windows alertam ao abrir; as notas do rascunho orientam
   como abrir mesmo assim (FR-014).
+- Arquivo de licença ausente: o processo falha antes de gerar instaladores (FR-016).
 - Linux sem as bibliotecas exigidas pelo app: o `.deb` declara as dependências; o `.AppImage`
   segue o comportamento já previsto na spec 001 (informa o que falta).
+
+## Clarifications
+
+### Session 2026-11-19
+
+- Q: Para quais arquiteturas os instaladores são gerados? → A: macOS universal (Apple Silicon
+  e Intel num só `.dmg`); Windows e Linux só x86_64.
+- Q: Qual o formato do instalador de Windows: `.msi`, `.exe` (NSIS) ou ambos? → A: Só `.exe`
+  (NSIS).
+- Q: O processo deve recusar criar o rascunho sem arquivo de licença, ou basta registrar o
+  pré-requisito? → A: Recusar criar o rascunho sem arquivo de licença, com teste automatizado.
 
 ## Requirements *(mandatory)*
 
@@ -149,12 +163,11 @@ instaladores e que só a etapa de publicação tem permissão de escrita.
   (`package.json`, `tauri.conf.json` e `Cargo.toml` do núcleo), nomeando o arquivo divergente.
 - **FR-004**: A suíte completa e a auditoria (`npm run verify`) MUST rodar e passar em macOS,
   Windows e Linux antes de qualquer instalador ser gerado.
-- **FR-005**: O processo MUST gerar instaladores de macOS (`.dmg`), Windows e Linux
-  (`.AppImage` e `.deb`) para as arquiteturas
-  [NEEDS CLARIFICATION: quais arquiteturas? macOS só Apple Silicon, só Intel ou universal;
-  Windows e Linux só x86_64 ou também ARM64?].
-- **FR-006**: O instalador de Windows MUST ser gerado no formato
-  [NEEDS CLARIFICATION: `.msi`, `.exe` (instalador NSIS) ou ambos?].
+- **FR-005**: O processo MUST gerar um instalador de macOS (`.dmg`) universal, que roda em
+  Apple Silicon e Intel no mesmo arquivo, e instaladores de Linux (`.AppImage` e `.deb`) para
+  x86_64.
+- **FR-006**: O instalador de Windows MUST ser gerado só no formato `.exe` (instalador NSIS),
+  para x86_64; `.msi` MUST NOT ser gerado.
 - **FR-007**: Os instaladores MUST ser anexados a uma release em **rascunho** chamada `vX.Y.Z`
   no GitHub Releases; o processo MUST NOT publicar a release. Publicar é ato manual do dono.
 - **FR-008**: O rascunho MUST ser criado só se os instaladores de todos os sistemas forem
@@ -174,10 +187,9 @@ instaladores e que só a etapa de publicação tem permissão de escrita.
   abrir o app mesmo assim em macOS e Windows, e como conferir o checksum.
 - **FR-015**: A documentação para contribuidores MUST descrever como preparar uma versão
   (atualizar os três arquivos, mesclar na `main`, criar a tag) e como publicar o rascunho.
-- **FR-016**: Antes da primeira release pública, o repositório MUST ter licença definida
-  (constituição, Governance: TODO(LICENSE)).
-  [NEEDS CLARIFICATION: o processo deve recusar criar o rascunho enquanto não houver arquivo
-  de licença, ou basta registrar o pré-requisito como passo do ato manual de publicar?]
+- **FR-016**: O processo MUST recusar criar o rascunho, antes de gerar instaladores, se o
+  repositório não tiver arquivo de licença na raiz (constituição, Governance: TODO(LICENSE)),
+  informando o motivo. Um teste automatizado MUST verificar essa recusa.
 
 ### Key Entities
 
@@ -187,8 +199,8 @@ instaladores e que só a etapa de publicação tem permissão de escrita.
   igual nos três e igual ao da tag.
 - **Release em rascunho**: página no GitHub Releases, invisível ao público, com instaladores,
   checksums e notas; publicada só pelo dono.
-- **Instalador**: arquivo de instalação de um sistema e arquitetura (`.dmg`, `.msi`/`.exe`,
-  `.AppImage`, `.deb`).
+- **Instalador**: arquivo de instalação de um sistema e arquitetura (`.dmg` universal,
+  `.exe` x86_64, `.AppImage` e `.deb` x86_64).
 - **Arquivo de checksums**: lista do SHA-256 de cada instalador anexado.
 
 ## Success Criteria *(mandatory)*
@@ -198,7 +210,7 @@ instaladores e que só a etapa de publicação tem permissão de escrita.
 - **SC-001**: 100% das tags `vX.Y.Z` válidas em commit da `main`, com suíte verde, resultam em
   rascunho com instaladores dos três sistemas, sem passo manual do dono além de criar a tag.
 - **SC-002**: 100% das tags inválidas (fora da `main`, formato errado, versão divergente, suíte
-  vermelha, nome já existente) terminam sem rascunho criado ou alterado.
+  vermelha, nome já existente, repositório sem licença) terminam sem rascunho criado ou alterado.
 - **SC-003**: O rascunho fica disponível em até 60 minutos após a criação da tag.
 - **SC-004**: 100% dos instaladores anexados têm checksum publicado que coincide com o arquivo
   baixado.

@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,9 @@
 
 ## Notes
 
-- Iteração 1: 3 marcadores [NEEDS CLARIFICATION] pendentes, aguardando o dono:
-  FR-005 (arquiteturas), FR-006 (formato do instalador Windows) e FR-016 (bloquear rascunho
-  sem arquivo de licença). Resolver via `/speckit-clarify` antes de `/speckit-plan`.
+- Iteração 2 (2026-11-19): os 3 marcadores foram resolvidos pelo dono (FR-005 macOS universal
+  e x86_64 em Windows/Linux; FR-006 só `.exe` NSIS; FR-016 recusa sem arquivo de licença, com
+  teste). Todos os 16 itens passam.
 - Decisões já tomadas pelo dono (GitHub Releases, tag `vX.Y.Z` na `main`, sem assinatura) não
   viraram perguntas.
 - GitHub Releases, `npm run verify`, `self-test`, formatos de instalador e os três arquivos de
