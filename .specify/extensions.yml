@@ -7,6 +7,6 @@ hooks:
   - extension: github
     command: speckit.github.taskstoissues
     description: "Cria uma issue no GitHub para cada tarefa do tasks.md"
-    prompt: "Criar as issues das tarefas no GitHub. Sem GitHub MCP server, use o gh CLI mantendo a deduplicação por ID T0xx; aplique milestone e label agente:* da issue-mãe e cite 'Parte de #N'."
+    prompt: "Criar as issues no GitHub na hierarquia Epic → User Story → Task (ver .claude/skills/gestor-projeto/SKILL.md, Hierarquia). Sem GitHub MCP server, use o gh CLI. O Epic é a issue-mãe da feature; crie uma issue `user-story` por USn da spec.md e uma `task` por linha do tasks.md, ligadas por sub-issue (a Task à sua US; Setup, Foundational e Polish direto no Epic). Herde milestone, prioridade e agente:* do Epic, cite 'Parte de #N' e deduplique pelo ID dentro da mesma mãe."
     optional: false
     enabled: true
