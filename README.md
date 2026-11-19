@@ -64,6 +64,24 @@ No Linux sem tela, rode os testes ponta a ponta sob `xvfb-run`.
 - Ao contribuir, você licencia sua contribuição sob a mesma licença do projeto (`MIT OR Apache-2.0`), sem CLA.
 - Licenças permitidas: [`security/licenses-allow.txt`](security/licenses-allow.txt). Exceções de vulnerabilidade: [`security/vuln-exceptions.toml`](security/vuln-exceptions.toml), sempre com motivo e data de revisão.
 
+### Publicar uma versão
+
+Uma tag `vX.Y.Z` num commit da `main` dispara [`.github/workflows/release.yml`](.github/workflows/release.yml) (feature [002](specs/002-release-pipeline/spec.md)). Ele gera os instaladores (`.dmg` universal, `.exe` x64, `.AppImage` e `.deb` x64) e cria uma release em **rascunho**. Nada fica público sem você publicar.
+
+1. Num PR, atualize a versão para `X.Y.Z` nos três arquivos: `package.json`, `src-tauri/tauri.conf.json` e `src-tauri/Cargo.toml` (rode `cargo check --manifest-path src-tauri/Cargo.toml` para atualizar o `Cargo.lock`). Mescle o PR na `main`.
+2. Crie e envie a tag (só o dono):
+
+   ```sh
+   git fetch origin
+   git tag vX.Y.Z origin/main && git push origin vX.Y.Z
+   ```
+
+3. Acompanhe a execução em **Actions > Release** (até cerca de 60 min). A ordem é `preflight` → `verify` (o mesmo CI dos PRs, nos três sistemas) → `build` → `publish`. O `preflight` recusa tag fora do formato `vX.Y.Z`, commit fora da `main`, versão diferente em algum dos três arquivos e repositório sem arquivo de licença na raiz (`LICENSE-MIT`/`LICENSE-APACHE`). Se já houver release ou rascunho com o mesmo nome, o `publish` falha sem alterá-lo. Se qualquer etapa falhar, nenhum rascunho fica para trás.
+4. Revise o rascunho em **Releases**: quatro instaladores, `SHA256SUMS.txt` e as notas, que explicam como abrir o app não assinado e conferir o checksum. Se quiser, baixe e confira com `sha256sum -c SHA256SUMS.txt --ignore-missing` (Linux) ou `shasum -a 256 -c SHA256SUMS.txt --ignore-missing` (macOS).
+5. Publique o rascunho pelo botão **Publish release**. O workflow nunca publica sozinho.
+
+Para refazer uma versão que falhou, apague o rascunho (se houver) e a tag (`gh release delete vX.Y.Z --yes; git push origin :refs/tags/vX.Y.Z`), corrija na `main` e crie a tag de novo.
+
 ## Ideias principais
 
 - **Typst puro no git.** O `.typ` do repositório é sempre compilável fora do Prelo. Sugestões e comentários ficam em `.prelo/`.
