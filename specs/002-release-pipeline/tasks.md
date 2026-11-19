@@ -109,12 +109,12 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
 ### Tests for User Story 3 ⚠️ escrever primeiro, ver falhar
 
-- [ ] T013 [P] [US3] Testes em `scripts/release-artifacts.test.ts` ([contracts/release-scripts.md](contracts/release-scripts.md)):
+- [X] T013 [P] [US3] Testes em `scripts/release-artifacts.test.ts` ([contracts/release-scripts.md](contracts/release-scripts.md)):
   - `sha256File` com vetor conhecido.
   - `formatSums` em ordem alfabética, `<hex>  <nome>` e `\n` final (`data-model.md` Arquivo de checksums).
   - `verifySums` acusa arquivo adulterado e aceita os íntegros.
   - O comando `sums` grava `SHA256SUMS.txt` e falha com diretório vazio.
-- [ ] T014 [P] [US3] Testes em `scripts/release-workflow.test.ts` e sobre `.github/release-notes.md`:
+- [X] T014 [P] [US3] Testes em `scripts/release-workflow.test.ts` e sobre `.github/release-notes.md`:
   - O `publish` roda `sums` antes de criar e anexa `SHA256SUMS.txt`.
   - `--notes-file` aponta para as notas com `{{VERSION}}` substituído.
   - O modelo contém `{{VERSION}}`, o aviso de app não assinado, as instruções de abertura no macOS (Gatekeeper) e no Windows (SmartScreen) e os comandos de conferência nos três sistemas (FR-009, FR-014; `data-model.md` Release em rascunho.body).
@@ -122,9 +122,9 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
 ### Implementation for User Story 3
 
-- [ ] T015 [US3] Implementar `sha256File`, `formatSums`, `verifySums` e o comando `sums` em `scripts/release-artifacts.mjs` (e tipos em `.d.mts`) até T013 passar, no formato de `data-model.md` Arquivo de checksums (`SHA256SUMS.txt`).linha
-- [ ] T016 [P] [US3] Escrever `.github/release-notes.md` ([research.md](research.md) R9), conteúdo de `data-model.md` Release em rascunho.body
-- [ ] T017 [US3] Ligar `sums`, a renderização das notas e o anexo de `SHA256SUMS.txt` no job `publish` de `.github/workflows/release.yml` até T014 passar
+- [X] T015 [US3] Implementar `sha256File`, `formatSums`, `verifySums` e o comando `sums` em `scripts/release-artifacts.mjs` (e tipos em `.d.mts`) até T013 passar, no formato de `data-model.md` Arquivo de checksums (`SHA256SUMS.txt`).linha
+- [X] T016 [P] [US3] Escrever `.github/release-notes.md` ([research.md](research.md) R9), conteúdo de `data-model.md` Release em rascunho.body
+- [X] T017 [US3] Ligar `sums`, a renderização das notas e o anexo de `SHA256SUMS.txt` no job `publish` de `.github/workflows/release.yml` até T014 passar
 
 **Checkpoint**: testes de US1–US3 verdes; `qa` modo validar.
 
