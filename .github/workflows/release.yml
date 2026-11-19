@@ -25,12 +25,12 @@ jobs:
       TAG: ${{ github.ref_name }}
     steps:
       # Histórico completo: a ancestralidade é conferida contra origin/main.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version-file: .nvmrc
 
@@ -45,7 +45,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/ci.yml
 
-  # Instaladores sem publicar: só leitura (research R4). Sem --features: self-test fica fora.
+  # Instaladores sem publicar: só leitura (research R4). Nenhuma feature extra é ligada.
   build:
     name: build (${{ matrix.os }})
     needs: verify
@@ -66,7 +66,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             bundles: appimage,deb
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
 
@@ -85,7 +85,7 @@ jobs:
         run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
 
       # Sem cache de build: o instalador sai de um estado limpo.
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version-file: .nvmrc
 
@@ -95,7 +95,15 @@ jobs:
         shell: bash
         run: npx --no-install tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
-      - uses: actions/upload-artifact@v4
+      # Confere o artefato real: o comando de autoteste não pode estar no binário (FR-010).
+      - name: Binário sem autoteste
+        shell: bash
+        run: |
+          bin="src-tauri/target/${{ matrix.target }}/release/prelo"
+          if [ "$RUNNER_OS" = "Windows" ]; then bin="$bin.exe"; fi
+          node scripts/release-artifacts.mjs scan "$bin"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: installers-${{ matrix.os }}
           path: |
@@ -118,16 +126,16 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
 
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version-file: .nvmrc
 
       # Um diretório por sistema: nome repetido entre sistemas é acusado pelo collect.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: installers-*
           path: downloads
