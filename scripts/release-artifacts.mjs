@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Instaladores da release (spec 002, contracts/release-scripts.md, data-model.md "Instalador").
-// Comandos: collect <dir> <versão> <saída> · sums <dir>.
+// Comandos: collect <dir> <versão> <saída> · sums <dir> · scan <binário>.
 import { createHash } from "node:crypto";
 import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
@@ -96,6 +96,42 @@ async function sums(dir) {
   return [];
 }
 
+// Nome do comando IPC de autoteste (spec 001): presente no binário só com a feature self-test.
+const MARKER = Buffer.from("self_test_report", "latin1");
+
+export function containsSelfTestMarker(buffer) {
+  return buffer.includes(MARKER);
+}
+
+/** Lê em blocos, guardando o final do bloco anterior para achar a marca entre dois blocos. */
+export function fileHasSelfTestMarker(path, chunkSize = 1 << 16) {
+  return new Promise((resolve, reject) => {
+    let tail = Buffer.alloc(0);
+    const stream = createReadStream(path, { highWaterMark: chunkSize });
+    stream
+      .on("data", (chunk) => {
+        const window = Buffer.concat([tail, chunk]);
+        if (containsSelfTestMarker(window)) {
+          stream.destroy();
+          resolve(true);
+          return;
+        }
+        tail = window.subarray(Math.max(0, window.length - (MARKER.length - 1)));
+      })
+      .on("error", reject)
+      .on("end", () => resolve(false));
+  });
+}
+
+async function scan(path) {
+  if (!existsSync(path)) return [`release: binário ${path} não encontrado`];
+  if (await fileHasSelfTestMarker(path)) {
+    return [`release: o binário contém a marca self_test_report (feature self-test): ${path}`];
+  }
+  console.log(`release: ${path} sem a marca self_test_report`);
+  return [];
+}
+
 async function main(argv) {
   const [cmd, ...args] = argv;
   let errors;
@@ -103,8 +139,10 @@ async function main(argv) {
     errors = collect(args[0], args[1], args[2]);
   } else if (cmd === "sums" && args.length === 1) {
     errors = await sums(args[0]);
+  } else if (cmd === "scan" && args.length === 1) {
+    errors = await scan(args[0]);
   } else {
-    errors = ["release: uso: release-artifacts.mjs collect <dir> <versão> <saída> | sums <dir>"];
+    errors = ["release: uso: release-artifacts.mjs collect <dir> <versão> <saída> | sums <dir> | scan <binário>"];
   }
   for (const e of errors) console.error(e);
   return errors.length === 0 ? 0 : 1;
