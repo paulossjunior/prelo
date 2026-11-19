@@ -10,8 +10,12 @@ import { afterEach, describe, expect, it } from "vitest";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const dirs: string[] = [];
 
+// Dentro do hook pre-push o git exporta variáveis GIT_*; herdadas, fariam estes comandos
+// agirem no repositório real em vez dos temporários.
+const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+
 function git(cwd: string, ...args: string[]) {
-  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe" });
+  return execFileSync("git", args, { cwd, encoding: "utf8", stdio: "pipe", env });
 }
 
 /** Repositório com a trava do Prelo e um `verify` que sai com `code`. */
@@ -39,14 +43,15 @@ function repoWithVerify(code: number) {
 }
 
 function push(work: string) {
-  return spawnSync("git", ["push", "-q", "origin", "main"], { cwd: work, encoding: "utf8" });
+  return spawnSync("git", ["push", "-q", "origin", "main"], { cwd: work, encoding: "utf8", env });
 }
 
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
 });
 
-describe("pre-push", () => {
+// Cada caso cria repositórios e faz `git push` real; em máquina carregada passa de 5 s.
+describe("pre-push", { timeout: 30_000 }, () => {
   it("bloqueia o push quando npm run verify falha", () => {
     const { work, remote } = repoWithVerify(1);
     const r = push(work);
@@ -62,13 +67,13 @@ describe("pre-push", () => {
   });
 });
 
-describe("prepare", () => {
+describe("prepare", { timeout: 30_000 }, () => {
   it("ativa .githooks como core.hooksPath", () => {
     const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     const base = mkdtempSync(join(tmpdir(), "prelo-prepare-"));
     dirs.push(base);
     git(base, "init", "-q");
-    execFileSync(pkg.scripts.prepare, { cwd: base, shell: true });
+    execFileSync(pkg.scripts.prepare, { cwd: base, shell: true, env });
     expect(git(base, "config", "core.hooksPath").trim()).toBe(".githooks");
   });
 });
