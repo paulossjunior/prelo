@@ -167,3 +167,35 @@ describe("release.yml: job publish", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------------------
+// US2: nada é gerado sem preflight e verify verdes (FR-001–FR-004, FR-016).
+
+describe("release.yml: preflight e verify antes do build", () => {
+  it("preflight só lê, em ubuntu-22.04, com histórico completo", () => {
+    expect(job("preflight")["runs-on"]).toBe("ubuntu-22.04");
+    expect(job("preflight").permissions).toEqual({ contents: "read" });
+    const checkout = steps("preflight").find((s) => usesOf(s).startsWith("actions/checkout@"));
+    expect(checkout?.with?.["fetch-depth"]).toBe(0);
+  });
+
+  it("preflight roda release-check.mjs com a tag vinda de env", () => {
+    const step = steps("preflight").find((s) => /node scripts\/release-check\.mjs/.test(runOf(s)));
+    expect(runOf(step)).toContain('node scripts/release-check.mjs "$TAG"');
+    expect({ ...job("preflight").env, ...step?.env }.TAG).toBe("${{ github.ref_name }}");
+  });
+
+  it("verify reaproveita ci.yml, depois do preflight, só com leitura", () => {
+    expect(job("verify").uses).toBe("./.github/workflows/ci.yml");
+    expect(needsOf("verify")).toEqual(["preflight"]);
+    expect(job("verify").permissions).toEqual({ contents: "read" });
+  });
+
+  it("build só roda depois do verify", () => {
+    expect(needsOf("build")).toContain("verify");
+  });
+
+  it("ordem completa: preflight → verify → build → publish", () => {
+    expect(Object.keys(release().jobs)).toEqual(["preflight", "verify", "build", "publish"]);
+  });
+});
