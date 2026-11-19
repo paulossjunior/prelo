@@ -16,6 +16,8 @@ mostra o texto em português.
 | `list_tree` | — | `TreeNode[]` | — |
 | `update_project_compiler_version` | — | `ProjectInfo` | — (só por ação explícita, FR-012) |
 
+Com versão registrada ≠ embutida, `ProjectInfo.warnings` traz `compiler_version_mismatch`, nenhum `PreviewUpdate` é emitido e `export_pdf_dialog` responde `compiler_version_mismatch` até `update_project_compiler_version`.
+
 O núcleo mostra o diálogo nativo; a webview não tem permissão de diálogo nem de arquivo.
 
 ## Documentos
@@ -46,7 +48,7 @@ O núcleo mostra o diálogo nativo; a webview não tem permissão de diálogo ne
 
 | Comando | Argumentos | Sucesso | Erros |
 |---|---|---|---|
-| `export_pdf_dialog` | — | `{ path }` ou `null` | `compile_errors` (com `Diagnostic[]`), `write_failed` |
+| `export_pdf_dialog` | — | `{ path }` ou `null` | `compile_errors` (com `Diagnostic[]`), `compiler_version_mismatch`, `write_failed` |
 
 ## Arquivo externo, plugins e pacotes
 

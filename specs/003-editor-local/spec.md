@@ -49,7 +49,9 @@ diagnóstico na linha certa e que a versão do compilador aparece no app.
 5. **Given** um computador sem `typst` instalado, **When** a pessoa abre e edita um projeto,
    **Then** a prévia e os diagnósticos funcionam normalmente.
 6. **Given** o projeto aberto, **When** a pessoa consulta a versão do compilador no app,
-   **Then** o app mostra a versão embutida e a versão registrada no projeto.
+   **Then** o app mostra a versão embutida e a versão registrada no projeto; se forem
+   diferentes, a prévia fica desativada até a pessoa atualizar o projeto para a versão
+   embutida.
 7. **Given** alterações feitas no editor, **When** a pessoa salva, fecha o app ou o app
    encerra de forma inesperada, **Then** o texto editado está no disco ao reabrir o projeto,
    exceto no máximo os últimos segundos de digitação no caso de encerramento inesperado.
@@ -120,7 +122,7 @@ RF-09, RF-50), mas a história 1 já entrega valor com texto puro.
 
 **Independent Test**: abrir um projeto de fixture com `.bib`, `.yml`, `.csl` e uma figura de
 cada formato suportado; verificar a prévia e comparar o PDF exportado com o do `typst` de
-linha de comando na mesma versão; medir a prévia após edições de texto num artigo com imagens
+linha de comando na mesma versão, com o mesmo conjunto de fontes (embutidas no Prelo + `fonts/` do projeto, D-15); medir a prévia após edições de texto num artigo com imagens
 grandes.
 
 **Acceptance Scenarios**:
@@ -192,15 +194,15 @@ ao que o `typst` de linha de comando geraria na mesma versão.
 RF-06). Depende da história 1.
 
 **Independent Test**: exportar o PDF de projetos de fixture e comparar com o PDF do `typst`
-de linha de comando na versão registrada; tentar exportar com erro de compilação.
+de linha de comando na versão registrada, com o mesmo conjunto de fontes (embutidas no Prelo + `fonts/` do projeto, D-15); tentar exportar com erro de compilação.
 
 **Acceptance Scenarios**:
 
 1. **Given** um projeto que compila sem erro, **When** a pessoa exporta o PDF e escolhe onde
    gravar, **Then** o PDF é gravado e tem o mesmo conteúdo visual da prévia.
 2. **Given** o mesmo projeto, **When** o PDF é comparado ao gerado pelo `typst` de linha de
-   comando na versão registrada em `.prelo/project.json`, **Then** os dois coincidem página a
-   página.
+   comando na versão registrada em `.prelo/project.json`, com o mesmo conjunto de fontes (embutidas no Prelo + `fonts/` do projeto, D-15), **Then** os
+   dois coincidem página a página.
 3. **Given** um projeto com erro de compilação, **When** a pessoa tenta exportar, **Then** a
    exportação é recusada e o app lista os erros que impedem a compilação.
 
@@ -232,9 +234,11 @@ comando.
 - **Pasta sem `.prelo/`**: um projeto Typst comum, nunca aberto no Prelo, abre normalmente; o
   app cria `.prelo/project.json` com a versão do compilador embutido sem alterar nenhum outro
   arquivo.
-- **Versão registrada diferente da embutida**: o app compila com a versão embutida, mostra
-  aviso com as duas versões e não altera o registro sem ação explícita da pessoa (D-10; quem
-  decide a troca de versão fica para fase posterior).
+- **Versão registrada diferente da embutida**: o app mostra as duas versões, mantém o editor
+  disponível e desativa prévia, diagnósticos de compilação e exportação até a pessoa escolher
+  "Atualizar o projeto para a versão embutida"; o registro nunca muda sem essa ação (D-10,
+  Restrição "Compilação embutida"; quem decide a troca de versão entre coautores fica para
+  fase posterior).
 - **Vários `.typ` sem `main.typ`**: o app pede para a pessoa escolher o arquivo principal e
   guarda a escolha em `.prelo/project.json`.
 - **Arquivo alterado fora do Prelo** (outro editor, gerenciador de referências que reescreve o
@@ -315,8 +319,10 @@ comando.
 - **FR-011**: Prévia, diagnósticos, autocompletar e PDF exportado MUST vir da mesma
   compilação, na mesma versão do compilador (RF-06, D-10).
 - **FR-012**: O app MUST mostrar a versão do compilador embutido e a versão registrada no
-  projeto; se diferirem, MUST avisar e MUST NOT alterar o registro sem ação explícita da
-  pessoa (RF-07, D-10).
+  projeto. Se diferirem, o app MUST avisar, MUST NOT compilar (prévia, diagnósticos de
+  compilação e PDF ficam desativados, para que nada saia de versão diferente da registrada) e
+  MUST NOT alterar o registro sem ação explícita da pessoa; a ação "Atualizar o projeto para a
+  versão embutida" regrava o registro e libera a compilação (RF-07, D-10).
 - **FR-013**: A prévia MUST ficar ao lado do editor e atualizar enquanto se digita, sem ação
   da pessoa (RF-02).
 - **FR-014**: Quando o texto não compila, a prévia MUST manter a última versão bem-sucedida e
@@ -414,7 +420,7 @@ comando.
   execução não autorizada (Princípio VI, RF-08, RF-09, RF-50, D-15).
 - **FR-031**: A suíte MUST incluir teste de equivalência: projetos de fixture com `.bib`,
   `.yml`, `.csl` e uma figura de cada formato geram, no Prelo, o mesmo PDF que o `typst` de
-  linha de comando na versão registrada (RF-09, RF-50).
+  linha de comando na versão registrada, com o mesmo conjunto de fontes (embutidas no Prelo + `fonts/` do projeto, D-15) (RF-09, RF-50).
 - **FR-032**: A suíte MUST incluir teste que conta decodificações de imagem ao longo de uma
   sequência de edições de texto (uma por imagem) e medição automatizada da meta de prévia
   (RF-51, RNF-03).
@@ -467,7 +473,8 @@ comando.
 - **SC-004**: 100% dos casos de fixture de entrada malformada geram diagnóstico e o app
   continua respondendo a edições em até 1 s depois (RF-09, Princípio VI).
 - **SC-005**: 100% dos projetos de fixture de equivalência geram PDF idêntico, página a
-  página, ao do `typst` de linha de comando na versão registrada (RF-06, RF-09, RF-50).
+  página, ao do `typst` de linha de comando na versão registrada, com o mesmo conjunto de fontes
+  (RF-06, RF-09, RF-50, D-15).
 - **SC-006**: Prelo, prévia e exportação funcionam em macOS, Windows e Linux sem `typst`
   instalado, verificado na verificação remota nos três sistemas (RNF-01, RF-06).
 - **SC-007**: Em 95% dos cliques na prévia sobre texto do projeto, o editor vai para a linha
@@ -484,9 +491,8 @@ comando.
 - A tecnologia já está decidida pela constituição e por D-01 e D-10 (shell Tauri, núcleo Rust,
   compilador Typst e Tinymist embutidos como bibliotecas, editor CodeMirror 6); detalhes ficam
   para o `plan.md`.
-- **Versão do Typst embutida**: a versão estável mais recente no momento do plano, que se
-  espera ser 0.14.0 ou posterior; se for anterior, PDF e WebP saem de FR-026
-  (TODO(versão-typst) de RF-50). O plano registra a versão escolhida.
+- **Versão do Typst embutida**: 0.15.1, a estável mais recente no momento do plano
+  (research R1); por ser posterior à 0.14.0, PDF e WebP ficam em FR-026.
 - **Conteúdo de um projeto novo**: um `main.typ` mínimo (título, autor, um parágrafo, sem
   pacotes nem fontes específicas) que compila em qualquer computador, mais
   `.prelo/project.json`. Modelos de artigo (ABNT, IEEE etc.) ficam para depois.

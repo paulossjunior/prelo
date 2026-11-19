@@ -66,7 +66,7 @@ segurança geradas em teste
 | VI. Testes de segurança | ✅ | Escape da raiz, entrada malformada, pacote malicioso/adulterado, plugin sem confirmação, IPC com caminho fora da raiz, configuração da janela ([file-access.md](contracts/file-access.md)) |
 | VI. Auditoria de dependências | ✅ | `cargo-deny`/`audit-ci` existentes + licenças de arquivos de fonte (D-15) |
 | Restrições: stack | ✅ | CodeMirror 6, typst + Tinymist, Tauri; nenhuma troca de componente |
-| Restrições: compilação embutida | ✅ | Prévia, diagnósticos, autocompletar e PDF do mesmo World, versão em `.prelo/project.json`; E2E sem `typst` no PATH |
+| Restrições: compilação embutida | ✅ | Prévia, diagnósticos, autocompletar e PDF do mesmo World; com versão registrada ≠ embutida o projeto não compila até a pessoa atualizar o registro (FR-012), então nada sai de versão diferente da registrada; E2E sem `typst` no PATH |
 | Restrições: plataformas | ✅ | CI nos três sistemas; regras de link/junção por sistema (R11) |
 | Restrições: desempenho | ✅ | Teste `perf_preview` (R13) |
 | Restrições: licenças (RNF-06) | ✅ | Fontes só OFL-1.1 por D-15; `webpki-roots` excluído; ver Complexity Tracking sobre dados do `typst-assets` |

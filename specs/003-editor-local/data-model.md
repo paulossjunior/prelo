@@ -25,7 +25,8 @@
 - Campos desconhecidos são preservados ao regravar (fases seguintes acrescentam participantes
   e papéis) e nunca interpretados.
 - Criado só quando não existe (FR-003); `compiler.typst` só muda por
-  `update_project_compiler_version` (FR-012). `main` muda por `choose_main_file`.
+  `update_project_compiler_version` (FR-012). Enquanto `compiler.typst` ≠ versão embutida, o
+  projeto fica em estado `VersaoDiferente`: sem compilação, prévia nem exportação. `main` muda por `choose_main_file`.
 - `main` com `..`, absoluto ou fora da raiz → inválido (aviso, usa padrão).
 
 ## OpenFile
@@ -41,7 +42,7 @@ Estados: `Limpo → (edição) → Sujo → (2 s ociosos, ⌘S ou fechar) → Gr
 `Gravando → (falha) → Sujo` + aviso. Mudança externa: `Limpo → recarrega`; `Sujo →
 Conflito → (escolha) → Limpo/Sujo`.
 
-## Compilação
+## Compilation
 
 | Campo | Tipo |
 |---|---|
@@ -69,7 +70,7 @@ onde `kind` ∈ `typst`, `access` (recusas de file-access), `plugin`, `package`,
 `FontLicense` = `{ family, file, license: "OFL-1.1", copyright }`, de
 `src-tauri/fonts/licenses.toml`. Fontes do projeto: lidas de `fonts/`; não auditadas (D-15).
 
-## Cache de pacotes (dados locais do app)
+## PackageCacheEntry — cache de pacotes (dados locais do app)
 
 ```text
 <dados locais>/packages/
@@ -77,10 +78,15 @@ onde `kind` ∈ `typst`, `access` (recusas de file-access), `plugin`, `package`,
 └── preview/<nome>/<versão>/      # conteúdo extraído e validado
 ```
 
+Campos de cada entrada do índice (`PackageCacheEntry`): `spec` (`preview/<nome>/<versão>`,
+só namespace `preview`), `sha256` (hash da árvore extraída), `downloadedAt`, `state`
+(`Ausente` \| `Baixando` \| `Disponível` \| `Recusado` \| `Adulterado`). Limites do download:
+50 MB compactado, 200 MB e 5 000 arquivos extraídos.
+
 Estados por pacote: `Ausente → Baixando → (validação ok) → Disponível`; `(validação falha) →
 Recusado`; `Disponível → (hash difere) → Adulterado → (baixar de novo) → Baixando`.
 
-## Aprovação de plugin (dados locais do app)
+## PluginApproval — aprovação de plugin (dados locais do app)
 
 `plugin-approvals.json`: lista de `{ projectRoot, sha256, decision: "approved"|"rejected",
 decidedAt, path }`. Chave = (`projectRoot` canônico, `sha256`). Nunca lida de `.prelo/`.
