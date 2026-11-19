@@ -12,7 +12,9 @@ conferem cada regra marcada com **(T)**.
 ## Permissões e segredos
 
 - Topo: `permissions: {}`. **(T)**
-- `contents: write` só no job `publish`; os demais com no máximo `contents: read`. **(T)**
+- `contents: write` só no job `publish`; `preflight`, `verify` e `build` com exatamente
+  `contents: read` (o `verify` precisa declarar, porque o workflow chamado só reduz
+  permissões). **(T)**
 - Nenhuma referência a `secrets.*` além de `secrets.GITHUB_TOKEN` / `github.token`. **(T)**
 - Ações externas fixadas por SHA de 40 caracteres, com a versão em comentário. **(T)**
 

@@ -67,9 +67,9 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
 ### Implementation for User Story 1
 
-- [ ] T006 [US1] Implementar `expectedInstallers`, `matchInstallers` e o comando `collect` em `scripts/release-artifacts.mjs`, com tipos em `scripts/release-artifacts.d.mts`, até T004 passar (regras de `data-model.md` Instalador)
+- [ ] T006 [US1] Implementar `expectedInstallers`, `matchInstallers` e o comando `collect` em `scripts/release-artifacts.mjs`, com tipos em `scripts/release-artifacts.d.mts`, até T004 passar (`data-model.md` Instalador.arquivo esperado, com `<v>` de `data-model.md` Tag de versão.version)
 - [ ] T007 [US1] Adicionar o job `build` em `.github/workflows/release.yml` ([research.md](research.md) R4): matriz do contrato; dependências de sistema do Linux iguais às do `ci.yml`; `rustup target add aarch64-apple-darwin x86_64-apple-darwin` no macOS; Node por `.nvmrc`; `npm ci`; `npx tauri build --target <alvo> --bundles <lista>`; `upload-artifact` com nome `installers-<os>`
-- [ ] T008 [US1] Adicionar o job `publish` em `.github/workflows/release.yml` ([research.md](research.md) R5): `download-artifact` com `merge-multiple`; `collect`; checagem de release inexistente; `gh release create` em um só comando com `id: create` gravando `created=true`; conferência dos assets anexados (`gh release view --json assets`) contra o conjunto esperado; passo de limpeza; tag lida de `env` (`TAG: ${{ github.ref_name }}`), nunca interpolada no `run:`. Rodar até T005 passar
+- [ ] T008 [US1] Adicionar o job `publish` em `.github/workflows/release.yml` ([research.md](research.md) R5): `download-artifact` com `merge-multiple`; `collect`; checagem de release inexistente; `gh release create` em um só comando com `id: create` gravando `created=true`, nome e título iguais a `data-model.md` Release em rascunho.tag_name / .name e `--draft` (`data-model.md` Release em rascunho.draft); conferência dos assets anexados (`gh release view --json assets`) contra `data-model.md` Release em rascunho.assets; passo de limpeza; tag lida de `env` (`TAG: ${{ github.ref_name }}`), nunca interpolada no `run:`. Rodar até T005 passar
 
 **Checkpoint**: testes de US1 verdes; `qa` modo validar.
 
@@ -94,8 +94,8 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
 ### Implementation for User Story 2
 
-- [ ] T011 [US2] Implementar `scripts/release-check.mjs` (funções exportadas e CLI) e `scripts/release-check.d.mts` até T009 passar
-- [ ] T012 [US2] Adicionar os jobs `preflight` e `verify` em `.github/workflows/release.yml` e ligar `build.needs: verify` até T010 passar
+- [ ] T011 [US2] Implementar `scripts/release-check.mjs` (funções exportadas e CLI) e `scripts/release-check.d.mts` até T009 passar, aplicando `data-model.md` Tag de versão.name (formato), Tag de versão.commit (na `main`), Versão declarada (as três fontes) e Arquivo de licença (nomes aceitos, não vazio)
+- [ ] T012 [US2] Adicionar os jobs `preflight` e `verify` em `.github/workflows/release.yml` e ligar `build.needs: verify` até T010 passar; o job `verify` declara `permissions: contents: read` explicitamente, porque o topo é `permissions: {}` e o workflow chamado só pode reduzir permissões
 
 **Checkpoint**: testes de US1 e US2 verdes; `qa` modo validar. **MVP** (US1 + US2).
 
@@ -122,8 +122,8 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
 ### Implementation for User Story 3
 
-- [ ] T015 [US3] Implementar `sha256File`, `formatSums`, `verifySums` e o comando `sums` em `scripts/release-artifacts.mjs` (e tipos em `.d.mts`) até T013 passar
-- [ ] T016 [P] [US3] Escrever `.github/release-notes.md` ([research.md](research.md) R9)
+- [ ] T015 [US3] Implementar `sha256File`, `formatSums`, `verifySums` e o comando `sums` em `scripts/release-artifacts.mjs` (e tipos em `.d.mts`) até T013 passar, no formato de `data-model.md` Arquivo de checksums (`SHA256SUMS.txt`).linha
+- [ ] T016 [P] [US3] Escrever `.github/release-notes.md` ([research.md](research.md) R9), conteúdo de `data-model.md` Release em rascunho.body
 - [ ] T017 [US3] Ligar `sums`, a renderização das notas e o anexo de `SHA256SUMS.txt` no job `publish` de `.github/workflows/release.yml` até T014 passar
 
 **Checkpoint**: testes de US1–US3 verdes; `qa` modo validar.
@@ -145,7 +145,8 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
   - Referência: FR-010, [research.md](research.md) R7.
 - [ ] T019 [US4] Testes de segurança em `scripts/release-workflow.test.ts` ([contracts/release-workflow.md](contracts/release-workflow.md#permissões-e-segredos)):
   - `permissions: {}` no topo.
-  - Só `publish` tem `contents: write`; os demais jobs têm no máximo `contents: read`.
+  - Só `publish` tem `contents: write`; `preflight`, `verify` e `build` têm exatamente
+    `contents: read`.
   - Nenhum `secrets.*` além de `GITHUB_TOKEN`.
   - Nenhuma variável de assinatura (`APPLE_`, `TAURI_SIGNING_`, `WINDOWS_CERT`).
   - Nenhum `--features` ou `self-test` no job `build`.
@@ -157,8 +158,8 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
 ### Implementation for User Story 4
 
-- [ ] T020 [US4] Implementar `containsSelfTestMarker` e o comando `scan` em `scripts/release-artifacts.mjs` até T018 passar
-- [ ] T021 [US4] Em `.github/workflows/release.yml`: adicionar o passo `scan` no `build` (binário `prelo` / `prelo.exe` do alvo de cada sistema); fixar todas as ações externas por SHA com a versão em comentário (SHA obtido via `gh api repos/<dono>/<ação>/git/ref/tags/<versão>`); revisar permissões por job até T019 passar
+- [ ] T020 [US4] Implementar `containsSelfTestMarker` e o comando `scan` em `scripts/release-artifacts.mjs` até T018 passar (regra de `data-model.md` Instalador.binário: sem a marca `self_test_report`)
+- [ ] T021 [US4] Em `.github/workflows/release.yml`: adicionar o passo `scan` no `build` (binário `prelo` / `prelo.exe` em `src-tauri/target/<alvo>/release/`, conforme `data-model.md` Instalador.origem); fixar todas as ações externas por SHA com a versão em comentário (SHA obtido via `gh api repos/<dono>/<ação>/git/ref/tags/<versão>`); revisar permissões por job até T019 passar
 
 **Checkpoint**: suíte inteira verde; `qa` modo validar.
 

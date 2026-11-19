@@ -29,15 +29,15 @@ Um de `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING` na raiz, não vazio (FR-
 
 ## Instalador
 
-| Sistema | Arquivo esperado | Origem |
+| Sistema | Arquivo esperado | Origem (`<raiz>` = `src-tauri/target/<alvo>/release/bundle`) |
 |---|---|---|
-| macOS (universal) | `Prelo_<v>_universal.dmg` | `src-tauri/target/universal-apple-darwin/release/bundle/dmg/` |
-| Windows (x86_64) | `Prelo_<v>_x64-setup.exe` | `src-tauri/target/release/bundle/nsis/` |
-| Linux (x86_64) | `Prelo_<v>_amd64.AppImage` | `src-tauri/target/release/bundle/appimage/` |
-| Linux (x86_64) | `Prelo_<v>_amd64.deb` | `src-tauri/target/release/bundle/deb/` |
+| macOS (universal) | `Prelo_<v>_universal.dmg` | `<raiz>/dmg/`, alvo `universal-apple-darwin` |
+| Windows (x86_64) | `Prelo_<v>_x64-setup.exe` | `<raiz>/nsis/`, alvo `x86_64-pc-windows-msvc` |
+| Linux (x86_64) | `Prelo_<v>_amd64.AppImage` | `<raiz>/appimage/`, alvo `x86_64-unknown-linux-gnu` |
+| Linux (x86_64) | `Prelo_<v>_amd64.deb` | `<raiz>/deb/`, alvo `x86_64-unknown-linux-gnu` |
 
 Regras: o conjunto MUST ser exatamente esses quatro, com `<v>` = `Tag.version` (FR-005,
-FR-006, FR-008); o binário do app em cada sistema MUST NOT conter a marca `self_test_report`
+FR-006, FR-008); o binário do app (`src-tauri/target/<alvo>/release/prelo[.exe]`) MUST NOT conter a marca `self_test_report`
 (FR-010).
 
 ## Arquivo de checksums (`SHA256SUMS.txt`)
