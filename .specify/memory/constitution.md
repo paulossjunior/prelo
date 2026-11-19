@@ -100,10 +100,19 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
   tempo real → modo sugestão → papéis e convites. Pular fase exige justificativa no plan.md.
 - Sincronização, merge CRDT, fila offline e geração do texto aceito MUST ter testes
   automatizados de integração, incluindo cenários de dois pares e de reconexão (Princípio VI).
-- Push MUST acontecer só com a suíte completa verde: testes unitários, de integração, de
-  segurança e auditoria de dependências. Teste falhando, pulado sem justificativa escrita ou
-  desativado bloqueia o push. Vale para pessoas e agentes; `--no-verify` e equivalentes MUST
-  NOT ser usados para contornar.
+- Gitflow: `feature/NNN-nome` sai da `dev` e volta a ela por pull request; a `dev` vai para a
+  `main` por pull request quando houver versão a publicar; a tag `vX.Y.Z` na `main` dispara a
+  release. `main` e `dev` MUST receber mudanças só por pull request, inclusive do dono.
+- Push MUST acontecer só com a verificação verde, no modo que o destino exige:
+  - para a `main` ou de tag: a suíte completa (`npm run verify`), com testes unitários, de
+    integração, de segurança, ponta a ponta e auditoria de dependências;
+  - de `feature/*` e `dev`: o modo rápido (`npm run verify -- --quick`), que é a suíte completa
+    menos o build e os testes ponta a ponta.
+  Teste falhando, pulado sem justificativa escrita ou desativado bloqueia o push nos dois modos.
+  Vale para pessoas e agentes; `--no-verify` e equivalentes MUST NOT ser usados para contornar.
+- CI: pull request e push para a `dev` MUST passar o verify no macOS; pull request e push para a
+  `main` e a release MUST passar o verify em macOS, Windows e Linux. Assim o suporte aos três
+  sistemas (RNF-01) é garantido antes de qualquer versão chegar à `main`.
 - Toda PR MUST verificar conformidade com os princípios I–VI; violação MUST ser justificada na
   seção de complexidade do plan.md.
 
@@ -120,4 +129,4 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
   (inbound = outbound), sem CLA nem DCO. `package.json` e `src-tauri/Cargo.toml` MUST declarar
   o mesmo identificador SPDX.
 
-**Version**: 1.2.1 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-19
+**Version**: 1.3.0 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-19
