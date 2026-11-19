@@ -3,10 +3,12 @@
 name: CI
 
 # PR cobre as branches de trabalho; push só na main (evita rodar duas vezes por PR).
+# workflow_call: o release.yml (spec 002) reaproveita este verify antes do build.
 on:
   pull_request:
   push:
     branches: [main]
+  workflow_call:
 
 permissions:
   contents: read
