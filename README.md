@@ -49,6 +49,7 @@ Por sistema:
 | `npm run dev` | Abre o app em modo desenvolvimento |
 | `npm run build` | Gera o pacote do sistema atual em `src-tauri/target/release/bundle/` |
 | `npm run verify` | Tudo: formatação, clippy, tsc, testes do núcleo, da interface e ponta a ponta, auditoria. Código 0 só se tudo passar |
+| `npm run verify -- --quick` | Igual, sem o build e os testes ponta a ponta. É o que o hook roda em push de `feature/*` e `dev` |
 | `npm run audit` | Só a auditoria de licenças e vulnerabilidades (Rust e npm) |
 | `npm run test:rust` · `test:ui` · `test:e2e` | Uma camada de testes |
 
@@ -57,10 +58,21 @@ No Linux sem tela, rode os testes ponta a ponta sob `xvfb-run`.
 ### Regras de contribuição
 
 - **TDD** (constituição, Princípio VI): teste primeiro, vendo falhar, depois o código. Teste pulado precisa de comentário `// justificativa:` ao lado.
-- **Push só com `npm run verify` verde.** O hook `.githooks/pre-push` roda a suíte; não use `--no-verify`.
-- **`main` só por pull request** com o CI verde em macOS, Windows e Linux, inclusive para o dono do repositório.
+- **Gitflow:** `feature/NNN-nome` sai da `dev` e volta para ela por pull request. A `dev` vai para a `main` por pull request quando houver uma versão para publicar.
+
+  | Branch | Entra por | Hook de pre-push | CI exigido |
+  |---|---|---|---|
+  | `feature/*` | (trabalho) | `verify --quick` | (nenhum; roda no PR) |
+  | `dev` | PR de `feature/*` | `verify --quick` | `verify (macos-latest)` |
+  | `main` | PR da `dev` | `verify` completo | `verify` nos 3 sistemas |
+  | tag `vX.Y.Z` | (na `main`) | `verify` completo | release nos 3 sistemas |
+
+- **Push só com o verify verde.** O hook `.githooks/pre-push` escolhe o modo pelo destino; não use `--no-verify`.
+- **`main` e `dev` só por pull request**, inclusive para o dono do repositório.
   A proteção está em [`.github/branch-protection.json`](.github/branch-protection.json); para reaplicar:
   `gh api -X PUT repos/paulossjunior/prelo/branches/main/protection --input .github/branch-protection.json`.
+  A da `dev` está em [`.github/branch-protection-dev.json`](.github/branch-protection-dev.json):
+  `gh api -X PUT repos/paulossjunior/prelo/branches/dev/protection --input .github/branch-protection-dev.json`.
 - Ao contribuir, você licencia sua contribuição sob a mesma licença do projeto (`MIT OR Apache-2.0`), sem CLA.
 - Licenças permitidas: [`security/licenses-allow.txt`](security/licenses-allow.txt). Exceções de vulnerabilidade: [`security/vuln-exceptions.toml`](security/vuln-exceptions.toml), sempre com motivo e data de revisão.
 

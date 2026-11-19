@@ -45,7 +45,7 @@ describe("ci.yml: chamável pela release sem mudar os checks da main", () => {
     const on = ci().on;
     expect(on).toHaveProperty("workflow_call");
     expect(on).toHaveProperty("pull_request");
-    expect(on.push).toEqual({ branches: ["main"] });
+    expect(on.push).toEqual({ branches: ["main", "dev"] });
   });
 
   it("mantém permissões só de leitura", () => {
@@ -57,9 +57,9 @@ describe("ci.yml: chamável pela release sem mudar os checks da main", () => {
     expect(Object.keys(jobs)).toEqual(["verify"]);
     const verify = jobs.verify;
     expect(verify.name).toBe("verify (${{ matrix.os }})");
-    const names = (verify.strategy.matrix.os as string[]).map((os) =>
-      verify.name.replace("${{ matrix.os }}", os),
-    );
+    // Gitflow: a matriz depende do destino; fora da dev (main, tag, workflow_call) são os 3.
+    const full = JSON.parse(String(verify.strategy.matrix.os).match(/\|\| '(\[[^']*\])'\) \}\}$/)![1]!);
+    const names = (full as string[]).map((os) => verify.name.replace("${{ matrix.os }}", os));
     expect(names).toEqual(["verify (ubuntu-22.04)", "verify (windows-latest)", "verify (macos-latest)"]);
     expect(verify.strategy.matrix.include).toBeUndefined();
   });

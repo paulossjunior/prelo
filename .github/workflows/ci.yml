@@ -1,13 +1,14 @@
-# Trava remota (T029, FR-011): a suíte completa e a auditoria em macOS, Windows e Linux.
-# Os checks "verify (<sistema>)" são obrigatórios na proteção da main (FR-012).
+# Trava remota (T029, FR-011): a suíte completa e a auditoria.
+# Os checks "verify (<sistema>)" são obrigatórios na proteção da main (3 sistemas) e da dev (macOS).
 name: CI
 
-# PR cobre as branches de trabalho; push só na main (evita rodar duas vezes por PR).
+# Gitflow: feature/* → dev → main. Roda em PR e push para dev e main.
 # workflow_call: o release.yml (spec 002) reaproveita este verify antes do build.
 on:
   pull_request:
+    branches: [main, dev]
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_call:
 
 permissions:
@@ -24,7 +25,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest, macos-latest]
+        # Para a dev: só macOS (rápido). Para a main, tag e release: os 3 sistemas.
+        # Os nomes "verify (<sistema>)" são os checks exigidos pela proteção de cada branch.
+        os: ${{ fromJSON((github.base_ref == 'dev' || github.ref == 'refs/heads/dev') && '["macos-latest"]' || '["ubuntu-22.04","windows-latest","macos-latest"]') }}
     steps:
       - uses: actions/checkout@v5
 

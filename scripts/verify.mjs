@@ -38,6 +38,18 @@ const TS_CONTINUATION = /^\s*(\.\w+)*\.(skip|only)\b/;
 const TS_CHAIN_HEAD = /^\s*(it|test|describe|suite|bench)(\.\w+)*\s*$/;
 
 /** Roda cada etapa em sequência; uma falha não interrompe as seguintes. */
+/** Etapas que o modo rápido deixa de fora: o build e os testes ponta a ponta (gitflow). */
+const FULL_ONLY = new Set(["test:e2e"]);
+
+/** "quick" para push em feature/dev; "full" para push na main, tag e CI. */
+export function stepsFor(mode) {
+  return mode === "quick" ? STEPS.filter((s) => !FULL_ONLY.has(s.name)) : STEPS;
+}
+
+export function modeFromArgs(argv) {
+  return argv.includes("--quick") ? "quick" : "full";
+}
+
 export async function runSteps(steps, run = runCommand) {
   const results = [];
   for (const step of steps) {
@@ -120,7 +132,9 @@ async function main() {
     name: "testes pulados",
     cmd: "(interno)",
   };
-  const results = await runSteps([...STEPS, skipStep], async (step) => {
+  const mode = modeFromArgs(process.argv);
+  console.log(`verify: modo ${mode === "quick" ? "rápido (sem build nem e2e)" : "completo"}`);
+  const results = await runSteps([...stepsFor(mode), skipStep], async (step) => {
     if (step !== skipStep) return runCommand(step);
     const skips = scanSkips(root);
     for (const s of skips) console.error(`teste pulado sem justificativa: ${s.file}:${s.line}`);

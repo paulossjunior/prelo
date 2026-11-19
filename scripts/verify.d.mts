@@ -15,6 +15,9 @@ export interface SkipFinding {
 }
 
 export declare const STEPS: Step[];
+export type VerifyMode = "quick" | "full";
+export declare function stepsFor(mode: VerifyMode): Step[];
+export declare function modeFromArgs(argv: string[]): VerifyMode;
 export declare function runSteps(
   steps: Step[],
   run?: (step: Step) => Promise<number>,
