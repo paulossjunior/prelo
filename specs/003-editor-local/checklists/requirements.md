@@ -13,7 +13,7 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
+- [x] No [NEEDS CLARIFICATION] markers remain
 - [x] Requirements are testable and unambiguous
 - [x] Success criteria are measurable
 - [x] Success criteria are technology-agnostic (no implementation details)
@@ -31,9 +31,12 @@
 
 ## Notes
 
-- Iteração 1: três marcadores [NEEDS CLARIFICATION] ficam abertos, de propósito, para
-  `/speckit-clarify`: FR-016 (fontes e licença OFL), FR-017 (pacotes `@preview` e uso
-  offline) e FR-018 (plugins WASM). Os demais itens passam.
+- Iteração 1: três marcadores [NEEDS CLARIFICATION] abertos (fontes, pacotes, plugins).
+- Iteração 2 (2026-11-19): respostas do dono registradas em Clarifications: fontes embutidas
+  + `fonts/` do projeto, sem fontes do sistema (FR-016, D-15); pacotes `@preview` baixados
+  sob demanda com cache local e validação (FR-017, FR-018); plugin WASM com confirmação na
+  primeira vez por projeto (FR-019). FR-015 passou a "abandonar" a compilação que excede o
+  limite. Todos os itens passam (16/16).
 - Versão do Typst embutida, conteúdo de projeto novo, salvamento automático, imagem grande de
   referência e arquivo principal viraram suposições em Assumptions, com padrão razoável.
 - Tecnologia (Tauri, Rust, CodeMirror, Tinymist) aparece só na descrição original e em
