@@ -36,7 +36,7 @@ no `npm run verify`). Nenhum arquivo de `src/` ou `src-tauri/src/` muda.
 
 **Purpose**: dependência para os testes lerem YAML.
 
-- [ ] T001 Adicionar `yaml` (ISC, versão exata) em `devDependencies` de `package.json` e atualizar `package-lock.json`; confirmar `npm run audit` verde
+- [X] T001 Adicionar `yaml` (ISC, versão exata) em `devDependencies` de `package.json` e atualizar `package-lock.json`; confirmar `npm run audit` verde
 
 **Checkpoint**: `import { parse } from "yaml"` funciona num teste do projeto `scripts`.
 
@@ -47,8 +47,8 @@ no `npm run verify`). Nenhum arquivo de `src/` ou `src-tauri/src/` muda.
 **Purpose**: o arquivo `release.yml` existe com gatilho, concorrência e permissões de topo, e
 o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
-- [ ] T002 Escrever em `scripts/release-workflow.test.ts` o carregador de `.github/workflows/release.yml` e `.github/workflows/ci.yml` e os testes: gatilho só `push.tags` com o padrão `v[0-9]+.[0-9]+.[0-9]+`, sem outros gatilhos ([contracts/release-workflow.md](contracts/release-workflow.md#gatilho), FR-001); `concurrency.group` começa com `release-` e difere do grupo do `ci.yml`; `ci.yml` aceita `workflow_call` e mantém `pull_request`, `push: main`, `permissions: contents: read` e o job `verify` com nome `verify (${{ matrix.os }})`. Confirmar que falham
-- [ ] T003 Criar `.github/workflows/release.yml` com gatilho, `concurrency` (`cancel-in-progress: false`) e `permissions: {}`, e acrescentar `workflow_call:` em `.github/workflows/ci.yml` até T002 passar
+- [X] T002 Escrever em `scripts/release-workflow.test.ts` o carregador de `.github/workflows/release.yml` e `.github/workflows/ci.yml` e os testes: gatilho só `push.tags` com o padrão `v[0-9]+.[0-9]+.[0-9]+`, sem outros gatilhos ([contracts/release-workflow.md](contracts/release-workflow.md#gatilho), FR-001); `concurrency.group` começa com `release-` e difere do grupo do `ci.yml`; `ci.yml` aceita `workflow_call` e mantém `pull_request`, `push: main`, `permissions: contents: read` e o job `verify` com nome `verify (${{ matrix.os }})`. Confirmar que falham
+- [X] T003 Criar `.github/workflows/release.yml` com gatilho, `concurrency` (`cancel-in-progress: false`) e `permissions: {}`, e acrescentar `workflow_call:` em `.github/workflows/ci.yml` até T002 passar
 
 **Checkpoint**: `npx vitest run --project scripts` verde; nenhum check obrigatório da `main` mudou de nome.
 
