@@ -45,7 +45,7 @@ describe("exceção de licença da crate typst-assets (D-16)", () => {
   it("typst-assets tem exceção com exatamente CC-BY-4.0 e W3C-20150513", () => {
     const own = exceptions().filter((e) => (e.crate ?? e.name) === "typst-assets");
     expect(own).toHaveLength(1);
-    expect([...(own[0].allow ?? [])].sort()).toEqual([...D16].sort());
+    expect([...(own[0]?.allow ?? [])].sort()).toEqual([...D16].sort());
   });
 
   it("a exceção cita D-16 em comentário", () => {
