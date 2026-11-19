@@ -37,6 +37,9 @@ exceptions = [
   { crate = "dtoa-short", allow = ["MPL-2.0"] },
   # Via dirs/dirs-sys (diretórios do sistema), usado sem modificação.
   { crate = "option-ext", allow = ["MPL-2.0"] },
+  # D-16: dados internos do typst-assets (tabelas HTML/MathML do WHATWG e do W3C, ver NOTICE
+  # da crate) entram no binário do compilador embutido (D-10). Só esta crate; nunca na lista geral.
+  { crate = "typst-assets", allow = ["CC-BY-4.0", "W3C-20150513"] },
 ]
 
 [licenses.private]
