@@ -1,0 +1,15 @@
+# Pipeline de release (spec 002, contracts/release-workflow.md): tag vX.Y.Z na main →
+# instaladores em rascunho no GitHub Releases. Ordem: preflight → verify → build → publish.
+name: Release
+
+# O filtro de tag do GitHub não é regex completa; o preflight repete a checagem estrita.
+on:
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+# Sem permissões no topo: cada job declara só o que precisa (FR-011).
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
