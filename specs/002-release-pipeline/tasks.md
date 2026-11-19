@@ -138,12 +138,12 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
 ### Tests for User Story 4 ⚠️ escrever primeiro, ver falhar
 
-- [ ] T018 [P] [US4] Testes em `scripts/release-artifacts.test.ts` para `containsSelfTestMarker` e o comando `scan`:
+- [X] T018 [P] [US4] Testes em `scripts/release-artifacts.test.ts` para `containsSelfTestMarker` e o comando `scan`:
   - binário falso com a marca `self_test_report` → `true` e saída 1;
   - binário falso sem a marca → `false` e saída 0;
   - marca no limite entre blocos de leitura → detectada.
   - Referência: FR-010, [research.md](research.md) R7.
-- [ ] T019 [US4] Testes de segurança em `scripts/release-workflow.test.ts` ([contracts/release-workflow.md](contracts/release-workflow.md#permissões-e-segredos)):
+- [X] T019 [US4] Testes de segurança em `scripts/release-workflow.test.ts` ([contracts/release-workflow.md](contracts/release-workflow.md#permissões-e-segredos)):
   - `permissions: {}` no topo.
   - Só `publish` tem `contents: write`; `preflight`, `verify` e `build` têm exatamente
     `contents: read`.
@@ -158,8 +158,8 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
 ### Implementation for User Story 4
 
-- [ ] T020 [US4] Implementar `containsSelfTestMarker` e o comando `scan` em `scripts/release-artifacts.mjs` até T018 passar (regra de `data-model.md` Instalador.binário: sem a marca `self_test_report`)
-- [ ] T021 [US4] Em `.github/workflows/release.yml`: adicionar o passo `scan` no `build` (binário `prelo` / `prelo.exe` em `src-tauri/target/<alvo>/release/`, conforme `data-model.md` Instalador.origem); fixar todas as ações externas por SHA com a versão em comentário (SHA obtido via `gh api repos/<dono>/<ação>/git/ref/tags/<versão>`); revisar permissões por job até T019 passar
+- [X] T020 [US4] Implementar `containsSelfTestMarker` e o comando `scan` em `scripts/release-artifacts.mjs` até T018 passar (regra de `data-model.md` Instalador.binário: sem a marca `self_test_report`)
+- [X] T021 [US4] Em `.github/workflows/release.yml`: adicionar o passo `scan` no `build` (binário `prelo` / `prelo.exe` em `src-tauri/target/<alvo>/release/`, conforme `data-model.md` Instalador.origem); fixar todas as ações externas por SHA com a versão em comentário (SHA obtido via `gh api repos/<dono>/<ação>/git/ref/tags/<versão>`); revisar permissões por job até T019 passar
 
 **Checkpoint**: suíte inteira verde; `qa` modo validar.
 
