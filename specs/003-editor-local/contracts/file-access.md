@@ -24,7 +24,8 @@ compilador.
 5. Abre sem bloquear (`O_NONBLOCK`; `O_NOFOLLOW` no último componente em Unix).
 6. No descritor aberto: não é arquivo regular → `ArquivoEspecial`; caminho real do descritor
    fora de `raiz` → `ForaDoProjeto` (troca de link entre 3 e 5).
-7. Tamanho > 256 MB → `GrandeDemais`.
+7. Tamanho > 256 MB → `GrandeDemais`. Para estilos `.csl`, o limite é 1 MiB (mitigação de
+   RUSTSEC-2026-0194/0195 no `quick-xml`, research R14) → `GrandeDemais`.
 8. Lê. Bytes começam com `\0asm` e não há aprovação para `(raiz do projeto, sha256)` →
    `PluginNaoAprovado` + evento `plugin_approval_needed` (R8).
 9. Guarda no cache por conteúdo (RF-51) e devolve.
@@ -36,7 +37,7 @@ compilador.
 | `NaoEncontrado` | "arquivo não encontrado: `<caminho pedido>`" | Não |
 | `ForaDoProjeto` | "acesso recusado: `<caminho pedido>` fica fora da pasta do projeto" | Não |
 | `ArquivoEspecial` | "acesso recusado: `<caminho pedido>` não é um arquivo comum" | Não |
-| `GrandeDemais` | "arquivo grande demais: `<caminho pedido>` (limite 256 MB)" | Não |
+| `GrandeDemais` | "arquivo grande demais: `<caminho pedido>` (limite 256 MB)"; para `.csl`: "estilo grande demais: `<caminho pedido>` (limite 1 MiB)" | Não |
 | `PluginNaoAprovado` | "plugin `<caminho pedido>` aguardando sua confirmação" | Sim, só para calcular o hash; não é entregue |
 | `PacoteAdulterado` | "o pacote `@preview/<nome>:<versão>` foi alterado depois do download" | Não é entregue |
 | `PacoteIndisponivel` | "pacote `@preview/<nome>:<versão>` não está no computador e não há conexão" | — |

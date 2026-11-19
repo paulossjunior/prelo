@@ -18,10 +18,16 @@ levantar licenças antes do plano; o resultado está em R12.
 - **Alternatives considered**: 0.14.x (perde correções; nenhuma vantagem); chamar o `typst`
   instalado (descartado por D-10).
 
-## R2. Serviço de linguagem (Tinymist como biblioteca)
+## R2. Serviço de linguagem (`typst-ide` oficial; Tinymist para World, VFS e pacotes)
 
-- **Decision**: `tinymist-world` 0.15.0, `tinymist-vfs` 0.15.0 e `tinymist-query` 0.15.12
-  (Apache-2.0), **sem** as features `system`, `fonts`, `http-registry`. O núcleo implementa:
+> **Revisado em 2026-11-19 (D-17).** O `tinymist-query` 0.15.x publicado não compila com o
+> `typst` 0.15.1 oficial: o `tinymist-analysis` usa `typst::foundations::FuncInner` e
+> `Func::inner()`, que só existem no *fork* do Typst do Tinymist, e o `typlite` 0.15.12 não
+> compila contra `tinymist-world` 0.15.0. O dono decidiu (D-17) usar o `typst-ide` oficial
+> para a análise do editor e manter o Tinymist só para World, VFS e pacotes.
+
+- **Decision**: `tinymist-world`, `tinymist-vfs` e `tinymist-package` 0.15.0 (Apache-2.0),
+  **sem** as features `system`, `fonts`, `http-registry`. O núcleo implementa:
   - `PathAccessModel` (trait de `tinymist-vfs`): único ponto de leitura de disco, com as regras
     de escopo de RF-08 ([contracts/file-access.md](contracts/file-access.md));
   - `PackageRegistry` (trait de `tinymist-package`): resolve `@preview` para o cache próprio do
@@ -29,26 +35,30 @@ levantar licenças antes do plano; o resultado está em R12.
   - resolvedor de fontes alimentado só por fontes embutidas e `fonts/` do projeto (R6).
   Os textos abertos no editor entram como *overlay* em memória do VFS; o disco só é lido para o
   que não está aberto.
-  `tinymist-query` fornece autocompletar, *semantic tokens* (realce) e *hover*; `typst-ide`
-  (dependência do próprio Tinymist) fornece `jump_from_click` e `jump_from_cursor` (R5).
-- **Versão travada**: `tinymist-*` com requisito exato no `Cargo.toml` (`=0.15.0` e
-  `=0.15.12`), assim como `typst-*` (`=0.15.1`). Atualizar só por PR com a suíte completa
-  verde (decisão do dono, 2026-11-19).
-- **Rationale**: a constituição fixa "typst + Tinymist" e D-10 quer prévia, diagnósticos e
-  autocompletar do mesmo World. `tinymist-query` 0.15.12 depende exatamente de `typst` 0.15.1.
-  As traits `PathAccessModel` e `PackageRegistry` deixam a política de acesso inteira no
-  núcleo do Prelo, sem *fork*.
+  `typst-ide` 0.15.1 fornece autocompletar (`autocomplete`), *hover* (`tooltip`),
+  `jump_from_click` e `jump_from_cursor` (R5), sobre o mesmo World da prévia. Diagnósticos
+  vêm da própria compilação. O realce sai de `typst-syntax` (`LinkedNode` + `highlight`, que
+  devolve a `Tag` de cada nó), convertido em *tokens* pela camada `lang_service.rs`.
+- **Versão travada**: `tinymist-*` com requisito exato no `Cargo.toml` (`=0.15.0`), assim como
+  `typst-*` (`=0.15.1`). Atualizar só por PR com a suíte completa verde (decisão do dono,
+  2026-11-19).
+- **Rationale**: D-10 quer prévia, diagnósticos e autocompletar do mesmo World e do mesmo
+  compilador oficial, e SC-005 exige PDF igual ao do `typst` CLI. `typst-ide` é publicado
+  junto com o `typst`, na mesma versão. As traits `PathAccessModel` e `PackageRegistry`
+  deixam a política de acesso inteira no núcleo do Prelo, sem *fork*. A constituição pede
+  nova D-xx para mudança de componente: D-17.
 - **Alternatives considered**: rodar o servidor LSP `tinymist` como processo separado (exige
   binário extra por sistema, a política de acesso ficaria fora do Prelo e o World não seria o
-  mesmo da prévia); usar só `typst-ide` (menos recursos; trocar Tinymist exigiria nova D-xx;
-  fica como plano B se a API de `tinymist-query` se mostrar instável — ver Riscos).
+  mesmo da prévia); `tinymist-query` 0.15.12 (não compila com o `typst` oficial; ver acima);
+  `[patch]` com o *fork* git do Typst (compilador deixaria de ser o oficial e a auditoria
+  proíbe fontes git).
 
 ## R3. Editor de código
 
 - **Decision**: CodeMirror 6 (`@codemirror/state` 6.7, `view` 6.43, `commands` 6.11,
   `language` 6.13, `autocomplete` 6.20, `lint` 6.9, `search` 6.7; todos MIT), interface em
-  TypeScript sem framework de UI. Realce por *semantic tokens* vindos do núcleo
-  (`tinymist-query`) aplicados como decorações; diagnósticos pelo `@codemirror/lint`;
+  TypeScript sem framework de UI. Realce por *tokens* vindos do núcleo (`typst-syntax`,
+  D-17) aplicados como decorações; diagnósticos pelo `@codemirror/lint`;
   autocompletar pelo `@codemirror/autocomplete` com fonte que chama o núcleo.
 - **Rationale**: CodeMirror 6 está na constituição e é a base de `y-codemirror.next` da fase 3.
   Realce pelo núcleo usa o mesmo analisador do compilador, sem gramática JS paralela que
@@ -122,8 +132,10 @@ levantar licenças antes do plano; o resultado está em R12.
 - **Decision**: `PackageRegistry` próprio, com cache em `<dados locais do app>/packages/
   preview/<nome>/<versão>/` (fora do projeto e fora do cache do `typst` CLI, que outros
   programas podem alterar). Download por `ureq` 3.5 com `rustls` (provedor `ring`) e
-  `rustls-platform-verifier` (certificados do sistema), **sem** `webpki-roots` (licença
-  CDLA-Permissive-2.0, fora da lista), de `https://packages.typst.org/preview/<nome>-<versão>.tar.gz`.
+  `rustls-native-certs` (certificados do sistema passados ao `ureq` como raízes), **sem**
+  `webpki-roots` nem `webpki-root-certs` (licença CDLA-Permissive-2.0, fora da lista; o
+  `rustls-platform-verifier` 0.7 traz `webpki-root-certs` no alvo `wasm32`, e a auditoria
+  confere todos os alvos — decisão do dono, 2026-11-19), de `https://packages.typst.org/preview/<nome>-<versão>.tar.gz`.
   Extração (`flate2` + `tar`) numa pasta temporária do cache com validação de cada entrada:
   recusa caminho absoluto, `..`, link simbólico, link físico, dispositivo/FIFO e entradas além
   de limites (50 MB compactado, 200 MB e 5 000 arquivos descompactados); qualquer recusa
@@ -209,12 +221,11 @@ levantar licenças antes do plano; o resultado está em R12.
 
 | Dependência | Versão | Licença | Uso |
 |---|---|---|---|
-| `typst`, `typst-library`, `typst-syntax`, `typst-svg`, `typst-pdf`, `typst-ide` | 0.15.1 | Apache-2.0 | Compilador, prévia, PDF, saltos |
+| `typst`, `typst-library`, `typst-syntax`, `typst-svg`, `typst-pdf`, `typst-ide` | 0.15.1 | Apache-2.0 | Compilador, prévia, PDF, saltos, autocompletar, *hover* e realce (D-17) |
 | `typst-assets` (sem `fonts`) | 0.15.1 | Apache-2.0; dados internos com partes CC-BY-4.0 e W3C, aceitas só para esta crate (D-16) | Dependência do `typst` |
 | `tinymist-world`, `tinymist-vfs`, `tinymist-package` | 0.15.0 | Apache-2.0 | World, VFS, traits |
-| `tinymist-query` | 0.15.12 | Apache-2.0 | Autocompletar, realce, hover |
 | `ureq` | 3.5 | MIT OR Apache-2.0 | Download de pacotes |
-| `rustls` / `ring` / `rustls-platform-verifier` | 0.23 / 0.17 / 0.7 | Apache-2.0 OR ISC OR MIT / Apache-2.0 AND ISC / MIT OR Apache-2.0 | TLS |
+| `rustls` / `ring` / `rustls-native-certs` | 0.23 / 0.17 / 0.8 | Apache-2.0 OR ISC OR MIT / Apache-2.0 AND ISC / Apache-2.0 OR ISC OR MIT | TLS com certificados do sistema |
 | `flate2`, `tar` | 1.1 / 0.4 | MIT OR Apache-2.0 | Extração de pacotes |
 | `sha2` | 0.10 | MIT OR Apache-2.0 | Hash de pacotes e plugins |
 | `tempfile` | 3.27 | MIT OR Apache-2.0 | Gravação atômica; fixtures |
@@ -230,8 +241,16 @@ dela por `OR`: MIT, Apache-2.0, BSD-2/3-Clause, ISC, Zlib, Unicode-3.0, 0BSD, CC
 Apache-2.0 WITH LLVM-exception; `Unlicense OR MIT`, `Apache-2.0 OR BSL-1.0` (escolha
 MIT/Apache); `ring` = `Apache-2.0 AND ISC` (ambas permitidas); `option-ext` MPL-2.0 (exceção
 D-11 já existe). **Achado**: `webpki-roots`/`webpki-root-certs` (CDLA-Permissive-2.0) entram
-se `ureq` usar a feature padrão de raízes; a configuração escolhida os exclui, e a auditoria
-confere.
+se `ureq` usar a feature padrão de raízes ou se o `rustls-platform-verifier` 0.7 estiver na
+árvore (no alvo `wasm32`); a configuração escolhida usa `rustls-native-certs` e os exclui, e a
+auditoria confere todos os alvos.
+
+**Resultado de T008 (2026-11-19)**: `tinymist-query` 0.15.12 removido (D-17, R2);
+`rustls-platform-verifier` trocado por `rustls-native-certs` (decisão do dono). O
+`cargo-deny` acusa `quick-xml` 0.38.4 (RUSTSEC-2026-0194 e RUSTSEC-2026-0195), tratado em
+R14 com exceção aprovada pelo dono. A exceção D-16 aparece como
+`license-exception-not-encountered` (aviso, não erro), porque o `cargo-deny` lê só a licença
+declarada do `typst-assets` (Apache-2.0); ela documenta e trava o escopo.
 
 ## R13. Testes por camada
 
@@ -251,13 +270,37 @@ Dados de fixture em `src-tauri/tests/fixtures/` (projetos pequenos versionados) 
 código para links, FIFO e pacotes `.tar.gz` maliciosos. O CI remove `typst` do PATH nos jobs
 de E2E (SC-006).
 
+## R14. `quick-xml` 0.38.4 (RUSTSEC-2026-0194, RUSTSEC-2026-0195)
+
+- **Achado**: o `cargo-deny` acusa dois avisos em `quick-xml` 0.38.4: tempo quadrático ao
+  conferir nomes de atributo repetidos numa *tag* (0194) e alocação sem limite para
+  declarações de namespace no `NsReader` (0195). A correção só existe a partir da 0.41. A
+  crate entra por `typst-library` 0.15.1 → `hayagriva` 0.10.1 → `citationberg` 0.7.0
+  (`quick-xml ^0.38.1`), que lê os estilos `.csl` (XML) do projeto. Não há versão de
+  `citationberg`, `hayagriva` ou `typst` compatível que a corrija.
+- **Decision (dono, 2026-11-19)**: exceção para os dois avisos em
+  `security/vuln-exceptions.toml` (`ecosystem = "cargo"`, `review_by = "2027-02-17"`) e em
+  `src-tauri/deny.toml` `[advisories].ignore`, com mitigação testada:
+  - limite de 1 MiB para arquivos `.csl` lidos pelo compilador, aplicado no ponto único de
+    leitura (`access_model.rs`), com diagnóstico claro ("estilo grande demais"); estilos CSL
+    reais têm poucas dezenas de KB;
+  - limite de 10 s da compilação (R9): uma compilação presa no XML é abandonada e vira
+    diagnóstico, com o editor respondendo.
+- **Testes**: `src-tauri/tests/security_malformed.rs` com `.csl` dentro do limite contendo (a)
+  uma *tag* com milhares de atributos distintos e (b) milhares de declarações `xmlns:*`;
+  cada caso termina em diagnóstico ou abandono por tempo, e o núcleo responde a uma edição em
+  até 1 s; `.csl` acima de 1 MiB é recusado sem ser entregue ao compilador.
+- **Rationale**: sem versão corrigida compatível, a alternativa seria remover a bibliografia
+  CSL (RF-05) ou fazer *fork*. O ataque exige um `.csl` malicioso no projeto; o limite de
+  tamanho reduz o custo máximo, e o limite de tempo garante que o app não trava.
+- **Revisão**: em 2027-02-17 ou na próxima versão do `typst`, o que vier primeiro.
+
 ## Riscos
 
-- **API do `tinymist-query`** muda entre versões menores e não é documentada como estável.
-  Mitigação: versão travada (`=0.15.x`), atualização só com a suíte verde, e camada fina
-  `lang_service.rs` que isola o uso. Plano B, registrado só como risco (sem D-xx agora): usar
-  `typst-ide` direto para autocompletar e realce; adotá-lo exigiria decisão nova, por trocar
-  componente da constituição.
+- **API do `typst-ide`** muda entre versões do Typst. Mitigação: versão travada (`=0.15.1`),
+  atualização só com a suíte verde, e camada fina `lang_service.rs` que isola o uso (D-17).
+- **`quick-xml` 0.38 com avisos de segurança** (R14): exceção com data de revisão e
+  mitigação testada.
 - **Dados internos do `typst-assets`** (perfis ICC CC0, dados HTML e MathML com partes
   CC-BY-4.0 e W3C, fontes Foxit BSD-3-Clause para PDFs embutidos) entram no binário mesmo sem
   a feature `fonts`. **Decidido em D-16**: CC-BY-4.0 e W3C-20150513 aceitas só como exceção

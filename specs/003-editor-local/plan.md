@@ -7,8 +7,8 @@
 
 ## Summary
 
-Editor Typst local sobre o esqueleto de 001: o núcleo Rust embute o `typst` 0.15.1 e o
-Tinymist 0.15 como bibliotecas, com um World próprio cujo único ponto de leitura de disco
+Editor Typst local sobre o esqueleto de 001: o núcleo Rust embute o `typst` 0.15.1 (com `typst-ide`
+para a análise do editor, D-17) e o Tinymist 0.15 (World, VFS e pacotes) como bibliotecas, com um World próprio cujo único ponto de leitura de disco
 aplica as regras de escopo de RF-08 (conferência no descritor aberto), as fontes de D-15
 (Libertinus OFL embutida + `fonts/` do projeto, sem fontes do sistema), o cache de pacotes
 `@preview` validado com hash e a confirmação de plugins WASM. A interface usa CodeMirror 6 com
@@ -23,9 +23,9 @@ Detalhes em [research.md](research.md).
 **Language/Version**: Rust 1.95 (`rust-toolchain.toml`); TypeScript 7 sobre Node 24 LTS
 
 **Primary Dependencies**: Tauri 2.12; `typst`/`typst-svg`/`typst-pdf`/`typst-ide` 0.15.1;
-`tinymist-world`/`tinymist-vfs`/`tinymist-package` `=0.15.0` e `tinymist-query` `=0.15.12`
-(versões travadas; atualizar só com a suíte verde);
-`ureq` 3.5 + `rustls` (ring) + `rustls-platform-verifier`; `flate2`, `tar`, `sha2`,
+`tinymist-world`/`tinymist-vfs`/`tinymist-package` `=0.15.0` (versões travadas; atualizar só
+com a suíte verde; `tinymist-query` fora por D-17);
+`ureq` 3.5 + `rustls` (ring) + `rustls-native-certs`; `flate2`, `tar`, `sha2`,
 `tempfile`, `notify` 8, `dirs` 6, `tauri-plugin-dialog` 2 (só do lado Rust); CodeMirror 6
 (`@codemirror/*`); fontes Libertinus 7.051 (OFL-1.1). Licenças em research R12.
 
@@ -66,7 +66,7 @@ segurança geradas em teste
 | VI. TDD | ✅ | `tasks.md` põe testes antes da implementação em cada fase |
 | VI. Testes de segurança | ✅ | Escape da raiz, entrada malformada, pacote malicioso/adulterado, plugin sem confirmação, IPC com caminho fora da raiz, configuração da janela ([file-access.md](contracts/file-access.md)) |
 | VI. Auditoria de dependências | ✅ | `cargo-deny`/`audit-ci` existentes + licenças de arquivos de fonte (D-15) |
-| Restrições: stack | ✅ | CodeMirror 6, typst + Tinymist, Tauri; nenhuma troca de componente |
+| Restrições: stack | ✅ | CodeMirror 6, typst + Tinymist (World, VFS, pacotes), Tauri; análise do editor pelo `typst-ide` oficial em vez do `tinymist-query`, registrada em D-17 |
 | Restrições: compilação embutida | ✅ | Prévia, diagnósticos, autocompletar e PDF do mesmo World; com versão registrada ≠ embutida o projeto não compila até a pessoa atualizar o registro (FR-012), então nada sai de versão diferente da registrada; E2E sem `typst` no PATH |
 | Restrições: plataformas | ✅ | CI nos três sistemas; regras de link/junção por sistema (R11) |
 | Restrições: desempenho | ✅ | Teste `perf_preview` (R13) |
@@ -77,9 +77,10 @@ segurança geradas em teste
 **Resultado pré-pesquisa**: aprovado. **Re-checagem pós-design**: sem violação nova; licença
 dos dados do `typst-assets` decidida pelo dono em D-16.
 
-**Riscos**: API do `tinymist-query` não declarada estável — versão travada (`=0.15.x`),
-atualização só com a suíte verde; plano B (`typst-ide` direto) só como risco, sem D-xx
-(research, Riscos).
+**Riscos**: API do `typst-ide` muda entre versões do Typst — versão travada (`=0.15.1`),
+atualização só com a suíte verde, camada `lang_service.rs` isolando o uso (D-17).
+`quick-xml` 0.38.4 com avisos sem correção compatível — exceção aprovada pelo dono e
+mitigação testada (limite de 1 MiB para `.csl`, limite de 10 s da compilação; research R14).
 
 ## Project Structure
 
@@ -143,7 +144,7 @@ src-tauri/
 │   │   ├── preview.rs       # SVG por página, hash, troca de data: URL
 │   │   ├── export.rs        # PDF
 │   │   └── sync.rs          # jump_from_click/cursor, outline
-│   ├── lang_service.rs      # camada fina sobre tinymist-query
+│   ├── lang_service.rs      # camada fina sobre typst-ide e typst-syntax (D-17)
 │   └── commands.rs          # comandos IPC
 └── tests/
     ├── fixtures/            # projetos pequenos versionados
@@ -171,4 +172,5 @@ ficam em arquivos próprios, para o QA conferir cobertura por categoria do Princ
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
 | Dados internos do `typst-assets` com partes CC-BY-4.0 e W3C-20150513 (dados HTML/MathML), além de CC0 e BSD-3-Clause já permitidos, entram no binário | O `typst` depende do `typst-assets`; sem ele não há compilador (D-10) | Remover exigiria *fork* do Typst; pôr as licenças na lista geral liberaria outras dependências sem revisão. **Aprovado (D-16)**: exceção só da crate `typst-assets` em `src-tauri/deny.toml`, testada em `scripts/audit.test.ts` (tarefa T001) |
+| Exceção de vulnerabilidade RUSTSEC-2026-0194/0195 (`quick-xml` 0.38.4) | Vem do `typst-library` 0.15.1 (via `hayagriva`/`citationberg`), sem versão corrigida compatível | Remover CSL quebraria RF-05; *fork* do `citationberg` exigiria manutenção. **Aprovado pelo dono (2026-11-19)** com revisão em 2027-02-17 e mitigação testada (research R14, T082/T083) |
 | Threads de compilação abandonadas em vez de canceladas (R9) | O Typst não tem cancelamento; FR-015 exige editor responsivo | Processo filho perde o cache incremental e a meta de 100 ms |
