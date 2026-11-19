@@ -61,6 +61,7 @@ No Linux sem tela, rode os testes ponta a ponta sob `xvfb-run`.
 - **`main` só por pull request** com o CI verde em macOS, Windows e Linux, inclusive para o dono do repositório.
   A proteção está em [`.github/branch-protection.json`](.github/branch-protection.json); para reaplicar:
   `gh api -X PUT repos/paulossjunior/prelo/branches/main/protection --input .github/branch-protection.json`.
+- Ao contribuir, você licencia sua contribuição sob a mesma licença do projeto (`MIT OR Apache-2.0`), sem CLA.
 - Licenças permitidas: [`security/licenses-allow.txt`](security/licenses-allow.txt). Exceções de vulnerabilidade: [`security/vuln-exceptions.toml`](security/vuln-exceptions.toml), sempre com motivo e data de revisão.
 
 ## Ideias principais
@@ -78,3 +79,7 @@ Tauri · Rust · CodeMirror 6 · Yjs / yrs · Typst + Tinymist · iroh · gitoxi
 ## Nome
 
 Prelo é a prensa tipográfica. Um texto "no prelo" está prestes a ser publicado, que é a fase do artigo que a ferramenta atende.
+
+## Licença
+
+O Prelo é distribuído sob a licença MIT ou a Apache-2.0, à sua escolha: [`LICENSE-MIT`](LICENSE-MIT) e [`LICENSE-APACHE`](LICENSE-APACHE).

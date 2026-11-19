@@ -78,7 +78,7 @@ Nenhuma opção documentada junta Typst, controle de alterações no estilo do O
 ## 5. Pendências do produto
 
 - **Nome e marca.** Verificar se "Prelo" já é marca registrada (INPI e buscas gerais) antes de divulgar.
-- **Licença do próprio Prelo.** Ainda não escolhida.
+- ~~**Licença do próprio Prelo.**~~ Resolvida em 2026-11-19: `MIT OR Apache-2.0` (`LICENSE-MIT`, `LICENSE-APACHE`).
 
 Riscos técnicos estão em [arquitetura.md §7](arquitetura.md#7-riscos-técnicos-e-questões-em-aberto).
 
