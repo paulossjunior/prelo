@@ -31,6 +31,9 @@ levantar licenças antes do plano; o resultado está em R12.
   que não está aberto.
   `tinymist-query` fornece autocompletar, *semantic tokens* (realce) e *hover*; `typst-ide`
   (dependência do próprio Tinymist) fornece `jump_from_click` e `jump_from_cursor` (R5).
+- **Versão travada**: `tinymist-*` com requisito exato no `Cargo.toml` (`=0.15.0` e
+  `=0.15.12`), assim como `typst-*` (`=0.15.1`). Atualizar só por PR com a suíte completa
+  verde (decisão do dono, 2026-11-19).
 - **Rationale**: a constituição fixa "typst + Tinymist" e D-10 quer prévia, diagnósticos e
   autocompletar do mesmo World. `tinymist-query` 0.15.12 depende exatamente de `typst` 0.15.1.
   As traits `PathAccessModel` e `PackageRegistry` deixam a política de acesso inteira no
@@ -207,7 +210,7 @@ levantar licenças antes do plano; o resultado está em R12.
 | Dependência | Versão | Licença | Uso |
 |---|---|---|---|
 | `typst`, `typst-library`, `typst-syntax`, `typst-svg`, `typst-pdf`, `typst-ide` | 0.15.1 | Apache-2.0 | Compilador, prévia, PDF, saltos |
-| `typst-assets` (sem `fonts`) | 0.15.1 | Apache-2.0 (dados internos sob licenças próprias, ver Riscos) | Dependência do `typst` |
+| `typst-assets` (sem `fonts`) | 0.15.1 | Apache-2.0; dados internos com partes CC-BY-4.0 e W3C, aceitas só para esta crate (D-16) | Dependência do `typst` |
 | `tinymist-world`, `tinymist-vfs`, `tinymist-package` | 0.15.0 | Apache-2.0 | World, VFS, traits |
 | `tinymist-query` | 0.15.12 | Apache-2.0 | Autocompletar, realce, hover |
 | `ureq` | 3.5 | MIT OR Apache-2.0 | Download de pacotes |
@@ -251,13 +254,16 @@ de E2E (SC-006).
 ## Riscos
 
 - **API do `tinymist-query`** muda entre versões menores e não é documentada como estável.
-  Mitigação: camada fina `lang_service.rs` que isola o uso; plano B é `typst-ide` direto, com
-  nova D-xx.
-- **Dados internos do `typst-assets`** (perfis ICC CC0, dados HTML sob CC-BY-4.0/W3C, fontes
-  Foxit BSD-3-Clause para PDFs embutidos) entram no binário mesmo sem a feature `fonts`. A
-  auditoria por crate vê só Apache-2.0. Mitigação: a nova verificação de licenças de arquivos
-  embutidos lista esses dados; Foxit (BSD-3-Clause) e CC0 estão na lista; CC-BY-4.0 e W3C
-  ficam como **pendência para o dono** (dados, não código; não bloqueia o plano).
+  Mitigação: versão travada (`=0.15.x`), atualização só com a suíte verde, e camada fina
+  `lang_service.rs` que isola o uso. Plano B, registrado só como risco (sem D-xx agora): usar
+  `typst-ide` direto para autocompletar e realce; adotá-lo exigiria decisão nova, por trocar
+  componente da constituição.
+- **Dados internos do `typst-assets`** (perfis ICC CC0, dados HTML e MathML com partes
+  CC-BY-4.0 e W3C, fontes Foxit BSD-3-Clause para PDFs embutidos) entram no binário mesmo sem
+  a feature `fonts`. **Decidido em D-16**: CC-BY-4.0 e W3C-20150513 aceitas só como exceção
+  da crate `typst-assets` em `src-tauri/deny.toml`, fora da lista geral. Como o `cargo-deny` lê
+  só a licença declarada da crate (Apache-2.0), a exceção documenta e trava o escopo; a
+  verificação de arquivos embutidos (`scripts/audit.mjs`) lista os dados e seus avisos.
 - **Imagens grandes no SVG**: a troca de `data:` URL por `prelo-asset://` depende do formato
   de saída do `typst-svg`; se não for estável, alternativa é renderizar a imagem à parte e
   posicioná-la por cima. Medido pela tarefa de desempenho com imagens grandes.

@@ -23,7 +23,8 @@ Detalhes em [research.md](research.md).
 **Language/Version**: Rust 1.95 (`rust-toolchain.toml`); TypeScript 7 sobre Node 24 LTS
 
 **Primary Dependencies**: Tauri 2.12; `typst`/`typst-svg`/`typst-pdf`/`typst-ide` 0.15.1;
-`tinymist-world`/`tinymist-vfs`/`tinymist-package` 0.15.0 e `tinymist-query` 0.15.12;
+`tinymist-world`/`tinymist-vfs`/`tinymist-package` `=0.15.0` e `tinymist-query` `=0.15.12`
+(versões travadas; atualizar só com a suíte verde);
 `ureq` 3.5 + `rustls` (ring) + `rustls-platform-verifier`; `flate2`, `tar`, `sha2`,
 `tempfile`, `notify` 8, `dirs` 6, `tauri-plugin-dialog` 2 (só do lado Rust); CodeMirror 6
 (`@codemirror/*`); fontes Libertinus 7.051 (OFL-1.1). Licenças em research R12.
@@ -69,12 +70,16 @@ segurança geradas em teste
 | Restrições: compilação embutida | ✅ | Prévia, diagnósticos, autocompletar e PDF do mesmo World; com versão registrada ≠ embutida o projeto não compila até a pessoa atualizar o registro (FR-012), então nada sai de versão diferente da registrada; E2E sem `typst` no PATH |
 | Restrições: plataformas | ✅ | CI nos três sistemas; regras de link/junção por sistema (R11) |
 | Restrições: desempenho | ✅ | Teste `perf_preview` (R13) |
-| Restrições: licenças (RNF-06) | ✅ | Fontes só OFL-1.1 por D-15; `webpki-roots` excluído; ver Complexity Tracking sobre dados do `typst-assets` |
+| Restrições: licenças (RNF-06) | ✅ | Fontes só OFL-1.1 por D-15; dados CC-BY-4.0/W3C só como exceção da crate `typst-assets` (D-16); `webpki-roots` excluído |
 | Fluxo: feature cita requisitos | ✅ | Spec cita RF/RNF/D |
 | Fluxo: ordem das fases | ✅ | Fase 1 do plano |
 
-**Resultado pré-pesquisa**: aprovado. **Re-checagem pós-design**: sem violação nova; um ponto
-de licença de dados (não código) registrado em Complexity Tracking para decisão do dono.
+**Resultado pré-pesquisa**: aprovado. **Re-checagem pós-design**: sem violação nova; licença
+dos dados do `typst-assets` decidida pelo dono em D-16.
+
+**Riscos**: API do `tinymist-query` não declarada estável — versão travada (`=0.15.x`),
+atualização só com a suíte verde; plano B (`typst-ide` direto) só como risco, sem D-xx
+(research, Riscos).
 
 ## Project Structure
 
@@ -165,5 +170,5 @@ ficam em arquivos próprios, para o QA conferir cobertura por categoria do Princ
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|-------------------------------------|
-| Dados internos do `typst-assets` (perfis ICC CC0, dados HTML com partes CC-BY-4.0/W3C, fontes Foxit BSD-3-Clause usadas ao embutir PDF) entram no binário, embora a crate seja Apache-2.0 | O `typst` depende do `typst-assets`; sem ele não há compilador (D-10) | Remover exigiria *fork* do Typst. A nova verificação de licenças de arquivos embutidos lista esses dados; CC0 e BSD-3-Clause já estão na lista; **CC-BY-4.0/W3C (dados, não código) aguardam confirmação do dono** antes do primeiro release |
+| Dados internos do `typst-assets` com partes CC-BY-4.0 e W3C-20150513 (dados HTML/MathML), além de CC0 e BSD-3-Clause já permitidos, entram no binário | O `typst` depende do `typst-assets`; sem ele não há compilador (D-10) | Remover exigiria *fork* do Typst; pôr as licenças na lista geral liberaria outras dependências sem revisão. **Aprovado (D-16)**: exceção só da crate `typst-assets` em `src-tauri/deny.toml`, testada em `scripts/audit.test.ts` (tarefa T001) |
 | Threads de compilação abandonadas em vez de canceladas (R9) | O Typst não tem cancelamento; FR-015 exige editor responsivo | Processo filho perde o cache incremental e a meta de 100 ms |

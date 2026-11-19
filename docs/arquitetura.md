@@ -168,7 +168,7 @@ O `.typ` e os demais arquivos do projeto chegam de outros coautores. Para o núc
 | Dados | `read`, `json`, `yaml`, `toml`, `csv`, `xml`, `cbor` | Raiz do projeto | RF-08 |
 | Plugins | `plugin("calc.wasm")` | Raiz do projeto ou pasta do pacote | RF-08; risco na [seção 7](#7-riscos-técnicos-e-questões-em-aberto) |
 | Pacotes | `#import "@preview/nome:1.0.0"` | Cache local de pacotes, baixado do registro do Typst | RF-08; risco na [seção 7](#7-riscos-técnicos-e-questões-em-aberto) |
-| Fontes | `#set text(font: "…")` | Não vêm por caminho do `.typ`: o World entrega a lista de fontes | TODO(fontes), [seção 6.5](#65-fontes-e-pacotes) |
+| Fontes | `#set text(font: "…")` | Não vêm por caminho do `.typ`: o World entrega as fontes embutidas e as da pasta `fonts/` do projeto | D-15, [seção 6.5](#65-fontes-e-pacotes) |
 
 TODO(multi-arquivo): confirmar que cada `.typ` do projeto, e não só o principal, é um `Y.Text` no documento Yjs. Se algum `.typ` for lido do disco, ele passa pelas mesmas regras da seção 6.2.
 
@@ -188,7 +188,7 @@ Uma recusa vira diagnóstico no editor, com o caminho pedido e o motivo, e nunca
 
 Testes de segurança exigidos (Princípio VI): `..` além da raiz, `/` seguido de `..`, link simbólico versionado para fora, link simbólico interno (aceito), FIFO, caminho de pacote saindo da pasta do pacote e autocompletar de caminhos.
 
-**Trade-off.** O projeto fica autocontido, e o `.typ` continua compilando fora do Prelo com o projeto como raiz (Princípio I). O custo: um `.bib` compartilhado entre artigos precisa entrar no projeto (D-13, proposta), e links simbólicos para pastas pessoais, comuns em instalações de LaTeX, deixam de funcionar.
+**Trade-off.** O projeto fica autocontido, e o `.typ` continua compilando fora do Prelo com o projeto como raiz (Princípio I). O custo: um `.bib` compartilhado entre artigos precisa entrar no projeto (D-13, aceita em 2026-11-18), e links simbólicos para pastas pessoais, comuns em instalações de LaTeX, deixam de funcionar.
 
 ### 6.3 Como um arquivo é resolvido
 
@@ -255,7 +255,7 @@ Os estados de sincronização continuam os quatro de [requisitos.md §5](requisi
 | Embutidas + fontes do sistema | Usa o que já está instalado | Prévia e PDF podem mudar de um computador para outro |
 | Embutidas + pasta de fontes no projeto | Reprodutível e flexível | Arquivos de fonte vão para o git; a licença de cada fonte precisa permitir redistribuição |
 
-TODO(fontes): quais fontes vêm embutidas, se fontes do sistema são lidas e se uma pasta de fontes no projeto é aceita (ela seguiria RF-08). TODO(licença-fontes): fontes costumam ter licença própria (ex.: OFL), e RNF-06 só cita Apache-2.0 e MIT; confirmar se fontes embutidas entram na mesma regra.
+Decidido em [D-15](adrs.md#d-15-fontes-embutidas--pasta-do-projeto-licença-ofl-11-aceita-só-para-arquivos-de-fonte): fontes embutidas no app mais a pasta `fonts/` do projeto, que segue RF-08; fontes do sistema não são lidas. Arquivos de fonte embutidos podem usar OFL-1.1, além das licenças de RNF-06.
 
 **Pacotes.** Pacotes `@preview` são baixados do registro do Typst para um cache local e lidos com a pasta do pacote como raiz (RF-08). Eles são entrada não confiável: trazem código Typst e podem trazer plugins WASM. O download revela ao registro o nome e a versão dos pacotes e o endereço IP de quem baixa, mas não o conteúdo do artigo (Princípio II). Pacotes `@local` ficam na máquina de quem os criou e não existem nos outros computadores, como um arquivo fora do projeto (D-13). Cache para compilar offline e cache no git continuam em aberto ([seção 7](#7-riscos-técnicos-e-questões-em-aberto)).
 
@@ -277,7 +277,7 @@ Decididas pelo dono em 2026-11-18:
 - **Sincronização lenta.** Muitas figuras podem demorar. O bloqueio vale só para o texto: o documento chega primeiro e as figuras terminam sem travar a edição. Enquanto isso, a prévia mostra marcadores e o PDF final fica bloqueado (RF-52, RF-53). O transporte das figuras segue D-12 (aceita em 2026-11-18).
 - **Conteúdo gerado.** Texto vindo de funções ou `#include` aparece na prévia mas não no arquivo aberto. Comentar na prévia precisa levar ao arquivo de origem.
 - **Pacotes e fontes na compilação embutida.** Pacotes `@preview` do Typst Universe são baixados da internet. Falta definir cache local para compilar offline, se o cache vai para o git e quais fontes vêm embutidas no app ([seção 6.5](#65-fontes-e-pacotes)).
-- **Fontes diferentes entre coautores.** Se o World ler fontes do sistema, dois coautores na mesma versão do compilador podem ver prévia e PDF diferentes, o que anula parte do objetivo de D-10. TODO(fontes).
+- **Fontes diferentes entre coautores.** Se o World ler fontes do sistema, dois coautores na mesma versão do compilador podem ver prévia e PDF diferentes, o que anula parte do objetivo de D-10. Resolvido por D-15: o World não lê fontes do sistema.
 - **Plugins WASM de coautores.** `plugin()` executa código WASM vindo do projeto ou de um pacote. O typst o roda em sandbox, mas é código de terceiros executado no computador de quem compila. TODO(plugins): permitir sempre, pedir confirmação na primeira vez ou recusar.
 - **Imagens grandes na prévia.** RF-51 cobre edições que não tocam a imagem. A primeira compilação depois que uma imagem grande chega ou muda, e o envio dela para a prévia na interface, podem passar da meta de RF-02. TODO(imagem-grande).
 - **Escape da raiz do projeto.** Um link simbólico versionado ou trocado durante a leitura pode tentar levar o compilador para fora do projeto. Mitigação: RF-08, conferência sobre o arquivo aberto ([seção 6.2](#62-regras-de-escopo-rf-08)) e testes de segurança.

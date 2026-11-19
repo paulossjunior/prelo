@@ -278,6 +278,10 @@ comando.
   local para uso offline; a pasta do pacote vira a raiz de escopo.
 - Q: Plugins WASM (`plugin()`) rodam sem pergunta? → A: Pedem confirmação na primeira vez em
   cada projeto, e a decisão fica guardada.
+- Q: Versão do compilador registrada no projeto diferente da embutida: compilar com a
+  embutida e avisar, ou bloquear? → A: Bloquear. Prévia, diagnósticos de compilação e PDF
+  ficam desativados até a pessoa escolher "Atualizar o projeto para a versão embutida"
+  (FR-012; Restrição "Compilação embutida").
 
 ## Requirements *(mandatory)*
 
