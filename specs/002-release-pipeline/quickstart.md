@@ -7,7 +7,8 @@ Guia de validação ponta a ponta. Regras em [contracts/](contracts/), dados em
 
 - Ambiente da spec 001 (`npm install`, `npm run verify` verde).
 - `gh` autenticado com permissão de escrita no repositório (só o dono cria tags).
-- Para o caminho feliz (cenário 1): arquivo de licença na raiz (research R10).
+- Para o caminho feliz (cenário 1): arquivo de licença na raiz (`LICENSE-MIT` e
+  `LICENSE-APACHE` já estão na `main`; research R10).
 
 ## Local
 

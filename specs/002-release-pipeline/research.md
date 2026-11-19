@@ -149,9 +149,10 @@ Versões das ações e do Tauri seguem as já usadas na spec 001 (`.github/workf
 - **Alternatives considered**: um `.sha256` por instalador (mais arquivos para o usuário
   achar); checksums só no texto das notas (não conferível por ferramenta).
 
-## R10. Pendência que bloqueia a primeira release real
+## R10. Pendência que bloqueava a primeira release real (resolvida)
 
-- O repositório ainda não tem arquivo de licença (`package.json` e `Cargo.toml` declaram
-  `UNLICENSED`). Pela decisão Q3, o `preflight` vai recusar toda tag até o dono escolher a
-  licença (TODO(LICENSE) da constituição). A validação do caminho feliz no GitHub (quickstart,
-  cenário 1) depende disso; o caminho de recusa (cenário 6) pode ser validado já.
+- Resolvida em 2026-11-19 (PR #37): a `main` tem `LICENSE-MIT` e `LICENSE-APACHE`, e
+  `package.json` e `Cargo.toml` declaram `MIT OR Apache-2.0`. O `preflight` aceita esses dois
+  nomes além de `LICENSE`, `LICENSE.md`, `LICENSE.txt` e `COPYING` (data-model). O caminho
+  feliz (quickstart, cenário 1) não depende mais de decisão do dono; o cenário 6 (sem licença)
+  só se valida localmente ou num commit de teste sem os arquivos.
