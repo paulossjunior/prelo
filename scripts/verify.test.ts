@@ -200,3 +200,24 @@ describe("STEPS", () => {
     expect(cmds.some((c) => c.includes("cargo test") && c.includes("--features self-test"))).toBe(true);
   });
 });
+
+describe("modo rápido (gitflow: push em feature e dev)", () => {
+  it("o modo rápido tira só o build ponta a ponta", async () => {
+    const { STEPS, stepsFor } = await import("./verify.mjs");
+    const quick = stepsFor("quick").map((s) => s.name);
+    expect(quick).not.toContain("test:e2e");
+    expect(quick).toEqual(STEPS.map((s) => s.name).filter((n) => n !== "test:e2e"));
+    expect(quick).toEqual(expect.arrayContaining(["fmt", "clippy", "tsc", "test:rust", "test:ui", "audit"]));
+  });
+
+  it("o modo completo mantém todas as etapas", async () => {
+    const { STEPS, stepsFor } = await import("./verify.mjs");
+    expect(stepsFor("full")).toEqual(STEPS);
+  });
+
+  it("lê o modo dos argumentos", async () => {
+    const { modeFromArgs } = await import("./verify.mjs");
+    expect(modeFromArgs(["node", "verify.mjs", "--quick"])).toBe("quick");
+    expect(modeFromArgs(["node", "verify.mjs"])).toBe("full");
+  });
+});

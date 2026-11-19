@@ -34,7 +34,14 @@ function repoWithVerify(code: number) {
   copyFileSync(join(root, ".githooks", "pre-push"), join(work, ".githooks", "pre-push"));
   writeFileSync(
     join(work, "package.json"),
-    JSON.stringify({ name: "t", private: true, scripts: { verify: `node -e "process.exit(${code})"` } }),
+    JSON.stringify({
+      name: "t",
+      private: true,
+      scripts: {
+        // Grava o modo pedido (--quick ou completo) para o teste conferir qual suíte rodou.
+        verify: `node -e "require('fs').writeFileSync('../modo.txt', process.argv.includes('--quick') ? 'quick' : 'full'); process.exit(${code})"`,
+      },
+    }),
   );
   git(work, "config", "core.hooksPath", ".githooks");
   git(work, "add", "-A");
@@ -42,9 +49,12 @@ function repoWithVerify(code: number) {
   return { work, remote };
 }
 
-function push(work: string) {
-  return spawnSync("git", ["push", "-q", "origin", "main"], { cwd: work, encoding: "utf8", env });
+function push(work: string, ...refs: string[]) {
+  const args = refs.length ? refs : ["main"];
+  return spawnSync("git", ["push", "-q", "origin", ...args], { cwd: work, encoding: "utf8", env });
 }
+
+const modo = (work: string) => readFileSync(join(work, "..", "modo.txt"), "utf8");
 
 afterEach(() => {
   for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
@@ -64,6 +74,51 @@ describe("pre-push", { timeout: 30_000 }, () => {
     const r = push(work);
     expect(r.status, r.stderr).toBe(0);
     expect(git(remote, "rev-parse", "main").trim()).toBe(git(work, "rev-parse", "HEAD").trim());
+  });
+});
+
+// Gitflow: push para a main ou de tag roda a suíte completa; o resto roda o modo rápido.
+describe("pre-push no gitflow", { timeout: 30_000 }, () => {
+  it("push para a main roda a suíte completa", () => {
+    const { work } = repoWithVerify(0);
+    expect(push(work).status).toBe(0);
+    expect(modo(work)).toBe("full");
+  });
+
+  it("push de tag roda a suíte completa", () => {
+    const { work } = repoWithVerify(0);
+    git(work, "tag", "v9.9.9");
+    expect(push(work, "v9.9.9").status).toBe(0);
+    expect(modo(work)).toBe("full");
+  });
+
+  it("push de branch de feature roda o modo rápido", () => {
+    const { work, remote } = repoWithVerify(0);
+    git(work, "switch", "-q", "-c", "feature/x");
+    expect(push(work, "feature/x").status).toBe(0);
+    expect(modo(work)).toBe("quick");
+    expect(git(remote, "rev-parse", "feature/x").trim()).toBe(git(work, "rev-parse", "HEAD").trim());
+  });
+
+  it("push para a dev roda o modo rápido", () => {
+    const { work } = repoWithVerify(0);
+    expect(push(work, "main:dev").status).toBe(0);
+    expect(modo(work)).toBe("quick");
+  });
+
+  it("modo rápido que falha também bloqueia o push", () => {
+    const { work, remote } = repoWithVerify(1);
+    git(work, "switch", "-q", "-c", "feature/x");
+    expect(push(work, "feature/x").status).not.toBe(0);
+    expect(modo(work)).toBe("quick");
+    expect(() => git(remote, "rev-parse", "feature/x")).toThrow();
+  });
+
+  it("push misto (feature e main juntos) roda a suíte completa", () => {
+    const { work } = repoWithVerify(0);
+    git(work, "branch", "feature/y");
+    expect(push(work, "main", "feature/y").status).toBe(0);
+    expect(modo(work)).toBe("full");
   });
 });
 
