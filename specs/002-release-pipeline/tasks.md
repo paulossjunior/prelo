@@ -171,7 +171,7 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 - [ ] T023 Abrir PR e confirmar `npm run verify` verde nos três sistemas pelo CI (checks `verify (<sistema>)` inalterados)
 - [ ] T024 Rodar o [quickstart.md](quickstart.md): cenários locais L1–L4 e, no GitHub, 4, 5, 6 e 8 (possíveis sem licença); apagar tags e rascunhos de teste
 - [ ] T025 Rodar os cenários 1, 2, 3, 7 e 9 do [quickstart.md](quickstart.md) **depois** que o dono adicionar o arquivo de licença (TODO(LICENSE), [research.md](research.md) R10); medir o tempo até o rascunho (SC-003)
-- [ ] T026 Validação final pelo agente `qa` (modo validar): suíte completa, cobertura FR-001–FR-016, testes de segurança, ordem TDD pelo histórico git; anexar o veredito na issue #35
+- [X] T026 Validação final pelo agente `qa` (modo validar): suíte completa, cobertura FR-001–FR-016, testes de segurança, ordem TDD pelo histórico git; anexar o veredito na issue #35
 
 ---
 
