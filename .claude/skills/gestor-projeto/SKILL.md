@@ -21,7 +21,7 @@ Sem argumento: rode **status**.
 
 - `.specify/memory/constitution.md`: princípios e ordem obrigatória das fases.
 - `docs/especificacao.md` §4: plano de construção (fases 1–5) e §5 pendências do produto.
-- `docs/requisitos.md`: RF-xx e RNF-xx. `docs/adrs.md`: D-xx. `docs/arquitetura.md` §6: riscos.
+- `docs/requisitos.md`: RF-xx e RNF-xx. `docs/adrs.md`: D-xx. `docs/arquitetura.md` §7: riscos.
 - `specs/*/` (spec-kit): spec.md, plan.md, tasks.md de cada feature, quando existirem.
 - GitHub: `gh issue list`, `gh issue view`, milestones e labels do repositório `origin`.
 
@@ -36,7 +36,7 @@ delegada ao `doc-tecnica`.
 | Fase (milestone) | `F1 Editor local`, `F2 Comentários e git`, `F3 Tempo real`, `F4 Modo sugestão`, `F5 Papéis e convites` | Fases do plano, na ordem da constituição |
 | Prioridade (label) | `P0` bloqueia tudo, `P1` próxima, `P2` nesta fase, `P3` depois | Uma por issue |
 | Tipo (label) | `feature`, `documentation`, `bug`, `decisão`, `risco`, `infra` | Uma por issue |
-| Agente (label) | `agente:doc-tecnica`, `agente:speckit`, `agente:builder`, `agente:qa`, `agente:humano` | Quem executa |
+| Agente (label) | `agente:doc-tecnica`, `agente:speckit`, `agente:builder`, `agente:qa`, `agente:site`, `agente:humano` | Quem executa |
 
 Antes de usar um label ou milestone, confira com `gh label list` / `gh api repos/{owner}/{repo}/milestones`.
 Se faltar, proponha a criação junto com o resto do lote (ver Confirmação).
@@ -48,7 +48,7 @@ Ordene nesta sequência; o primeiro critério que diferenciar decide:
 1. **Fase**: nenhuma issue de fase N+1 passa à frente da fase N sem justificativa escrita
    (constituição, Fluxo de Desenvolvimento).
 2. **Bloqueio**: o que destrava outras issues sobe (ex.: decisão em aberto que impede o plano).
-3. **Risco**: itens de `docs/arquitetura.md` §6 que podem invalidar a arquitetura sobem cedo
+3. **Risco**: itens de `docs/arquitetura.md` §7 que podem invalidar a arquitetura sobem cedo
    (spike antes de construir em cima).
 4. **Princípio**: trabalho que garante um princípio da constituição (I–VI) vence trabalho de
    conveniência.
@@ -88,12 +88,16 @@ Depende de #N · Bloqueia #M
 | Edição pequena em 1–2 arquivos | agente `caveman:cavecrew-builder` | Agent tool, escopo exato |
 | Localizar código ou mapear impacto | agente `caveman:cavecrew-investigator` ou `Explore` | Agent tool |
 | Testes de negócio e segurança: projetar antes, validar depois de implementar | agente `qa` | Agent tool, prompt com modo (projetar/validar), feature em `specs/`, issue e critérios de aceite |
+| Página pública no GitHub Pages: texto e front-end | agente `site` | Agent tool, prompt com a issue, seções desejadas e o que já existe em `site/` |
 | Revisar diff antes de fechar | agente `caveman:cavecrew-reviewer` ou `/code-review` | Agent tool / skill |
 | Decisão de produto, marca, licença, prioridade de negócio | humano | Pergunte ao usuário; label `agente:humano` |
 
 Ao delegar:
 
 - Uma issue por agente por vez; agentes independentes podem rodar em paralelo.
+- **Nada vai direto à `main`** (spec 001, FR-012): cada feature trabalha na branch
+  `NNN-nome` do `specs/`; ao fim, abra pull request (`gh pr create`) citando `Closes #N` e
+  anexando o veredito do `qa`. Merge só com CI verde nos três sistemas.
 - Features: a issue-mãe (ex.: #1) descreve o objetivo; as tarefas `T0xx` do `tasks.md` viram
   issues filhas via `/speckit-github-taskstoissues`. Ao criá-las, aplique a mesma milestone e
   label `agente:*` da issue-mãe e cite `Parte de #N` no corpo. Feche a issue-mãe só quando

@@ -1,0 +1,15 @@
+# Lista única de licenças permitidas para dependências (RNF-06, FR-008).
+# Um identificador SPDX por linha. Lida por scripts/audit.mjs e espelhada em
+# src-tauri/deny.toml ([licenses].allow); um teste garante que as duas são iguais.
+# MPL-2.0 NÃO entra aqui: só como exceção por crate em deny.toml (D-11).
+Apache-2.0
+MIT
+BSD-2-Clause
+BSD-3-Clause
+ISC
+Zlib
+Unicode-3.0
+0BSD
+CC0-1.0
+# Apache-2.0 com permissão adicional; aprovado pelo dono em 2026-11-18.
+Apache-2.0 WITH LLVM-exception

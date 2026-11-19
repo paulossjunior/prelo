@@ -1,0 +1,27 @@
+[package]
+name = "prelo"
+version = "0.1.0"
+description = "Prelo: editor desktop colaborativo para artigos em Typst"
+edition = "2021"
+rust-version = "1.95"
+publish = false
+license = "UNLICENSED"
+
+[lib]
+name = "prelo_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+tauri = { version = "2.12", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tauri = { version = "2.12", features = ["test"] }
+
+[features]
+# Autoteste ponta a ponta (research R3). Nunca habilitado em release.
+self-test = []

@@ -1,0 +1,10 @@
+# Exceções de vulnerabilidade (FR-009). Formato: data-model.md "Exceção de vulnerabilidade".
+# Cada exceção precisa de id, ecosystem ("cargo" ou "npm"), reason não vazio e review_by
+# (data ISO). Passada a data, a auditoria falha até alguém revisar.
+# Exceções "cargo" também precisam constar em src-tauri/deny.toml [advisories].ignore.
+#
+# [[exception]]
+# id = "RUSTSEC-0000-0000"
+# ecosystem = "cargo"
+# reason = "sem correção publicada; caminho vulnerável não é usado pelo Prelo"
+# review_by = "2027-01-31"
