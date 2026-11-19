@@ -1,6 +1,10 @@
 mod app_info;
 #[cfg(feature = "self-test")]
 mod self_test;
+
+// O autoteste encerra o app pelo IPC; nunca pode ir para uma build de release.
+#[cfg(all(feature = "self-test", not(debug_assertions)))]
+compile_error!("a feature `self-test` só é permitida em build de depuração");
 mod webview_args;
 
 use tauri::{Builder, Runtime};
