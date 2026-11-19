@@ -201,3 +201,15 @@ fn tauri_conf_nao_declara_capabilities_embutidas() {
         }
     }
 }
+
+#[test]
+fn self_test_nao_compila_em_release() {
+    // O comando `self_test_report` encerra o app e só pode existir em build de depuração
+    // (contracts/ipc.md). A trava precisa estar no código, não só na convenção.
+    let lib = fs::read_to_string(manifest_dir().join("src/lib.rs")).expect("não leu src/lib.rs");
+    let guard = "#[cfg(all(feature = \"self-test\", not(debug_assertions)))]\ncompile_error!(";
+    assert!(
+        lib.contains(guard),
+        "src/lib.rs precisa barrar `--features self-test` em release com compile_error!"
+    );
+}
