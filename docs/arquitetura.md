@@ -226,7 +226,7 @@ sequenceDiagram
   end
 ```
 
-O diagrama não mostra arquivos de pacote, que seguem os mesmos passos com a pasta do pacote como raiz e não consultam o manifesto. Também não mostra fontes, invalidação do cache quando um arquivo muda nem o autocompletar do Tinymist, que usa o mesmo World. O manifesto ainda não existe: ele depende de D-12, que está proposta. Hoje o protótipo já mostra "Figuras · 118 de 131 arquivos" durante a entrada, o que pressupõe uma lista de arquivos conhecida antes dos bytes.
+O diagrama não mostra arquivos de pacote, que seguem os mesmos passos com a pasta do pacote como raiz e não consultam o manifesto. Também não mostra fontes, invalidação do cache quando um arquivo muda nem o autocompletar do Tinymist, que usa o mesmo World. O manifesto vem de D-12, aceita em 2026-11-18, e ainda não está implementado. Hoje o protótipo já mostra "Figuras · 118 de 131 arquivos" durante a entrada, o que pressupõe uma lista de arquivos conhecida antes dos bytes.
 
 ### 6.4 Arquivos pendentes (RF-52 a RF-54)
 
@@ -274,7 +274,7 @@ Decididas pelo dono em 2026-11-18:
 - **Edição fora do app.** Se alguém editar o `.typ` no VS Code e fizer push, o Prelo precisa transformar o diff em sugestões de um autor "externo". Falta definir como tratar trechos que mudaram nos dois lados.
 - **Redes que bloqueiam P2P.** Algumas redes bloqueiam UDP; o tráfego passa sempre pelo relay. Decidir entre relays públicos do iroh ou relay próprio do grupo.
 - **Bloqueio enquanto sincroniza.** O app só sabe o que recebeu de quem está online e do git. Mudanças de quem ainda não reconectou chegam depois; itens sobre trechos alterados são realocados com ajuda do usuário (RF-37).
-- **Sincronização lenta.** Muitas figuras podem demorar. O bloqueio vale só para o texto: o documento chega primeiro e as figuras terminam sem travar a edição. Enquanto isso, a prévia mostra marcadores e o PDF final fica bloqueado (RF-52, RF-53). O transporte das figuras depende de D-12 (proposta).
+- **Sincronização lenta.** Muitas figuras podem demorar. O bloqueio vale só para o texto: o documento chega primeiro e as figuras terminam sem travar a edição. Enquanto isso, a prévia mostra marcadores e o PDF final fica bloqueado (RF-52, RF-53). O transporte das figuras segue D-12 (aceita em 2026-11-18).
 - **Conteúdo gerado.** Texto vindo de funções ou `#include` aparece na prévia mas não no arquivo aberto. Comentar na prévia precisa levar ao arquivo de origem.
 - **Pacotes e fontes na compilação embutida.** Pacotes `@preview` do Typst Universe são baixados da internet. Falta definir cache local para compilar offline, se o cache vai para o git e quais fontes vêm embutidas no app ([seção 6.5](#65-fontes-e-pacotes)).
 - **Fontes diferentes entre coautores.** Se o World ler fontes do sistema, dois coautores na mesma versão do compilador podem ver prévia e PDF diferentes, o que anula parte do objetivo de D-10. TODO(fontes).
