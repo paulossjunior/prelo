@@ -199,3 +199,65 @@ describe("release.yml: preflight e verify antes do build", () => {
     expect(Object.keys(release().jobs)).toEqual(["preflight", "verify", "build", "publish"]);
   });
 });
+
+// ---------------------------------------------------------------------------------------
+// US3: checksums e notas do rascunho (FR-009, FR-014).
+
+const NOTES = join(root, ".github", "release-notes.md");
+const notes = () => {
+  expect(existsSync(NOTES), `${NOTES} não existe`).toBe(true);
+  return readFileSync(NOTES, "utf8");
+};
+
+describe("release.yml: checksums e notas no publish", () => {
+  const index = (re: RegExp) => steps("publish").findIndex((s) => re.test(runOf(s)));
+  const create = () => runOf(steps("publish").find((s) => s.id === "create"));
+
+  it("gera SHA256SUMS.txt depois do collect e antes de criar, no diretório anexado", () => {
+    const collect = index(/release-artifacts\.mjs collect downloads "\$\{TAG#v\}" release-files/);
+    const sums = index(/node scripts\/release-artifacts\.mjs sums release-files/);
+    const created = steps("publish").findIndex((s) => s.id === "create");
+    expect(collect).toBeGreaterThanOrEqual(0);
+    expect(sums).toBeGreaterThan(collect);
+    expect(sums).toBeLessThan(created);
+    expect(create()).toMatch(/ release-files\/\*$/m);
+  });
+
+  it("renderiza as notas com a versão e as passa por --notes-file", () => {
+    const render = index(/\.github\/release-notes\.md/);
+    const created = steps("publish").findIndex((s) => s.id === "create");
+    expect(render).toBeGreaterThanOrEqual(0);
+    expect(render).toBeLessThan(created);
+    const run = runOf(steps("publish")[render]);
+    expect(run).toContain("{{VERSION}}");
+    expect(run).toContain('"$RUNNER_TEMP/notes.md"');
+    expect(create()).toContain('--notes-file "$RUNNER_TEMP/notes.md"');
+    expect(create()).not.toMatch(/--notes /);
+  });
+});
+
+describe(".github/release-notes.md", () => {
+  it("tem o marcador {{VERSION}}", () => {
+    expect(notes()).toContain("{{VERSION}}");
+  });
+
+  it("avisa que os instaladores não são assinados", () => {
+    expect(notes()).toMatch(/não são assinados/);
+  });
+
+  it("explica como abrir no macOS (Gatekeeper) e no Windows (SmartScreen)", () => {
+    const text = notes();
+    expect(text).toContain("Gatekeeper");
+    expect(text).toContain("Abrir");
+    expect(text).toContain("SmartScreen");
+    expect(text).toContain("Mais informações");
+    expect(text).toContain("Executar assim mesmo");
+  });
+
+  it("traz os comandos de conferência do checksum nos três sistemas", () => {
+    const text = notes();
+    expect(text).toContain("sha256sum -c SHA256SUMS.txt");
+    expect(text).toContain("shasum -a 256 -c SHA256SUMS.txt");
+    expect(text).toContain("Get-FileHash");
+  });
+});
