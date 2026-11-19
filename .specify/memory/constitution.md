@@ -115,6 +115,9 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
 - Versão segue SemVer: MAJOR remove ou redefine princípio; MINOR adiciona princípio ou seção;
   PATCH esclarece redação.
 - Revisões de plan.md e PRs MUST checar os princípios I–VI no Constitution Check.
-- Pendente: TODO(LICENSE) — escolher a licença do Prelo antes da primeira release pública.
+- Licença: o Prelo é distribuído sob `MIT OR Apache-2.0` (`LICENSE-MIT` e `LICENSE-APACHE`
+  na raiz; decisão do dono em 2026-11-19). Contribuições entram sob a mesma licença
+  (inbound = outbound), sem CLA nem DCO. `package.json` e `src-tauri/Cargo.toml` MUST declarar
+  o mesmo identificador SPDX.
 
-**Version**: 1.2.0 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-18
+**Version**: 1.2.1 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-19

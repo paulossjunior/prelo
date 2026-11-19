@@ -5,7 +5,7 @@ description = "Prelo: editor desktop colaborativo para artigos em Typst"
 edition = "2021"
 rust-version = "1.95"
 publish = false
-license = "UNLICENSED"
+license = "MIT OR Apache-2.0"
 
 [lib]
 name = "prelo_lib"
