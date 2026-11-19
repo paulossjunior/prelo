@@ -135,6 +135,13 @@ jobs:
       - name: Conferir o conjunto de instaladores
         run: node scripts/release-artifacts.mjs collect downloads "${TAG#v}" release-files
 
+      - name: Checksums (SHA256SUMS.txt)
+        run: node scripts/release-artifacts.mjs sums release-files
+
+      # TAG já passou pelo formato estrito vX.Y.Z no preflight: seguro no sed.
+      - name: Notas do rascunho
+        run: sed "s/{{VERSION}}/${TAG#v}/g" .github/release-notes.md > "$RUNNER_TEMP/notes.md"
+
       - name: Release ainda não existe (FR-013)
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -155,7 +162,8 @@ jobs:
         id: create
         run: |
           echo "created=true" >> "$GITHUB_OUTPUT"
-          gh release create "$TAG" --draft --verify-tag --title "$TAG" --notes "" release-files/*
+          gh release create "$TAG" --draft --verify-tag --title "$TAG" \
+            --notes-file "$RUNNER_TEMP/notes.md" release-files/*
 
       - name: Conferir assets anexados
         run: |
