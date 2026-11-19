@@ -3,6 +3,7 @@
 // "Lista de licenças permitidas".
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { parse as parseToml } from "smol-toml";
 import { describe, expect, it } from "vitest";
 import {
   denyAdvisoryIgnores,
@@ -31,6 +32,43 @@ describe("lista única de licenças", () => {
 
   it("MPL-2.0 não está na lista geral (D-11)", () => {
     expect(parseAllowlist(read("security/licenses-allow.txt"))).not.toContain("MPL-2.0");
+  });
+});
+
+describe("exceção de licença da crate typst-assets (D-16)", () => {
+  type DenyException = { crate?: string; name?: string; allow?: string[] };
+  const exceptions = (): DenyException[] =>
+    ((parseToml(read("src-tauri/deny.toml")) as { licenses?: { exceptions?: DenyException[] } }).licenses
+      ?.exceptions ?? []);
+  const D16 = ["CC-BY-4.0", "W3C-20150513"];
+
+  it("typst-assets tem exceção com exatamente CC-BY-4.0 e W3C-20150513", () => {
+    const own = exceptions().filter((e) => (e.crate ?? e.name) === "typst-assets");
+    expect(own).toHaveLength(1);
+    expect([...(own[0].allow ?? [])].sort()).toEqual([...D16].sort());
+  });
+
+  it("a exceção cita D-16 em comentário", () => {
+    const lines = read("src-tauri/deny.toml").split(/\r?\n/);
+    const i = lines.findIndex((l) => l.includes('"typst-assets"'));
+    expect(i).toBeGreaterThan(0);
+    expect(lines.slice(Math.max(0, i - 3), i + 1).join("\n")).toContain("D-16");
+  });
+
+  it("nenhuma outra crate tem exceção com CC-BY-4.0 ou W3C-20150513", () => {
+    const others = exceptions().filter(
+      (e) => (e.crate ?? e.name) !== "typst-assets" && (e.allow ?? []).some((l) => D16.includes(l)),
+    );
+    expect(others).toEqual([]);
+  });
+
+  it("CC-BY-4.0 e W3C-20150513 não estão na lista geral nem em [licenses].allow", () => {
+    const allow = parseAllowlist(read("security/licenses-allow.txt"));
+    const denyAllow = denyAllowList(read("src-tauri/deny.toml"));
+    for (const lic of D16) {
+      expect(allow).not.toContain(lic);
+      expect(denyAllow).not.toContain(lic);
+    }
   });
 });
 
