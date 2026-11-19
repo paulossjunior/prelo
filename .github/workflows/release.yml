@@ -15,9 +15,40 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Falha em segundos, antes de verify e build (FR-001–FR-003, FR-016).
+  preflight:
+    name: preflight
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      # Histórico completo: a ancestralidade é conferida contra origin/main.
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+
+      - name: Tag, main, versões e licença
+        run: node scripts/release-check.mjs "$TAG"
+
+  # O mesmo verify da spec 001 nos três sistemas (FR-004). O topo é permissions: {} e o
+  # workflow chamado só pode reduzir permissões, então a leitura é declarada aqui.
+  verify:
+    needs: preflight
+    permissions:
+      contents: read
+    uses: ./.github/workflows/ci.yml
+
   # Instaladores sem publicar: só leitura (research R4). Sem --features: self-test fica fora.
   build:
     name: build (${{ matrix.os }})
+    needs: verify
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
