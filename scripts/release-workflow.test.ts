@@ -93,6 +93,19 @@ describe("release.yml: job build", () => {
     expect(runOf(build[0])).toContain("npx --no-install tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}");
   });
 
+  it("confere no macOS que o binário é universal (x86_64 e arm64) antes do upload", () => {
+    const st = steps("build");
+    const build = st.findIndex((s) => /tauri build/.test(runOf(s)));
+    const lipo = st.findIndex((s) => /lipo -archs/.test(runOf(s)));
+    const upload = st.findIndex((s) => usesOf(s).startsWith("actions/upload-artifact@"));
+    expect(lipo).toBeGreaterThan(build);
+    expect(lipo).toBeLessThan(upload);
+    expect(st[lipo].if).toBe("runner.os == 'macOS'");
+    expect(runOf(st[lipo])).toContain("src-tauri/target/universal-apple-darwin/release/prelo");
+    expect(runOf(st[lipo])).toMatch(/x86_64/);
+    expect(runOf(st[lipo])).toMatch(/arm64/);
+  });
+
   it("adiciona os dois alvos Apple antes do build universal", () => {
     const i = steps("build").findIndex((s) => /rustup target add aarch64-apple-darwin x86_64-apple-darwin/.test(runOf(s)));
     const b = steps("build").findIndex((s) => /tauri build/.test(runOf(s)));
@@ -155,7 +168,7 @@ describe("release.yml: job publish", () => {
   it("limpa só o rascunho criado nesta execução, sem apagar a tag", () => {
     const cleanup = steps("publish").filter((s) => /gh release delete/.test(runOf(s)));
     expect(cleanup).toHaveLength(1);
-    expect(cleanup[0].if).toBe("failure() && steps.create.outputs.created == 'true'");
+    expect(cleanup[0].if).toBe("(failure() || cancelled()) && steps.create.outputs.created == 'true'");
     expect(runOf(cleanup[0])).toContain('gh release delete "$TAG" --yes');
     expect(runOf(cleanup[0])).not.toContain("--cleanup-tag");
   });
