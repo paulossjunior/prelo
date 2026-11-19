@@ -330,3 +330,29 @@ describe("release.yml: self-test fora do instalador", () => {
     expect(runOf(st[scan])).toContain("src-tauri/target/${{ matrix.target }}/release/prelo");
   });
 });
+
+// ---------------------------------------------------------------------------------------
+// Polish: documentação para contribuidores (FR-015).
+
+describe("README: Publicar uma versão", () => {
+  const section = () => {
+    const text = readFileSync(join(root, "README.md"), "utf8");
+    const start = text.indexOf("### Publicar uma versão");
+    expect(start, "seção ausente").toBeGreaterThanOrEqual(0);
+    const end = text.indexOf("\n## ", start);
+    return text.slice(start, end < 0 ? undefined : end);
+  };
+
+  it("diz quais arquivos de versão atualizar e como criar a tag na main", () => {
+    const s = section();
+    for (const f of ["package.json", "src-tauri/tauri.conf.json", "src-tauri/Cargo.toml"]) expect(s).toContain(f);
+    expect(s).toContain("git tag vX.Y.Z origin/main && git push origin vX.Y.Z");
+  });
+
+  it("explica revisar e publicar o rascunho, conferir checksums e o pré-requisito de licença", () => {
+    const s = section();
+    expect(s).toMatch(/rascunho/);
+    expect(s).toContain("SHA256SUMS.txt");
+    expect(s).toMatch(/licença/);
+  });
+});
