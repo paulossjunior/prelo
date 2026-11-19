@@ -1,0 +1,1019 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prelo · artigos em Typst a várias mãos</title>
+<meta name="description" content="Prelo: editor desktop, em desenvolvimento, para escrever e revisar artigos científicos em Typst com coautores, com sugestões, comentários e colaboração sem servidor.">
+<meta name="color-scheme" content="light dark">
+<style>
+/* ---------- Tokens: tema claro (padrão) ---------- */
+:root {
+  --bg: #f6f4ee;
+  --surface: #ffffff;
+  --surface-2: #ece9e1;
+  --line: #cbc6b8;
+  --fg: #1a1d1f;
+  --muted: #4b5459;
+  --accent: #0d6a73;
+  --on-accent: #ffffff;
+  --accent-soft: #d6ecee;
+  --ins: #1b6534;
+  --ins-bg: #dcf1e2;
+  --del: #a3271f;
+  --del-bg: #f8dfdc;
+  --cmt: #6e4c00;
+  --cmt-bg: #fbedc6;
+  --warn-line: #b07a00;
+  --code-bg: #fbfaf7;
+  --tok-fn: #6a2fa3;
+  --tok-h: #0b2a33;
+  --tok-str: #1b6534;
+  --tok-cmt: #5a666b;
+  --u-ana: #6f2fd6;
+  --u-bruno: #a8480c;
+  --u-carla: #1f5bb8;
+  --focus: #0b4f9e;
+  /* papel da prévia: sempre claro, nos dois temas */
+  --paper: #fffefa;
+  --paper-fg: #1a1a1a;
+  --paper-muted: #4a4a4a;
+  --shadow: 0 14px 40px -20px rgba(11, 42, 51, .45);
+  --f-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --f-serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, "Times New Roman", serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light;
+}
+
+/* ---------- Tokens: tema escuro ---------- */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101517;
+    --surface: #172024;
+    --surface-2: #1e292e;
+    --line: #3a4a51;
+    --fg: #e6ecee;
+    --muted: #a6b3b8;
+    --accent: #5cc8cf;
+    --on-accent: #0a1d20;
+    --accent-soft: #16383c;
+    --ins: #7ad99a;
+    --ins-bg: #173524;
+    --del: #ff9e94;
+    --del-bg: #3d1e1b;
+    --cmt: #f0c35a;
+    --cmt-bg: #3a2f12;
+    --warn-line: #f0c35a;
+    --code-bg: #121b1f;
+    --tok-fn: #d3acff;
+    --tok-h: #ffffff;
+    --tok-str: #7ad99a;
+    --tok-cmt: #93a3a9;
+    --u-ana: #c3a0ff;
+    --u-bruno: #ffab70;
+    --u-carla: #8bbaff;
+    --focus: #ffd166;
+    --shadow: 0 14px 40px -20px rgba(0, 0, 0, .8);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101517;
+  --surface: #172024;
+  --surface-2: #1e292e;
+  --line: #3a4a51;
+  --fg: #e6ecee;
+  --muted: #a6b3b8;
+  --accent: #5cc8cf;
+  --on-accent: #0a1d20;
+  --accent-soft: #16383c;
+  --ins: #7ad99a;
+  --ins-bg: #173524;
+  --del: #ff9e94;
+  --del-bg: #3d1e1b;
+  --cmt: #f0c35a;
+  --cmt-bg: #3a2f12;
+  --warn-line: #f0c35a;
+  --code-bg: #121b1f;
+  --tok-fn: #d3acff;
+  --tok-h: #ffffff;
+  --tok-str: #7ad99a;
+  --tok-cmt: #93a3a9;
+  --u-ana: #c3a0ff;
+  --u-bruno: #ffab70;
+  --u-carla: #8bbaff;
+  --focus: #ffd166;
+  --shadow: 0 14px 40px -20px rgba(0, 0, 0, .8);
+  color-scheme: dark;
+}
+
+/* ---------- Base ---------- */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--f-sans);
+  font-size: 1.0625rem;
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+img, svg { max-width: 100%; height: auto; }
+a { color: var(--accent); text-underline-offset: .18em; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
+h1, h2, h3, h4 { font-family: var(--f-serif); line-height: 1.2; color: var(--fg); text-wrap: balance; }
+h2 { font-size: clamp(1.7rem, 4vw, 2.3rem); margin: 0 0 .5rem; }
+h3 { font-size: clamp(1.25rem, 2.6vw, 1.5rem); margin: 2.2rem 0 .5rem; }
+h4 { font-size: 1.1rem; margin: 1.6rem 0 .4rem; }
+p, li { max-width: 68ch; }
+code, kbd { font-family: var(--f-mono); font-size: .9em; }
+code { background: var(--surface-2); padding: .05em .3em; border-radius: 4px; }
+kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 .35em; background: var(--surface); white-space: nowrap; }
+pre { font-family: var(--f-mono); font-size: .88rem; background: var(--code-bg); border: 1px solid var(--line); border-radius: 8px; padding: .8rem 1rem; white-space: pre-wrap; overflow-wrap: anywhere; max-width: 68ch; }
+pre code { background: none; padding: 0; }
+
+.wrap { width: 100%; max-width: 74rem; margin-inline: auto; padding-inline: 16px; }
+@media (min-width: 900px) { .wrap { padding-inline: 32px; } }
+
+.skip { position: absolute; left: 16px; top: -100px; background: var(--accent); color: var(--on-accent); padding: .5rem .9rem; border-radius: 6px; z-index: 10; font-weight: 600; }
+.skip:focus { top: 12px; }
+
+
+/* ---------- Cabeçalho ---------- */
+.site-header { border-bottom: 1px solid var(--line); background: var(--surface); }
+.site-header .wrap { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem 1.2rem; padding-block: .7rem; }
+.brand { font-family: var(--f-serif); font-weight: 700; font-size: 1.35rem; color: var(--fg); text-decoration: none; letter-spacing: .01em; }
+.brand span { color: var(--accent); }
+.site-nav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .2rem 1rem; }
+.site-nav a { color: var(--fg); text-decoration: none; font-weight: 600; font-size: .98rem; padding: .3rem 0; display: inline-block; border-bottom: 2px solid transparent; }
+.site-nav a:hover { border-bottom-color: var(--accent); }
+
+/* ---------- Partes ---------- */
+.part { padding-block: 3rem 2.5rem; border-bottom: 1px solid var(--line); }
+.part:last-of-type { border-bottom: 0; }
+.eyebrow { font-family: var(--f-mono); font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 .4rem; }
+.lede { font-size: 1.15rem; color: var(--fg); }
+.mode-tag { display: inline-block; font-family: var(--f-mono); font-size: .72rem; letter-spacing: .06em; text-transform: uppercase; border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; padding: .05rem .55rem; vertical-align: middle; margin-left: .4rem; font-weight: 600; }
+
+/* Herói */
+.hero { padding-block: 3.2rem 2.4rem; }
+.hero h1 { font-size: clamp(2rem, 6vw, 3.3rem); margin: .2rem 0 1rem; max-width: 22ch; }
+.hero .lede { max-width: 60ch; }
+.status { border: 1px solid var(--line); border-left: 4px solid var(--warn-line); background: var(--surface); border-radius: 8px; padding: .9rem 1.1rem; margin: 1.4rem 0; max-width: 68ch; }
+.status p { margin: .2rem 0; }
+.status strong { color: var(--fg); }
+.cta { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 1.4rem; align-items: center; }
+.btn { display: inline-flex; align-items: center; gap: .4rem; font: inherit; font-weight: 600; padding: .65rem 1.1rem; border-radius: 8px; text-decoration: none; border: 2px solid var(--accent); }
+.btn-primary { background: var(--accent); color: var(--on-accent); }
+.btn-secondary { background: transparent; color: var(--accent); }
+.btn small { font-weight: 400; }
+.note { color: var(--muted); font-size: .95rem; }
+
+/* Grade de cartões */
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); margin-top: 1.2rem; }
+.grid-4 { grid-template-columns: repeat(auto-fit, minmax(min(100%, 14.5rem), 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.2rem; min-width: 0; }
+.card h3, .card h4 { margin-top: 0; font-size: 1.2rem; }
+.card p { margin: .4rem 0; }
+.card .rf { font-family: var(--f-mono); font-size: .8rem; color: var(--muted); }
+.pain { border-top: 4px solid var(--del); }
+.diff { border-top: 4px solid var(--accent); }
+
+/* Tabelas */
+.table-wrap { overflow-x: auto; max-width: 100%; margin: 1rem 0; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: .93rem; }
+caption { text-align: left; padding: .6rem .8rem; font-weight: 600; color: var(--fg); }
+th, td { text-align: left; padding: .5rem .7rem; border-top: 1px solid var(--line); vertical-align: top; }
+thead th { background: var(--surface-2); }
+tbody th { font-weight: 600; }
+.yes { color: var(--ins); font-weight: 600; }
+.no { color: var(--del); font-weight: 600; }
+
+/* Roteiro */
+.roadmap { list-style: none; padding: 0; margin: 1rem 0; display: grid; gap: .6rem; }
+.roadmap li { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: .7rem 1rem; max-width: 68ch; }
+.roadmap .st { font-family: var(--f-mono); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; margin-right: .4rem; }
+.roadmap .done .st { color: var(--ins); }
+.roadmap .next .st { color: var(--muted); }
+.roadmap .doing .st { color: var(--accent); }
+
+/* Marcador "a definir" */
+.tbd { display: inline-block; font-family: var(--f-mono); font-size: .76rem; font-weight: 600; color: var(--cmt); background: var(--cmt-bg); border: 1px dashed var(--cmt); border-radius: 4px; padding: 0 .35rem; white-space: nowrap; }
+
+/* ---------- Mockups ---------- */
+.screens { display: grid; gap: 2.4rem; margin-top: 1.6rem; }
+.screen { margin: 0; min-width: 0; }
+.screen figcaption { margin-top: .7rem; max-width: 68ch; }
+.screen figcaption h3 { margin: 0 0 .3rem; font-size: 1.2rem; }
+.screen figcaption p { margin: .3rem 0; }
+.rf-list { font-family: var(--f-mono); font-size: .82rem; color: var(--muted); }
+.shot { display: block; width: 100%; max-width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); background: var(--surface); }
+
+h2.sec-gap { margin-top: 2.6rem; }
+.req { text-decoration: underline dotted; text-underline-offset: .2em; }
+.req-table td:nth-child(2) { min-width: 18rem; }
+.req-table tbody tr:target { background: var(--accent-soft); }
+.req-table tbody tr:target th, .req-table tbody tr:target td { color: var(--fg); }
+/* ---------- Manual ---------- */
+.manual-nav { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); margin: 1.2rem 0 1rem; }
+.manual-nav a { display: block; text-decoration: none; color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .9rem 1rem; }
+.manual-nav a:hover { border-color: var(--accent); }
+.manual-nav strong { display: block; color: var(--accent); font-family: var(--f-serif); font-size: 1.15rem; }
+.manual-nav span { font-size: .93rem; color: var(--muted); }
+.doc-mode { border-top: 2px solid var(--line); margin-top: 2.6rem; padding-top: .4rem; }
+.doc-mode > h3 { margin-top: 1rem; font-size: clamp(1.45rem, 3vw, 1.8rem); }
+.steps { padding-left: 1.4rem; }
+.steps > li { margin-bottom: .8rem; }
+.steps > li::marker { font-weight: 700; color: var(--accent); }
+.result { border-left: 4px solid var(--ins); background: var(--surface); padding: .6rem .9rem; border-radius: 0 8px 8px 0; max-width: 68ch; }
+.howto { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: .4rem 1.2rem 1rem; margin-top: 1.2rem; }
+.howto h4 { margin-top: 1rem; }
+.prereq { font-size: .95rem; color: var(--muted); }
+
+/* ---------- Rodapé ---------- */
+.site-footer { background: var(--surface); border-top: 1px solid var(--line); padding-block: 2rem; font-size: .95rem; }
+.site-footer p { margin: .35rem 0; }
+.site-footer .colophon { font-family: var(--f-serif); font-style: italic; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#conteudo">Pular para o conteúdo</a>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="#inicio">Prelo<span>.</span></a>
+    <nav class="site-nav" aria-label="Seções da página">
+      <ul>
+        <li><a href="#inicio">Início</a></li>
+        <li><a href="#telas">Telas</a></li>
+        <li><a href="#manual">Manual</a></li>
+        <li><a href="#requisitos">Requisitos</a></li>
+        <li><a href="#contribuir">Contribuir</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="conteudo" tabindex="-1">
+
+<!-- =====================================================================
+     PARTE 1 · INÍCIO
+     ===================================================================== -->
+<section id="inicio" class="part" aria-labelledby="h-inicio">
+  <div class="wrap">
+    <div class="hero">
+      <p class="eyebrow">Editor desktop para artigos em Typst · em desenvolvimento</p>
+      <h1 id="h-inicio">Revise artigos em Typst com seus coautores, sem servidor no meio.</h1>
+      <p class="lede">O Prelo é um editor desktop, em construção, para quem escreve artigos científicos a várias mãos. Coautores vão poder sugerir, comentar e aceitar mudanças no mesmo arquivo <code>.typ</code>, com a prévia do PDF ao lado. O texto vai de um computador ao outro sem passar por um servidor que o guarde.</p>
+
+      <div class="status" role="note" aria-label="Estado do projeto">
+        <p><strong>Estado do projeto: em desenvolvimento. Ainda não dá para escrever artigos com ele.</strong></p>
+        <p>Existe hoje o esqueleto do app (uma janela que mostra versão e sistema, a suíte de testes e a auditoria de dependências) e o pipeline que gera os instaladores. O editor local está em andamento. Compilador, colaboração e revisão são <em>planejados</em>. Tudo o que esta página descreve no futuro ainda não existe.</p>
+      </div>
+
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/paulossjunior/prelo" rel="noopener">Ver o código no GitHub</a>
+        <a class="btn btn-secondary" href="https://github.com/paulossjunior/prelo/releases/latest" rel="noopener">Baixar a v0.1.0 <small>(abre a página da versão no GitHub)</small></a>
+      </div>
+
+      <p class="note" id="nota-download">A v0.1.0 é só o esqueleto: a janela abre e mostra a versão, mas o editor ainda não existe. Há instaladores para macOS, Windows e Linux (<a class="req" href="#req-RNF-01" title="Plataformas: macOS, Windows e Linux.">RNF-01</a>). O app não é assinado, então macOS e Windows mostram um aviso ao abrir. As <a href="https://github.com/paulossjunior/prelo/releases/tag/v0.1.0" rel="noopener">notas da versão</a> explicam como abrir e como conferir o checksum.</p>
+    </div>
+
+    <h2 id="problema">O problema: a revisão a várias mãos</h2>
+    <p>O Typst compila em milissegundos e tem sintaxe mais limpa que a do LaTeX. Num artigo com coautores, orientadores e revisores, porém, o que mais consome tempo é a revisão: alguém sugere uma frase, outro comenta uma figura, o autor principal aceita parte e rejeita o resto. Hoje esse ciclo se espalha por ferramentas que não juntam tudo isso para Typst.</p>
+    <div class="grid">
+      <article class="card pain">
+        <h3>Controle de alterações só no LaTeX</h3>
+        <p>O Overleaf tem controle de alterações e papel de revisor, mas só funciona com LaTeX.</p>
+      </article>
+      <article class="card pain">
+        <h3>Typst na web, só online</h3>
+        <p>O Typst web app tem edição em tempo real e comentários (com dono no plano Pro), mas não documenta controle de alterações e não funciona offline.</p>
+      </article>
+      <article class="card pain">
+        <h3>Revisão virando diff do git</h3>
+        <p>VS Code com Tinymist e git funciona offline e tem boa prévia. A revisão, porém, vira diff do git e comentário dentro do código-fonte.</p>
+      </article>
+    </div>
+    <p class="note">Fonte: levantamento de novembro de 2026 feito a partir da documentação de cada ferramenta, em <a href="https://github.com/paulossjunior/prelo/blob/main/docs/especificacao.md#2-alternativas-existentes" rel="noopener">especificação §2</a>. A tabela completa inclui TeXlyre, Collabst e TINO.</p>
+
+    <h2 id="diferenciais" class="sec-gap">O que o Prelo vai fazer de diferente</h2>
+    <div class="grid grid-4">
+      <article class="card diff">
+        <h3>Revisão por sugestão</h3>
+        <p><strong>Antes:</strong> a mudança de um revisor entra direto no texto ou chega por e-mail.</p>
+        <p><strong>Depois:</strong> no modo Sugerindo, cada mudança vira uma sugestão marcada com a cor de quem a fez. Você aceita ou rejeita uma a uma ou em lote, e pode desfazer.</p>
+        <p>Uma sugestão que quebraria a compilação aparece com aviso, e o Aceitar fica desativado.</p>
+        <p class="rf"><a class="req" href="#req-RF-10" title="Três modos de trabalho: Editando (alterações entram direto), Sugerindo (alterações viram sugestões) e Lendo (só leitura e comentários).">RF-10</a> a <a class="req" href="#req-RF-15" title="Cada sugestão é testada em segundo plano. A que quebra a compilação aparece com aviso e o botão Aceitar desativado.">RF-15</a></p>
+      </article>
+      <article class="card diff">
+        <h3>Colaboração sem servidor</h3>
+        <p>Os computadores dos coautores se conectam direto: na rede local ou pela internet. Nenhum servidor guarda o artigo, e o tráfego é criptografado de ponta a ponta. Não há conta nem senha: cada pessoa tem uma chave criada no próprio computador.</p>
+        <p>Quem não está online ao mesmo tempo recebe o trabalho pelo git do grupo.</p>
+        <p class="rf"><a class="req" href="#req-RF-20" title="Edição simultânea com cursores e presença das outras pessoas visíveis.">RF-20</a> a <a class="req" href="#req-RF-23" title="Conexão direta entre computadores, sem servidor obrigatório.">RF-23</a>, <a class="req" href="#req-RNF-02" title="Privacidade: nenhum servidor guarda o conteúdo do artigo, e todo tráfego entre computadores é criptografado de ponta a ponta.">RNF-02</a></p>
+      </article>
+      <article class="card diff">
+        <h3>Compilador Typst embutido</h3>
+        <p>Ninguém precisa instalar o <code>typst</code>. O Prelo compila sozinho, e prévia, diagnósticos e PDFs saem do mesmo compilador. A versão fica registrada no projeto, para todos os coautores compilarem igual.</p>
+        <p>Meta: prévia em menos de 100 ms após uma edição, em artigos de até 40 páginas. É meta, não medição.</p>
+        <p class="rf"><a class="req" href="#req-RF-02" title="Prévia ao lado do editor, atualizada enquanto se digita. Meta: menos de 100 ms em artigos de até 40 páginas.">RF-02</a>, <a class="req" href="#req-RF-06" title="O Prelo compila Typst com compilador embutido, sem exigir o typst instalado. Prévia, diagnósticos e PDFs saem da mesma compilação.">RF-06</a>, <a class="req" href="#req-RF-07" title="A versão do compilador embutido aparece no app e fica registrada em .prelo/project.json, para todos os coautores compilarem com a mesma versão.">RF-07</a></p>
+      </article>
+      <article class="card diff">
+        <h3>Local-first, com o <code>.typ</code> limpo no git</h3>
+        <p>O artigo mora no seu computador e num repositório git. O <code>.typ</code> é sempre Typst puro, compilável fora do Prelo; sugestões e comentários ficam numa pasta separada, <code>.prelo/</code>.</p>
+        <p>Offline você comenta e sugere. Salvar (<kbd>⌘S</kbd>) recebe as mudanças dos outros, envia as suas e grava um commit.</p>
+        <p class="rf"><a class="req" href="#req-RF-30" title="Offline é possível comentar, responder, resolver e sugerir. Essas ações vão para uma fila guardada no disco.">RF-30</a> a <a class="req" href="#req-RF-36" title="Ao fechar, o app faz um último Salvar.">RF-36</a>, <a class="req" href="#req-RNF-04" title="Robustez: fechar o app ou perder a conexão nunca perde trabalho. A fila offline fica no disco.">RNF-04</a>, <a class="req" href="#req-RNF-05" title="Interoperabilidade: o .typ no repositório é sempre Typst puro, compilável fora do Prelo.">RNF-05</a></p>
+      </article>
+    </div>
+
+    <h2 id="roteiro" class="sec-gap">Estado e roteiro</h2>
+    <p>O plano tem cinco fases. A base está pronta e a fase 1 começou; as demais ainda não.</p>
+    <ol class="roadmap">
+      <li class="done"><span class="st">Pronto</span> <strong>Esqueleto do app</strong> (feature 001): janela Tauri, núcleo em Rust, testes em três sistemas, auditoria de licenças e trava de push.</li>
+      <li class="done"><span class="st">Pronto</span> <strong>Pipeline de release</strong> (feature 002): uma tag de versão na <code>main</code> gera os instaladores para macOS, Windows e Linux, com checksums, numa release em rascunho que o dono revisa e publica.</li>
+      <li class="done"><span class="st">Publicado</span> <strong>v0.1.0</strong>: primeira versão pública, com o esqueleto do app. <a href="https://github.com/paulossjunior/prelo/releases/tag/v0.1.0" rel="noopener">Notas da versão</a>.</li>
+      <li class="doing"><span class="st">Em andamento</span> <strong>1. Editor local</strong> (feature 003): editor de código, prévia ao lado e sincronização entre código e prévia. Especificação e plano em revisão.</li>
+      <li class="next"><span class="st">Planejado</span> <strong>2. Comentários e histórico</strong>: comentários, commit e push pelo app, versões nomeadas, Salvar sincronizando pelo git.</li>
+      <li class="next"><span class="st">Planejado</span> <strong>3. Tempo real sem servidor</strong>: rede local e internet, convite por código, cursores e presença, fila offline.</li>
+      <li class="next"><span class="st">Planejado</span> <strong>4. Modo sugestão</strong>: aceitar e rejeitar, prévia com marcações, aviso de sugestão que não compila, PDF de diferenças.</li>
+      <li class="next"><span class="st">Planejado</span> <strong>5. Papéis e convites</strong>: revisor e leitor, aprovação de entrada, remoção de participantes, notificações.</li>
+    </ol>
+    <p class="note">Datas de entrega: <span class="tbd">a definir</span>.</p>
+
+    <h2 id="quer-ajudar" class="sec-gap">Quer ajudar?</h2>
+    <p>Dá para contribuir com código, testes, documentação, revisão de texto ou só relatando um problema. O passo a passo está em <a href="#contribuir">Como contribuir</a>.</p>
+  </div>
+</section>
+
+<!-- =====================================================================
+     PARTE 2 · TELAS
+     ===================================================================== -->
+<section id="telas" class="part" aria-labelledby="h-telas">
+  <div class="wrap">
+    <p class="eyebrow">Telas planejadas · nenhuma delas existe ainda no app</p>
+    <h2 id="h-telas">Telas</h2>
+    <p>Imagens da interface planejada. Não são capturas do app, que ainda não existe: são telas desenhadas a partir do <a href="https://github.com/paulossjunior/prelo/blob/main/prototype/index.html" rel="noopener">protótipo clicável</a> e dos requisitos. A página do artigo na prévia foi compilada de verdade pelo Typst. Nomes, artigo e referências são fictícios. Cada legenda diz quais requisitos a tela atende.</p>
+
+    <div class="screens">
+
+      <!-- Tela 1 -->
+      <figure class="screen" id="tela-inicio">
+        <img class="shot" src="img/tela-1-inicio.png" width="2880" height="1800" alt="Janela do Prelo na tela inicial. À esquerda, três opções: Novo projeto Typst, Abrir pasta ou repositório git e Entrar com convite, esta selecionada. No centro, o formulário Entrar com convite com o código prelo://join/artigo-exemplo colado, a pasta onde salvar e a confirmação de convite válido para o papel de revisora, com validade de 7 dias e uso único. À direita, o cartão Sua identidade com o nome Ana Reis, a escolha de cor e o código da chave 5F2A 9B07 C91E, com o aviso de que não há conta nem senha." loading="lazy" decoding="async">
+        <figcaption>
+          <h3>1. Tela inicial</h3>
+          <p>Três caminhos: criar um projeto, abrir uma pasta ou repositório git, ou entrar com um convite. Na primeira vez, a pessoa escolhe nome e cor, e o app cria a chave dela.</p>
+          <p class="rf-list">Atende: <a class="req" href="#req-RF-21" title="Convite por código de uso único, com papel, validade e opção de exigir aprovação do dono.">RF-21</a>, <a class="req" href="#req-RF-22" title="Identidade local por chave criptográfica, sem conta nem senha. O dono confere o código da chave antes de aprovar uma entrada.">RF-22</a> · <a class="req" href="#req-fluxo-6-1" title="Do convite do dono até o convidado estar no projeto: código de uso único, nome e chave do convidado, conexão, aprovação do dono, texto primeiro e figuras depois.">fluxo 6.1</a>, passos 3 e 4. Atalhos <kbd>⌘N</kbd>, <kbd>⌘O</kbd>, <kbd>⌘J</kbd> vêm do protótipo, não dos requisitos <span class="tbd">a definir</span>.</p>
+        </figcaption>
+      </figure>
+
+      <!-- Tela 2 -->
+      <figure class="screen" id="tela-editor">
+        <img class="shot" src="img/tela-2-editor.png" width="2880" height="1800" alt="Janela do editor no modo Editando. No topo, os modos Editando, Sugerindo e Lendo, os avatares de Ana, Bruno e você, o estado Sincronizado e os botões Salvar, Compartilhar e Exportar PDF. À esquerda, a árvore de arquivos (main.typ, refs.bib, figures) e a estrutura do artigo com contagem de pendências por seção. No centro, o código Typst de main.typ com realce de sintaxe e números de linha; a linha 17 está destacada e o cursor de Bruno Lima aparece na linha 25. À direita, a prévia de uma página A4 em duas colunas, com título, autores, resumo, seções, uma equação numerada, uma figura, uma tabela e referências; o parágrafo da linha 17 aparece destacado na prévia." loading="lazy" decoding="async">
+        <figcaption>
+          <h3>2. Editor com prévia lado a lado</h3>
+          <p>Código Typst à esquerda, prévia à direita. Clicar na prévia leva à linha do código, e vice-versa. A estrutura mostra quantas pendências de revisão há por seção. O cursor de quem está editando junto aparece com nome e cor.</p>
+          <p class="rf-list">Atende: <a class="req" href="#req-RF-01" title="Editor de código Typst com realce de sintaxe, autocompletar e diagnósticos fornecidos pelo Tinymist.">RF-01</a>, <a class="req" href="#req-RF-02" title="Prévia ao lado do editor, atualizada enquanto se digita. Meta: menos de 100 ms em artigos de até 40 páginas.">RF-02</a>, <a class="req" href="#req-RF-03" title="Sincronização entre código e prévia: clicar na prévia leva à linha do código, e vice-versa.">RF-03</a>, <a class="req" href="#req-RF-04" title="Árvore de arquivos e estrutura de seções, com a contagem de pendências de revisão por seção.">RF-04</a>, <a class="req" href="#req-RF-06" title="O Prelo compila Typst com compilador embutido, sem exigir o typst instalado. Prévia, diagnósticos e PDFs saem da mesma compilação.">RF-06</a>, <a class="req" href="#req-RF-07" title="A versão do compilador embutido aparece no app e fica registrada em .prelo/project.json, para todos os coautores compilarem com a mesma versão.">RF-07</a>, <a class="req" href="#req-RF-10" title="Três modos de trabalho: Editando (alterações entram direto), Sugerindo (alterações viram sugestões) e Lendo (só leitura e comentários).">RF-10</a>, <a class="req" href="#req-RF-18" title="Prévia em dois modos: com marcações ou só com o texto aceito.">RF-18</a>, <a class="req" href="#req-RF-20" title="Edição simultânea com cursores e presença das outras pessoas visíveis.">RF-20</a>.</p>
+        </figcaption>
+      </figure>
+
+      <!-- Tela 3 -->
+      <figure class="screen" id="tela-comentarios">
+        <img class="shot" src="img/tela-3-comentarios.png" width="2880" height="1800" alt="Janela no modo Lendo, com o painel de revisão aberto na aba Abertos. No código e na prévia, a frase comentada aparece destacada em amarelo. No painel, uma conversa aberta por Bruno Lima, revisor, pede um exemplo concreto; Ana Reis responde mencionando @Bruno e você menciona @Carla. Abaixo, um campo de resposta e os botões Responder e Resolver. Outros dois comentários, de Ana e Carla, aparecem recolhidos. As abas mostram 3 abertos e 5 resolvidos." loading="lazy" decoding="async">
+        <figcaption>
+          <h3>3. Comentários em conversa</h3>
+          <p>Comentários presos a um trecho, com respostas e menções. Um comentário não muda o texto: ele é <em>resolvido</em>, não aceito. Os resolvidos vão para uma aba própria, de onde se reabre ou exclui.</p>
+          <p class="rf-list">Atende: <a class="req" href="#req-RF-10" title="Três modos de trabalho: Editando (alterações entram direto), Sugerindo (alterações viram sugestões) e Lendo (só leitura e comentários).">RF-10</a> (modo Lendo), <a class="req" href="#req-RF-16" title="Comentários presos a um trecho, com respostas, menções (@nome), resolver, reabrir e excluir.">RF-16</a>, <a class="req" href="#req-RF-17" title="Aba Resolvidos com as conversas resolvidas, de onde se pode reabrir ou excluir.">RF-17</a> · regras de comentário em <a class="req" href="#ref-papeis" title="Tabela de papéis e permissões e regras de comentários">requisitos §1</a> · <a class="req" href="#req-D-03" title="Comentários são resolvidos, não aceitos: têm só os estados aberto e resolvido.">D-03</a>.</p>
+        </figcaption>
+      </figure>
+
+      <!-- Tela 4 -->
+      <figure class="screen" id="tela-sugestao">
+        <img class="shot" src="img/tela-4-sugestao.png" width="2880" height="1800" alt="Janela no modo Sugerindo. No código, a palavra horários aparece riscada em vermelho e momentos inserida em verde, sugestão de Ana; uma inserção de Bruno aparece sublinhada em verde; e a exclusão de um colchete na linha 30 aparece riscada. A prévia mostra as mesmas marcações na página. No painel Sugestões, um filtro por pessoa (Ana) e seção com o botão Aceitar 3 de Ana; o cartão de Ana com Rejeitar (Command Backspace) e Aceitar (Command Enter); o cartão de Bruno; e um cartão de Bruno com aviso de que a sugestão quebra a compilação e o botão Aceitar desativado. Um aviso flutuante informa que 2 sugestões de Carla foram aceitas, mostra o commit proposto e oferece Desfazer." loading="lazy" decoding="async">
+        <figcaption>
+          <h3>4. Modo sugestão: aceitar e recusar</h3>
+          <p>No modo Sugerindo, inserções, exclusões e substituições ficam marcadas com a cor do autor. Cada uma se aceita ou rejeita pelo cartão ou pelo trecho; também em lote, filtrando por pessoa e seção, com a contagem na confirmação. O app testa cada sugestão em segundo plano e desativa o Aceitar das que quebram a compilação. Depois de aceitar: Desfazer e um commit proposto.</p>
+          <p class="rf-list">Atende: <a class="req" href="#req-RF-10" title="Três modos de trabalho: Editando (alterações entram direto), Sugerindo (alterações viram sugestões) e Lendo (só leitura e comentários).">RF-10</a>, <a class="req" href="#req-RF-11" title="Sugestões de inserção, exclusão e substituição, marcadas no código e na prévia com a cor do autor.">RF-11</a>, <a class="req" href="#req-RF-12" title="Aceitar ou rejeitar uma sugestão pelo cartão ou pelo trecho marcado. Atalhos: ⌘↵ aceita, ⌘⌫ rejeita, ⌥↓ vai para a próxima.">RF-12</a>, <a class="req" href="#req-RF-13" title="Aceitar ou rejeitar em lote, com filtro por pessoa e por seção e confirmação que mostra a contagem.">RF-13</a>, <a class="req" href="#req-RF-14" title="Desfazer um aceite ou uma rejeição (⌘Z ou botão Desfazer no aviso).">RF-14</a>, <a class="req" href="#req-RF-15" title="Cada sugestão é testada em segundo plano. A que quebra a compilação aparece com aviso e o botão Aceitar desativado.">RF-15</a>, <a class="req" href="#req-RF-19" title="Ao aceitar sugestões, o app propõe um commit com mensagem pronta.">RF-19</a> · <a class="req" href="#req-fluxo-6-2" title="Aceitar ou rejeitar sugestões, uma a uma ou em lote; sugestão que quebra a compilação; desfazer; resolver, reabrir e excluir comentários; preparar submissão.">fluxo 6.2</a>.</p>
+        </figcaption>
+      </figure>
+
+      <!-- Tela 5 -->
+      <figure class="screen" id="tela-colaboradores">
+        <img class="shot" src="img/tela-5-colaboradores.png" width="2880" height="1800" alt="Janela com a folha Compartilhar artigo-exemplo aberta sobre o editor. À esquerda, os participantes: você como dono; Ana Reis, coautora, online pela rede local; Bruno Lima, revisor, online pela internet; Carla Dias, leitora, offline; cada um com menu de papel e botão Remover. Abaixo, um pedido de entrada de Daniel Souza como revisor, pedindo para conferir o código da chave 7C1D 44E0 A9F3 antes de Aprovar ou Recusar. À direita, o formulário Novo convite com papel Revisor, validade de 7 dias e uso único, a opção Exigir minha aprovação ligada, um código QR e o código do convite com o botão Copiar." loading="lazy" decoding="async">
+        <figcaption>
+          <h3>5. Colaboradores, papéis e convites</h3>
+          <p>O dono gera um convite de uso único com papel, validade e a opção de exigir aprovação. Antes de aprovar uma entrada, confere o código da chave da pessoa. Pode mudar o papel de alguém ou removê-lo a qualquer momento.</p>
+          <p class="rf-list">Atende: <a class="req" href="#req-RF-20" title="Edição simultânea com cursores e presença das outras pessoas visíveis.">RF-20</a>, <a class="req" href="#req-RF-21" title="Convite por código de uso único, com papel, validade e opção de exigir aprovação do dono.">RF-21</a>, <a class="req" href="#req-RF-22" title="Identidade local por chave criptográfica, sem conta nem senha. O dono confere o código da chave antes de aprovar uma entrada.">RF-22</a>, <a class="req" href="#req-RF-24" title="Remover uma pessoa ou mudar seu papel a qualquer momento.">RF-24</a> · papéis em <a class="req" href="#ref-papeis" title="Tabela de papéis e permissões e regras de comentários">requisitos §1</a> · <a class="req" href="#req-fluxo-6-1" title="Do convite do dono até o convidado estar no projeto: código de uso único, nome e chave do convidado, conexão, aprovação do dono, texto primeiro e figuras depois.">fluxo 6.1</a>. Opções de validade além de “7 dias” <span class="tbd">a definir</span>.</p>
+        </figcaption>
+      </figure>
+
+      <!-- Tela 6 -->
+      <figure class="screen" id="tela-historico">
+        <img class="shot" src="img/tela-6-historico.png" width="2880" height="1800" alt="Janela de histórico. No topo, uma faixa verde: Sincronizado, Bruno fez 2 commits, Ana deixou 1 comentário. À esquerda, a linha do tempo com as versões nomeadas Revisão R1 e Submissão 1 destacadas e os commits Prelo sync e Accept suggestions entre elas. No centro, o commit selecionado, Accept 1 suggestion from Ana in Introdução, com a diferença da linha 17: horários removido e momentos inserido. À direita, a lista de versões nomeadas, o botão Nomear versão atual e o formulário PDF de diferenças, de Submissão 1 para Revisão R1, com o botão Gerar PDF de diferenças." loading="lazy" decoding="async">
+        <figcaption>
+          <h3>6. Histórico e versões</h3>
+          <p>Cada Salvar grava um commit. Versões importantes ganham nome (“Submissão 1”, “Revisão R1”). Duas versões nomeadas viram um PDF de diferenças para a resposta aos revisores. Depois de sincronizar, um resumo diz o que mudou.</p>
+          <p class="rf-list">Atende: <a class="req" href="#req-RF-33" title="Salvar (⌘S) sincroniza: recebe as mudanças dos outros, envia o trabalho local e grava um commit no git.">RF-33</a>, <a class="req" href="#req-RF-38" title="Depois de sincronizar, o app mostra um resumo do que mudou (ex.: “Bruno fez 2 commits, Ana deixou 1 comentário”).">RF-38</a>, <a class="req" href="#req-RF-40" title="Commit e push pelo próprio app.">RF-40</a>, <a class="req" href="#req-RF-41" title="Versões nomeadas no histórico, como “Submissão 1” e “Revisão R1”.">RF-41</a>, <a class="req" href="#req-RF-44" title="Exportar PDF de diferenças entre duas versões.">RF-44</a>. Restaurar uma versão antiga não está nos requisitos <span class="tbd">a definir</span>.</p>
+        </figcaption>
+      </figure>
+
+      <!-- Tela 7 -->
+      <figure class="screen" id="tela-erros">
+        <img class="shot" src="img/tela-7-erros.png" width="2880" height="1800" alt="Janela do editor com problemas de compilação. Na árvore de arquivos, fluxo.png está marcada como aguardando. No código, a linha 34 com image("../../fotos/campo.png") está sublinhada em vermelho e a linha 29 com figures/fluxo.png em amarelo. O painel Problemas lista: acesso recusado porque o caminho fica fora da pasta do projeto; bibliografia malformada em refs.bib linha 14, chave não fechada; e figures/fluxo.png ainda chegando do computador de Ana, com barra de progresso. Na prévia, a figura aparece como um retângulo tracejado com o texto Aguardando figures/fluxo.png. O botão Exportar PDF final está desativado, e um balão explica que a exportação fica bloqueada até o arquivo chegar." loading="lazy" decoding="async">
+        <figcaption>
+          <h3>7. Erros de compilação e arquivos pendentes</h3>
+          <p>Diagnósticos citam arquivo e linha, sem fechar o app. O compilador recusa ler fora da pasta do projeto e diz o motivo. Uma figura que ainda não chegou vira um marcador na prévia, e o PDF final só sai quando todos os arquivos chegarem.</p>
+          <p class="rf-list">Atende: <a class="req" href="#req-RF-01" title="Editor de código Typst com realce de sintaxe, autocompletar e diagnósticos fornecidos pelo Tinymist.">RF-01</a>, <a class="req" href="#req-RF-08" title="O compilador só lê arquivos regulares dentro da pasta do projeto. Caminho que sai dela, link simbólico para fora e arquivo especial são recusados, com diagnóstico que diz o motivo.">RF-08</a>, <a class="req" href="#req-RF-09" title="Bibliografia em .bib (BibLaTeX) ou .yml/.yaml (Hayagriva), um ou vários, e estilos .csl. Arquivo malformado gera diagnóstico com arquivo e linha, sem fechar o app.">RF-09</a>, <a class="req" href="#req-RF-52" title="Arquivo que o projeto conhece mas ainda não chegou não impede a prévia: imagem vira marcador; bibliografia ou .typ pendente mantém a última compilação, com aviso.">RF-52</a>, <a class="req" href="#req-RF-53" title="Exportar o PDF final fica bloqueado enquanto houver arquivo pendente referenciado pelo artigo. O app lista o que falta.">RF-53</a>, <a class="req" href="#req-RF-54" title="Erro causado só por arquivo pendente não conta como sugestão que quebra a compilação e não desativa o Aceitar.">RF-54</a>. Texto exato das mensagens e tamanho do marcador quando o <code>.typ</code> não diz <code>width</code>/<code>height</code> <span class="tbd">a definir</span>.</p>
+        </figcaption>
+      </figure>
+
+    </div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     PARTE 3 · MANUAL (Diátaxis)
+     ===================================================================== -->
+<section id="manual" class="part" aria-labelledby="h-manual">
+  <div class="wrap">
+    <p class="eyebrow">Manual · comportamento planejado</p>
+    <h2 id="h-manual">Manual de uso</h2>
+    <div class="status" role="note" aria-label="Aviso do manual">
+      <p><strong>Este manual descreve o Prelo planejado.</strong> Nenhum dos passos funciona ainda. Onde os documentos do projeto deixam uma decisão em aberto, o texto marca <span class="tbd">a definir</span>.</p>
+    </div>
+    <p>O manual está dividido em quatro partes, cada uma para uma necessidade diferente.</p>
+    <nav class="manual-nav" aria-label="Partes do manual">
+      <a href="#tutorial"><strong>Tutorial</strong><span>Aprenda fazendo: seu primeiro artigo, do zero ao PDF.</span></a>
+      <a href="#guias"><strong>Guias práticos</strong><span>Receitas para tarefas concretas: convidar, revisar, exportar.</span></a>
+      <a href="#referencia"><strong>Referência</strong><span>Consulta rápida: papéis, atalhos, formatos, arquivos.</span></a>
+      <a href="#explicacao"><strong>Explicação</strong><span>Por que o Prelo funciona assim.</span></a>
+    </nav>
+
+    <!-- ---------------- Tutorial ---------------- -->
+    <section class="doc-mode" id="tutorial" aria-labelledby="h-tutorial">
+      <h3 id="h-tutorial">Primeiros passos: do zero ao PDF <span class="mode-tag">Tutorial</span></h3>
+      <p>Neste tutorial você vai criar um artigo curto, ver a prévia mudar enquanto digita e exportar o PDF. Não precisa de coautores nem de internet.</p>
+
+      <ol class="steps">
+        <li>
+          <strong>Instale e abra o Prelo.</strong> A versão publicada hoje (v0.1.0) ainda não tem o editor; este passo vale a partir da versão que trouxer a fase 1. Na primeira abertura, digite seu nome e escolha uma cor. O app cria sua chave; não há conta nem senha.
+        </li>
+        <li>
+          <strong>Crie o projeto.</strong> Na tela inicial, escolha <em>Novo projeto Typst</em>. Dê o nome <code>meu-artigo</code>.
+          <br><span class="note">Pasta padrão, conteúdo inicial do projeto e se o app já cria o repositório git: <span class="tbd">a definir</span>.</span>
+        </li>
+        <li>
+          <strong>Escreva o título e a primeira seção.</strong> No arquivo <code>main.typ</code>, digite:
+<pre><code>#set document(title: "Meu primeiro artigo")
+#set text(lang: "pt")
+
+= Introdução
+Este é o primeiro parágrafo do meu artigo.</code></pre>
+          Olhe a prévia, à direita: o título da seção e o parágrafo aparecem enquanto você digita.
+        </li>
+        <li>
+          <strong>Ligue código e prévia.</strong> Clique na palavra “parágrafo” na prévia. O cursor vai para a linha correspondente no código. Agora clique numa linha do código: a prévia mostra o trecho dela.
+        </li>
+        <li>
+          <strong>Acrescente uma lista.</strong> Abaixo do parágrafo, digite:
+<pre><code>= Método
+- Coletar os dados.
+- Analisar os resultados.</code></pre>
+          A estrutura, à esquerda, passa a mostrar <em>Introdução</em> e <em>Método</em>.
+        </li>
+        <li>
+          <strong>Salve.</strong> Pressione <kbd>⌘S</kbd>. O Prelo grava seu trabalho e um commit no git.
+          <br><span class="note">O que Salvar faz num projeto sem repositório remoto: <span class="tbd">a definir</span>.</span>
+        </li>
+        <li>
+          <strong>Exporte o PDF.</strong> Clique em <em>Exportar PDF</em> e escolha <em>PDF final</em>.
+          <br><span class="note">Onde o arquivo é gravado e se o app pergunta o local: <span class="tbd">a definir</span>.</span>
+        </li>
+      </ol>
+      <p class="result"><strong>Pronto.</strong> Você escreveu um artigo em Typst, viu a prévia acompanhar a digitação, salvou no git e tem um PDF. Para trazer um coautor, siga <a href="#guia-convidar">Como convidar um coautor</a>.</p>
+    </section>
+
+    <!-- ---------------- Guias práticos ---------------- -->
+    <section class="doc-mode" id="guias" aria-labelledby="h-guias">
+      <h3 id="h-guias">Guias práticos <span class="mode-tag">Como fazer</span></h3>
+      <p>Cada guia resolve uma tarefa. Ele supõe que você já tem um projeto aberto.</p>
+
+      <div class="howto" id="guia-convidar">
+        <h4>Como convidar um coautor</h4>
+        <p class="prereq">Requer: papel de dono.</p>
+        <ol class="steps">
+          <li>Clique em <em>Compartilhar</em>.</li>
+          <li>Escolha o papel (coautor, revisor ou leitor), a validade e se a entrada exige sua aprovação.</li>
+          <li>Copie o código de uso único ou mostre o QR. Envie por canal privado: o código contém a chave do documento.</li>
+          <li>A pessoa instala o Prelo, cola o código em <em>Entrar com convite</em> ou clica no link <code>prelo://join/…</code>.</li>
+          <li>Quando o pedido de entrada aparecer, confira com ela o código da chave e clique em <em>Aprovar</em>.</li>
+        </ol>
+        <p>A pessoa recebe primeiro o texto, depois as figuras e o histórico (<a class="req" href="#req-D-12" title="Imagens e outros binários: lista de arquivos no documento compartilhado e bytes enviados direto entre computadores por iroh, com conferência de hash. O git continua levando os arquivos para quem não está online junto.">D-12</a>). Se ninguém do projeto estiver online, ela pode esperar um aviso ou baixar pelo GitHub.</p>
+        <p class="note">Para mudar o papel ou remover alguém depois: <em>Compartilhar</em> → participante → <em>Mudar papel</em> ou <em>Remover</em>.</p>
+      </div>
+
+      <div class="howto" id="guia-revisar">
+        <h4>Como revisar sugestões</h4>
+        <p class="prereq">Requer: papel de dono ou coautor e arquivos sincronizados. Offline, aceitar e rejeitar ficam bloqueados.</p>
+        <ol class="steps">
+          <li>Abra o painel de revisão. A estrutura mostra quantas pendências há em cada seção.</li>
+          <li>Para uma sugestão: clique em <em>Aceitar</em> (<kbd>⌘↵</kbd>) ou <em>Rejeitar</em> (<kbd>⌘⌫</kbd>) no cartão ou no trecho marcado. <kbd>⌥↓</kbd> vai para a próxima.</li>
+          <li>Para várias: filtre por pessoa e por seção, confira a contagem e confirme.</li>
+          <li>Se errou, clique em <em>Desfazer</em> no aviso ou pressione <kbd>⌘Z</kbd>.</li>
+          <li>Aceite o commit proposto, ou edite a mensagem.</li>
+        </ol>
+        <p>Uma sugestão com aviso de compilação tem o Aceitar desativado. Rejeite-a ou peça ao autor que a corrija.</p>
+        <p class="note">Para comentários: responda e clique em <em>Resolver</em>. Para reabrir ou excluir, use a aba <em>Resolvidos</em>. Para excluir uma conversa aberta, use o menu ⋯ do cartão.</p>
+      </div>
+
+      <div class="howto" id="guia-bib">
+        <h4>Como adicionar bibliografia e imagens</h4>
+        <p class="prereq">Requer: os arquivos dentro da pasta do projeto. O Prelo não lê nada fora dela.</p>
+        <ol class="steps">
+          <li>Copie o <code>.bib</code> (ou <code>.yml</code> no formato Hayagriva) para a pasta do projeto. Se o <code>.typ</code> apontar para um arquivo de fora, o app oferece copiá-lo para dentro (<a class="req" href="#req-D-13" title="Arquivos fora da pasta do projeto não são permitidos; o app oferece copiá-los para dentro.">D-13</a>).</li>
+          <li>Copie as imagens para uma pasta do projeto, por exemplo <code>figures/</code>.</li>
+          <li>No <code>.typ</code>, aponte para os arquivos:
+<pre><code>#figure(
+  image("figures/fluxo.png", width: 80%),
+  caption: [Fluxo de revisão.],
+)
+
+Como mostra @silva2024, ...
+
+#bibliography("refs.bib")</code></pre>
+          </li>
+          <li>Para um estilo de citação próprio, copie o <code>.csl</code> para o projeto e use <code>#bibliography("refs.bib", style: "meu-estilo.csl")</code>.</li>
+          <li>Salve (<kbd>⌘S</kbd>) para os coautores receberem os arquivos.</li>
+        </ol>
+        <p class="note">Se o <code>.bib</code> tiver erro, o diagnóstico mostra arquivo e linha. Como adicionar arquivos pela interface (arrastar, menu) e quem pode adicionar, trocar ou remover arquivos: <span class="tbd">a definir</span>. Limite de tamanho por arquivo: <span class="tbd">a definir</span>.</p>
+      </div>
+
+      <div class="howto" id="guia-exportar">
+        <h4>Como exportar o PDF</h4>
+        <ol class="steps">
+          <li>Para enviar à revista: <em>Exportar PDF</em> → <em>PDF final</em>. Sai só o texto aceito, sem marcações nem comentários. Você também pode exportar o <code>.typ</code> limpo.</li>
+          <li>Para o orientador: <em>PDF com comentários</em>, com os comentários na margem.</li>
+          <li>Para a resubmissão: <em>PDF de diferenças</em>. Escolha duas versões nomeadas, como “Submissão 1” e “Revisão R1”.</li>
+          <li>Antes de submeter, abra <em>Preparar submissão</em>: ela lista sugestões pendentes e comentários abertos, e exclui todos os resolvidos de uma vez (só o dono).</li>
+        </ol>
+        <p>Se alguma figura ainda não chegou, o PDF final fica bloqueado e o app lista o que falta. Espere o arquivo chegar.</p>
+        <p class="note">Se o PDF com comentários e o PDF de diferenças podem sair com figura pendente: <span class="tbd">a definir</span>.</p>
+      </div>
+
+      <div class="howto" id="guia-versao">
+        <h4>Como marcar e comparar versões</h4>
+        <ol class="steps">
+          <li>Abra o <em>Histórico</em>.</li>
+          <li>Clique em <em>Nomear versão atual</em> e dê um nome, como “Submissão 1”.</li>
+          <li>Para ver o que mudou entre duas versões nomeadas, escolha as duas e gere o PDF de diferenças.</li>
+        </ol>
+        <p>Para desfazer um aceite ou uma rejeição recente, use <kbd>⌘Z</kbd>.</p>
+        <p class="note"><strong>Voltar a uma versão anterior</strong> (restaurar o texto de uma versão nomeada ou de um commit) não está definido nos requisitos: <span class="tbd">a definir</span>. Até lá, o histórico fica no git do projeto.</p>
+      </div>
+
+      <div class="howto" id="guia-offline">
+        <h4>Como trabalhar offline</h4>
+        <ol class="steps">
+          <li>Sem conexão, comente, responda, resolva e sugira normalmente. Cada ação entra numa fila guardada no disco.</li>
+          <li>Pressione <kbd>⌘S</kbd>: o trabalho fica no computador e a sincronização é agendada.</li>
+          <li>Ao reconectar, o app recebe, envia a fila, grava no git e libera a edição, nessa ordem.</li>
+          <li>Se um trecho que você comentou mudou nesse meio tempo, escolha manter o item no trecho novo ou excluí-lo.</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ---------------- Referência ---------------- -->
+    <section class="doc-mode" id="referencia" aria-labelledby="h-referencia">
+      <h3 id="h-referencia">Referência <span class="mode-tag">Consulta</span></h3>
+
+      <h4 id="ref-papeis">Papéis e permissões</h4>
+      <div class="table-wrap" role="region" aria-labelledby="cap-papeis" tabindex="0">
+        <table>
+          <caption id="cap-papeis">O que cada papel pode fazer (requisitos §1)</caption>
+          <thead><tr><th scope="col">Papel</th><th scope="col">Ler</th><th scope="col">Comentar</th><th scope="col">Sugerir</th><th scope="col">Editar direto</th><th scope="col">Aceitar / rejeitar</th><th scope="col">Convidar e mudar papéis</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Dono</th><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td></tr>
+            <tr><th scope="row">Coautor</th><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim</td><td class="no">Não</td></tr>
+            <tr><th scope="row">Revisor</th><td class="yes">Sim</td><td class="yes">Sim</td><td class="yes">Sim, toda edição vira sugestão</td><td class="no">Não</td><td class="no">Não</td><td class="no">Não</td></tr>
+            <tr><th scope="row">Leitor</th><td class="yes">Sim</td><td class="no">Não</td><td class="no">Não</td><td class="no">Não</td><td class="no">Não</td><td class="no">Não</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-wrap" role="region" aria-labelledby="cap-coment" tabindex="0">
+        <table>
+          <caption id="cap-coment">Regras de comentários</caption>
+          <thead><tr><th scope="col">Ação</th><th scope="col">Quem pode</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Resolver comentário</th><td>Todos, menos leitor</td></tr>
+            <tr><th scope="row">Reabrir comentário resolvido</th><td>Todos, menos leitor</td></tr>
+            <tr><th scope="row">Apagar a própria mensagem</th><td>Autor da mensagem</td></tr>
+            <tr><th scope="row">Excluir conversa inteira</th><td>Quem abriu a conversa e o dono</td></tr>
+            <tr><th scope="row">Excluir todos os resolvidos</th><td>Dono</td></tr>
+            <tr><th scope="row">Adicionar, trocar ou remover arquivos</th><td><span class="tbd">a definir</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 id="ref-estados">Estados de sincronização</h4>
+      <div class="table-wrap" role="region" aria-labelledby="cap-estados" tabindex="0">
+        <table>
+          <caption id="cap-estados">O que cada estado permite (requisitos §5)</caption>
+          <thead><tr><th scope="col">Estado</th><th scope="col">Ler</th><th scope="col">Comentar</th><th scope="col">Sugerir</th><th scope="col">Editar direto</th><th scope="col">Aceitar sugestões</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Verificando / Recebendo</th><td>Sim</td><td>Espera</td><td>Espera</td><td>Bloqueado</td><td>Bloqueado</td></tr>
+            <tr><th scope="row">Sincronizado</th><td>Sim</td><td>Sim</td><td>Sim</td><td>Sim</td><td>Sim</td></tr>
+            <tr><th scope="row">Offline</th><td>Sim</td><td>Sim, na fila</td><td>Sim, na fila</td><td>Bloqueado</td><td>Bloqueado</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Como o indicador mostra arquivos ainda pendentes no estado Sincronizado: <span class="tbd">a definir</span>.</p>
+
+      <h4 id="ref-atalhos">Atalhos de teclado</h4>
+      <div class="table-wrap" role="region" aria-labelledby="cap-atalhos" tabindex="0">
+        <table>
+          <caption id="cap-atalhos">Atalhos propostos (macOS)</caption>
+          <thead><tr><th scope="col">Atalho</th><th scope="col">Ação</th><th scope="col">Origem</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><kbd>⌘S</kbd></th><td>Salvar e sincronizar</td><td><a class="req" href="#req-RF-33" title="Salvar (⌘S) sincroniza: recebe as mudanças dos outros, envia o trabalho local e grava um commit no git.">RF-33</a></td></tr>
+            <tr><th scope="row"><kbd>⌘↵</kbd></th><td>Aceitar sugestão</td><td><a class="req" href="#req-RF-12" title="Aceitar ou rejeitar uma sugestão pelo cartão ou pelo trecho marcado. Atalhos: ⌘↵ aceita, ⌘⌫ rejeita, ⌥↓ vai para a próxima.">RF-12</a></td></tr>
+            <tr><th scope="row"><kbd>⌘⌫</kbd></th><td>Rejeitar sugestão</td><td><a class="req" href="#req-RF-12" title="Aceitar ou rejeitar uma sugestão pelo cartão ou pelo trecho marcado. Atalhos: ⌘↵ aceita, ⌘⌫ rejeita, ⌥↓ vai para a próxima.">RF-12</a></td></tr>
+            <tr><th scope="row"><kbd>⌥↓</kbd></th><td>Ir para a próxima sugestão</td><td><a class="req" href="#req-RF-12" title="Aceitar ou rejeitar uma sugestão pelo cartão ou pelo trecho marcado. Atalhos: ⌘↵ aceita, ⌘⌫ rejeita, ⌥↓ vai para a próxima.">RF-12</a></td></tr>
+            <tr><th scope="row"><kbd>⌘Z</kbd></th><td>Desfazer aceite ou rejeição</td><td><a class="req" href="#req-RF-14" title="Desfazer um aceite ou uma rejeição (⌘Z ou botão Desfazer no aviso).">RF-14</a></td></tr>
+            <tr><th scope="row"><kbd>⌘N</kbd></th><td>Novo projeto Typst</td><td>Protótipo <span class="tbd">a definir</span></td></tr>
+            <tr><th scope="row"><kbd>⌘O</kbd></th><td>Abrir pasta ou repositório git</td><td>Protótipo <span class="tbd">a definir</span></td></tr>
+            <tr><th scope="row"><kbd>⌘J</kbd></th><td>Entrar com convite</td><td>Protótipo <span class="tbd">a definir</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">Equivalentes no Windows e no Linux: <span class="tbd">a definir</span>.</p>
+
+      <h4 id="ref-formatos">Formatos aceitos</h4>
+      <div class="table-wrap" role="region" aria-labelledby="cap-formatos" tabindex="0">
+        <table>
+          <caption id="cap-formatos">Arquivos que o compilador embutido lê (sempre dentro da pasta do projeto)</caption>
+          <thead><tr><th scope="col">Tipo</th><th scope="col">Formatos</th><th scope="col">Observação</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Texto</th><td><code>.typ</code></td><td>Typst puro; sem marcações de revisão no arquivo.</td></tr>
+            <tr><th scope="row">Bibliografia</th><td><code>.bib</code> (BibLaTeX), <code>.yml</code> / <code>.yaml</code> (Hayagriva)</td><td>Um ou vários arquivos.</td></tr>
+            <tr><th scope="row">Estilo de citação</th><td><code>.csl</code> e estilos embutidos do Typst</td><td>&nbsp;</td></tr>
+            <tr><th scope="row">Imagens</th><td>PNG, JPEG, GIF (estática), SVG</td><td>PDF e WebP só se o Typst embutido for 0.14.0 ou mais novo: <span class="tbd">a definir</span>.</td></tr>
+            <tr><th scope="row">Dados</th><td>JSON, YAML, TOML, CSV, XML, CBOR</td><td>Via <code>read</code>, <code>json</code> etc.</td></tr>
+            <tr><th scope="row">Plugins</th><td><code>.wasm</code></td><td>Permitir sempre, pedir confirmação ou recusar: <span class="tbd">a definir</span>.</td></tr>
+            <tr><th scope="row">Pacotes</th><td><code>@preview</code></td><td>Baixados do registro do Typst. Cache para compilar offline: <span class="tbd">a definir</span>. <code>@local</code>: <span class="tbd">a definir</span>.</td></tr>
+            <tr><th scope="row">Fontes</th><td>&nbsp;</td><td>Quais vêm embutidas e se fontes do sistema são lidas: <span class="tbd">a definir</span>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 id="ref-exportacoes">Exportações</h4>
+      <div class="table-wrap" role="region" aria-labelledby="cap-export" tabindex="0">
+        <table>
+          <caption id="cap-export">O que cada exportação contém</caption>
+          <thead><tr><th scope="col">Exportação</th><th scope="col">Conteúdo</th><th scope="col">Requisito</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">PDF final</th><td>Só o texto aceito, sem marcações nem comentários. Bloqueado com arquivo pendente.</td><td><a class="req" href="#req-RF-42" title="Exportar PDF final e .typ limpos, sem marcações nem comentários.">RF-42</a>, <a class="req" href="#req-RF-53" title="Exportar o PDF final fica bloqueado enquanto houver arquivo pendente referenciado pelo artigo. O app lista o que falta.">RF-53</a></td></tr>
+            <tr><th scope="row"><code>.typ</code> limpo</th><td>Texto aceito, Typst puro.</td><td><a class="req" href="#req-RF-42" title="Exportar PDF final e .typ limpos, sem marcações nem comentários.">RF-42</a></td></tr>
+            <tr><th scope="row">PDF com comentários</th><td>Comentários na margem.</td><td><a class="req" href="#req-RF-43" title="Exportar PDF com os comentários na margem, para orientadores.">RF-43</a></td></tr>
+            <tr><th scope="row">PDF de diferenças</th><td>Mudanças entre duas versões nomeadas, marcadas.</td><td><a class="req" href="#req-RF-44" title="Exportar PDF de diferenças entre duas versões.">RF-44</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h4 id="ref-arquivos">Arquivos no repositório do artigo</h4>
+<pre><code>meu-artigo/
+├── main.typ          # texto aceito, Typst puro
+├── refs.bib
+├── figures/
+└── .prelo/
+    ├── review.json   # sugestões e comentários
+    ├── project.json  # participantes, papéis, versão do compilador
+    └── versions.json # versões nomeadas</code></pre>
+
+      <h4 id="ref-plataformas">Plataformas</h4>
+      <p>macOS, Windows e Linux (<a class="req" href="#req-RNF-01" title="Plataformas: macOS, Windows e Linux.">RNF-01</a>). Versões mínimas de cada sistema: <span class="tbd">a definir</span>.</p>
+      <p class="note">Requisitos completos: <a href="https://github.com/paulossjunior/prelo/blob/main/docs/requisitos.md" rel="noopener">docs/requisitos.md</a>. Decisões: <a href="https://github.com/paulossjunior/prelo/blob/main/docs/adrs.md" rel="noopener">docs/adrs.md</a>.</p>
+    </section>
+
+    <!-- ---------------- Explicação ---------------- -->
+    <section class="doc-mode" id="explicacao" aria-labelledby="h-explicacao">
+      <h3 id="h-explicacao">Explicação <span class="mode-tag">Por quê</span></h3>
+
+      <h4 id="exp-p2p">Como a colaboração funciona sem servidor</h4>
+      <p>Num editor em tempo real comum, um servidor central recebe as edições de todos, decide a ordem e guarda o documento. O Prelo dispensa esse papel com um CRDT (Yjs): uma estrutura de dados em que as edições de cada pessoa se fundem sem conflito dentro de cada computador, em qualquer ordem, também depois de um período offline. Se a fusão acontece em cada máquina, o servidor não tem mais o que decidir.</p>
+      <p>Sobra um problema: os computadores precisam se encontrar. Na mesma rede, eles se descobrem pela rede local (mDNS). Pela internet, o iroh abre uma conexão direta e atravessa roteadores e NAT. Quando a rede é fechada demais, o tráfego passa por um relay, sem que o relay consiga ler o conteúdo, porque tudo vai criptografado de ponta a ponta (<a class="req" href="#req-D-04" title="Conexão direta: mDNS na rede local e iroh pela internet. Relay só para conectar quando o NAT bloqueia, com tráfego criptografado de ponta a ponta.">D-04</a>). O relay pode ser público ou do próprio grupo; essa escolha está <span class="tbd">a definir</span>.</p>
+      <p>E quando ninguém está online ao mesmo tempo? Aí entra o git. Salvar e fechar gravam um commit no remoto do grupo (GitHub, GitLab ou outro), e quem abre depois recebe por ali (<a class="req" href="#req-D-05" title="Salvar e fechar gravam commit e fazem push no git do grupo; quem abre depois faz pull.">D-05</a>). Um grupo que queira entrega sem depender de ninguém online pode deixar um computador do laboratório com o Prelo aberto: ele é só mais um participante.</p>
+      <p>A identidade segue a mesma lógica. Não há conta num serviço; cada pessoa tem uma chave criptográfica criada no próprio computador. O convite carrega a chave do documento, e o dono confere o código da chave de quem entra. O custo dessa escolha é real: sem servidor, “sincronizado” só cobre quem está online e o que já está no git, e redes que bloqueiam UDP dependem do relay.</p>
+
+      <h4 id="exp-local">Por que local-first</h4>
+      <p>Artigos inéditos são material sensível. Se o texto não fica em servidor de terceiros, não há onde ele vazar, e o grupo não precisa contratar nem manter infraestrutura. Por isso nenhum servidor guarda o conteúdo do artigo (<a class="req" href="#req-RNF-02" title="Privacidade: nenhum servidor guarda o conteúdo do artigo, e todo tráfego entre computadores é criptografado de ponta a ponta.">RNF-02</a>).</p>
+      <p>Trabalhar no próprio computador traz uma pergunta: o que fazer offline? A resposta do Prelo é conservadora. Offline você comenta e sugere, porque isso passa por revisão antes de mudar o texto. Editar direto e aceitar sugestões esperam a sincronização, para ninguém escrever sobre uma versão antiga e apagar sem querer o trabalho de outra pessoa. O preço é que quem revisa offline acumula pendências até reconectar (<a class="req" href="#req-D-06" title="Offline só se comenta, responde, resolve e sugere; essas ações vão para uma fila no disco.">D-06</a>, <a class="req" href="#req-D-07" title="Ao abrir, reconectar ou salvar, o app recebe as mudanças primeiro e mantém o editor em leitura até terminar.">D-07</a>, <a class="req" href="#req-D-09" title="Aceitar e rejeitar sugestões seguem D-07: só com os arquivos sincronizados.">D-09</a>).</p>
+      <p>Salvar faz tudo de uma vez (receber, enviar e gravar no git) porque gestos separados deixam espaço para esquecer um deles (<a class="req" href="#req-D-08" title="⌘S recebe, envia a fila, grava commit e faz push. Sem conexão, guarda local e agenda.">D-08</a>). A consequência é um histórico com muitos commits <code>Prelo sync</code>, e as versões nomeadas existem para marcar os que importam.</p>
+
+      <h4 id="exp-typst">Por que Typst</h4>
+      <p>O Typst compila em milissegundos e tem sintaxe mais limpa que a do LaTeX. Compilação rápida é o que permite uma prévia que acompanha a digitação e o teste de cada sugestão em segundo plano: o app compila “texto aceito + esta sugestão” para saber se ela quebra o artigo.</p>
+      <p>O compilador vem embutido no Prelo, e a versão fica registrada no projeto. Assim ninguém instala nada à parte, e todos os coautores veem a mesma prévia e o mesmo PDF (<a class="req" href="#req-D-10" title="typst e Tinymist entram como bibliotecas no núcleo Rust, com a versão do compilador registrada em .prelo/project.json.">D-10</a>). A contrapartida: atualizar o Typst exige uma nova versão do Prelo, e uma versão nova pode mudar o layout. Quem decide trocar a versão de um projeto está <span class="tbd">a definir</span>.</p>
+      <p>LaTeX fica fora da primeira versão. Quem precisa de controle de alterações em LaTeX já tem o Overleaf; o espaço vazio, segundo o levantamento de novembro de 2026, é Typst com revisão, offline e git juntos.</p>
+
+      <h4 id="exp-sugestoes">Por que sugestões não ficam dentro do <code>.typ</code></h4>
+      <p>Se as marcas de revisão fossem escritas no próprio <code>.typ</code>, quem abrisse o repositório sem o Prelo veria um arquivo sujo, que talvez nem compilasse. Por isso a sugestão é um atributo sobre um trecho do texto compartilhado, guardado em <code>.prelo/</code> (<a class="req" href="#req-D-02" title="Sugestões são atributos sobre trechos do texto compartilhado (CRDT) e ficam em .prelo/review.json, nunca como marcação dentro do .typ.">D-02</a>). O git recebe sempre o texto aceito: sem as inserções pendentes, com o texto das exclusões pendentes. Quem usa VS Code ou o <code>typst</code> de linha de comando continua vendo um projeto Typst normal.</p>
+      <p>O lado difícil: uma edição feita fora do Prelo chega como diff do git e precisa virar sugestão de um autor “externo”. Como tratar trechos que mudaram dos dois lados ainda está <span class="tbd">a definir</span>.</p>
+    </section>
+  </div>
+</section>
+
+<!-- =====================================================================
+     PARTE · REQUISITOS E DECISÕES (referência)
+     ===================================================================== -->
+<section id="requisitos" class="part" aria-labelledby="h-requisitos">
+  <div class="wrap">
+    <p class="eyebrow">Referência · o que os códigos querem dizer</p>
+    <h2 id="h-requisitos">Requisitos e decisões</h2>
+    <p>O site cita três tipos de código. <strong>RF</strong> é um requisito funcional: algo que o Prelo vai fazer. <strong>RNF</strong> é um requisito não funcional: uma qualidade que ele deve ter, como privacidade ou plataformas. <strong>D</strong> é uma decisão de arquitetura (ADR): uma escolha de como construir, com o motivo e as alternativas descartadas. Os resumos abaixo simplificam o texto oficial, que está em <a href="https://github.com/paulossjunior/prelo/blob/main/docs/requisitos.md" rel="noopener">docs/requisitos.md</a> e <a href="https://github.com/paulossjunior/prelo/blob/main/docs/adrs.md" rel="noopener">docs/adrs.md</a> no GitHub.</p>
+    <p class="note">Passe o mouse sobre qualquer código no site para ver o resumo, ou clique para vir até esta tabela.</p>
+
+    <h3 id="req-funcionalidades">Funcionalidades (RF)</h3>
+      <div class="table-wrap" role="region" aria-labelledby="cap-req-rf" tabindex="0">
+        <table class="req-table">
+          <caption id="cap-req-rf">Requisitos funcionais citados no site</caption>
+          <thead><tr><th scope="col">Código</th><th scope="col">O que significa</th><th scope="col">Onde aparece no site</th></tr></thead>
+          <tbody>
+            <tr id="req-RF-01"><th scope="row">RF-01</th><td>Editor de código Typst com realce de sintaxe, autocompletar e diagnósticos fornecidos pelo Tinymist.</td><td><a href="#tela-editor">Tela 2. Editor com prévia lado a lado</a>, <a href="#tela-erros">Tela 7. Erros de compilação e arquivos pendentes</a></td></tr>
+            <tr id="req-RF-02"><th scope="row">RF-02</th><td>Prévia ao lado do editor, atualizada enquanto se digita. Meta: menos de 100 ms em artigos de até 40 páginas.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-editor">Tela 2. Editor com prévia lado a lado</a></td></tr>
+            <tr id="req-RF-03"><th scope="row">RF-03</th><td>Sincronização entre código e prévia: clicar na prévia leva à linha do código, e vice-versa.</td><td><a href="#tela-editor">Tela 2. Editor com prévia lado a lado</a></td></tr>
+            <tr id="req-RF-04"><th scope="row">RF-04</th><td>Árvore de arquivos e estrutura de seções, com a contagem de pendências de revisão por seção.</td><td><a href="#tela-editor">Tela 2. Editor com prévia lado a lado</a></td></tr>
+            <tr id="req-RF-06"><th scope="row">RF-06</th><td>O Prelo compila Typst com compilador embutido, sem exigir o typst instalado. Prévia, diagnósticos e PDFs saem da mesma compilação.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-editor">Tela 2. Editor com prévia lado a lado</a></td></tr>
+            <tr id="req-RF-07"><th scope="row">RF-07</th><td>A versão do compilador embutido aparece no app e fica registrada em .prelo/project.json, para todos os coautores compilarem com a mesma versão.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-editor">Tela 2. Editor com prévia lado a lado</a></td></tr>
+            <tr id="req-RF-08"><th scope="row">RF-08</th><td>O compilador só lê arquivos regulares dentro da pasta do projeto. Caminho que sai dela, link simbólico para fora e arquivo especial são recusados, com diagnóstico que diz o motivo.</td><td><a href="#tela-erros">Tela 7. Erros de compilação e arquivos pendentes</a></td></tr>
+            <tr id="req-RF-09"><th scope="row">RF-09</th><td>Bibliografia em .bib (BibLaTeX) ou .yml/.yaml (Hayagriva), um ou vários, e estilos .csl. Arquivo malformado gera diagnóstico com arquivo e linha, sem fechar o app.</td><td><a href="#tela-erros">Tela 7. Erros de compilação e arquivos pendentes</a></td></tr>
+            <tr id="req-RF-10"><th scope="row">RF-10</th><td>Três modos de trabalho: Editando (alterações entram direto), Sugerindo (alterações viram sugestões) e Lendo (só leitura e comentários).</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-editor">Tela 2. Editor com prévia lado a lado</a>, <a href="#tela-comentarios">Tela 3. Comentários em conversa</a>, <a href="#tela-sugestao">Tela 4. Modo sugestão: aceitar e recusar</a></td></tr>
+            <tr id="req-RF-11"><th scope="row">RF-11</th><td>Sugestões de inserção, exclusão e substituição, marcadas no código e na prévia com a cor do autor.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-sugestao">Tela 4. Modo sugestão: aceitar e recusar</a></td></tr>
+            <tr id="req-RF-12"><th scope="row">RF-12</th><td>Aceitar ou rejeitar uma sugestão pelo cartão ou pelo trecho marcado. Atalhos: ⌘↵ aceita, ⌘⌫ rejeita, ⌥↓ vai para a próxima.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-sugestao">Tela 4. Modo sugestão: aceitar e recusar</a>, <a href="#ref-atalhos">Atalhos de teclado</a></td></tr>
+            <tr id="req-RF-13"><th scope="row">RF-13</th><td>Aceitar ou rejeitar em lote, com filtro por pessoa e por seção e confirmação que mostra a contagem.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-sugestao">Tela 4. Modo sugestão: aceitar e recusar</a></td></tr>
+            <tr id="req-RF-14"><th scope="row">RF-14</th><td>Desfazer um aceite ou uma rejeição (⌘Z ou botão Desfazer no aviso).</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-sugestao">Tela 4. Modo sugestão: aceitar e recusar</a>, <a href="#ref-atalhos">Atalhos de teclado</a></td></tr>
+            <tr id="req-RF-15"><th scope="row">RF-15</th><td>Cada sugestão é testada em segundo plano. A que quebra a compilação aparece com aviso e o botão Aceitar desativado.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-sugestao">Tela 4. Modo sugestão: aceitar e recusar</a></td></tr>
+            <tr id="req-RF-16"><th scope="row">RF-16</th><td>Comentários presos a um trecho, com respostas, menções (@nome), resolver, reabrir e excluir.</td><td><a href="#tela-comentarios">Tela 3. Comentários em conversa</a></td></tr>
+            <tr id="req-RF-17"><th scope="row">RF-17</th><td>Aba Resolvidos com as conversas resolvidas, de onde se pode reabrir ou excluir.</td><td><a href="#tela-comentarios">Tela 3. Comentários em conversa</a></td></tr>
+            <tr id="req-RF-18"><th scope="row">RF-18</th><td>Prévia em dois modos: com marcações ou só com o texto aceito.</td><td><a href="#tela-editor">Tela 2. Editor com prévia lado a lado</a></td></tr>
+            <tr id="req-RF-19"><th scope="row">RF-19</th><td>Ao aceitar sugestões, o app propõe um commit com mensagem pronta.</td><td><a href="#tela-sugestao">Tela 4. Modo sugestão: aceitar e recusar</a></td></tr>
+            <tr id="req-RF-20"><th scope="row">RF-20</th><td>Edição simultânea com cursores e presença das outras pessoas visíveis.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-editor">Tela 2. Editor com prévia lado a lado</a>, <a href="#tela-colaboradores">Tela 5. Colaboradores, papéis e convites</a></td></tr>
+            <tr id="req-RF-21"><th scope="row">RF-21</th><td>Convite por código de uso único, com papel, validade e opção de exigir aprovação do dono.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-inicio">Tela 1. Tela inicial</a>, <a href="#tela-colaboradores">Tela 5. Colaboradores, papéis e convites</a></td></tr>
+            <tr id="req-RF-22"><th scope="row">RF-22</th><td>Identidade local por chave criptográfica, sem conta nem senha. O dono confere o código da chave antes de aprovar uma entrada.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-inicio">Tela 1. Tela inicial</a>, <a href="#tela-colaboradores">Tela 5. Colaboradores, papéis e convites</a></td></tr>
+            <tr id="req-RF-23"><th scope="row">RF-23</th><td>Conexão direta entre computadores, sem servidor obrigatório.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a></td></tr>
+            <tr id="req-RF-24"><th scope="row">RF-24</th><td>Remover uma pessoa ou mudar seu papel a qualquer momento.</td><td><a href="#tela-colaboradores">Tela 5. Colaboradores, papéis e convites</a></td></tr>
+            <tr id="req-RF-30"><th scope="row">RF-30</th><td>Offline é possível comentar, responder, resolver e sugerir. Essas ações vão para uma fila guardada no disco.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a></td></tr>
+            <tr id="req-RF-31"><th scope="row">RF-31</th><td>Editar direto e aceitar ou rejeitar sugestões só ficam liberados com os arquivos sincronizados.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a></td></tr>
+            <tr id="req-RF-32"><th scope="row">RF-32</th><td>Ao abrir o projeto, o app verifica versões com quem está online e com o git remoto e recebe as mudanças antes de liberar a edição, mantendo o editor em leitura.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a></td></tr>
+            <tr id="req-RF-33"><th scope="row">RF-33</th><td>Salvar (⌘S) sincroniza: recebe as mudanças dos outros, envia o trabalho local e grava um commit no git.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#tela-historico">Tela 6. Histórico e versões</a>, <a href="#ref-atalhos">Atalhos de teclado</a></td></tr>
+            <tr id="req-RF-34"><th scope="row">RF-34</th><td>Salvar sem conexão guarda no computador e agenda a sincronização para quando a conexão voltar.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a></td></tr>
+            <tr id="req-RF-35"><th scope="row">RF-35</th><td>Ao reconectar, a ordem é sempre: receber, enviar a fila, gravar no git, liberar a edição.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a></td></tr>
+            <tr id="req-RF-36"><th scope="row">RF-36</th><td>Ao fechar, o app faz um último Salvar.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a></td></tr>
+            <tr id="req-RF-38"><th scope="row">RF-38</th><td>Depois de sincronizar, o app mostra um resumo do que mudou (ex.: “Bruno fez 2 commits, Ana deixou 1 comentário”).</td><td><a href="#tela-historico">Tela 6. Histórico e versões</a></td></tr>
+            <tr id="req-RF-40"><th scope="row">RF-40</th><td>Commit e push pelo próprio app.</td><td><a href="#tela-historico">Tela 6. Histórico e versões</a></td></tr>
+            <tr id="req-RF-41"><th scope="row">RF-41</th><td>Versões nomeadas no histórico, como “Submissão 1” e “Revisão R1”.</td><td><a href="#tela-historico">Tela 6. Histórico e versões</a></td></tr>
+            <tr id="req-RF-42"><th scope="row">RF-42</th><td>Exportar PDF final e .typ limpos, sem marcações nem comentários.</td><td><a href="#ref-exportacoes">Exportações</a></td></tr>
+            <tr id="req-RF-43"><th scope="row">RF-43</th><td>Exportar PDF com os comentários na margem, para orientadores.</td><td><a href="#ref-exportacoes">Exportações</a></td></tr>
+            <tr id="req-RF-44"><th scope="row">RF-44</th><td>Exportar PDF de diferenças entre duas versões.</td><td><a href="#tela-historico">Tela 6. Histórico e versões</a>, <a href="#ref-exportacoes">Exportações</a></td></tr>
+            <tr id="req-RF-52"><th scope="row">RF-52</th><td>Arquivo que o projeto conhece mas ainda não chegou não impede a prévia: imagem vira marcador; bibliografia ou .typ pendente mantém a última compilação, com aviso.</td><td><a href="#tela-erros">Tela 7. Erros de compilação e arquivos pendentes</a></td></tr>
+            <tr id="req-RF-53"><th scope="row">RF-53</th><td>Exportar o PDF final fica bloqueado enquanto houver arquivo pendente referenciado pelo artigo. O app lista o que falta.</td><td><a href="#tela-erros">Tela 7. Erros de compilação e arquivos pendentes</a>, <a href="#ref-exportacoes">Exportações</a></td></tr>
+            <tr id="req-RF-54"><th scope="row">RF-54</th><td>Erro causado só por arquivo pendente não conta como sugestão que quebra a compilação e não desativa o Aceitar.</td><td><a href="#tela-erros">Tela 7. Erros de compilação e arquivos pendentes</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    <h3 id="req-qualidades">Qualidades (RNF)</h3>
+      <div class="table-wrap" role="region" aria-labelledby="cap-req-rnf" tabindex="0">
+        <table class="req-table">
+          <caption id="cap-req-rnf">Requisitos não funcionais citados no site</caption>
+          <thead><tr><th scope="col">Código</th><th scope="col">O que significa</th><th scope="col">Onde aparece no site</th></tr></thead>
+          <tbody>
+            <tr id="req-RNF-01"><th scope="row">RNF-01</th><td>Plataformas: macOS, Windows e Linux.</td><td><a href="#h-inicio">Início</a>, <a href="#ref-plataformas">Plataformas</a></td></tr>
+            <tr id="req-RNF-02"><th scope="row">RNF-02</th><td>Privacidade: nenhum servidor guarda o conteúdo do artigo, e todo tráfego entre computadores é criptografado de ponta a ponta.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a>, <a href="#exp-local">Por que local-first</a></td></tr>
+            <tr id="req-RNF-04"><th scope="row">RNF-04</th><td>Robustez: fechar o app ou perder a conexão nunca perde trabalho. A fila offline fica no disco.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a></td></tr>
+            <tr id="req-RNF-05"><th scope="row">RNF-05</th><td>Interoperabilidade: o .typ no repositório é sempre Typst puro, compilável fora do Prelo.</td><td><a href="#diferenciais">O que o Prelo vai fazer de diferente</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    <h3 id="req-decisoes">Decisões de arquitetura (D)</h3>
+      <div class="table-wrap" role="region" aria-labelledby="cap-req-d" tabindex="0">
+        <table class="req-table">
+          <caption id="cap-req-d">Todas as decisões registradas, com o status em docs/adrs.md</caption>
+          <thead><tr><th scope="col">Código</th><th scope="col">O que significa</th><th scope="col">Status</th><th scope="col">Onde aparece no site</th></tr></thead>
+          <tbody>
+            <tr id="req-D-01"><th scope="row">D-01</th><td>App desktop com Tauri: interface em HTML/TypeScript e núcleo em Rust.</td><td>Aceita · novembro de 2026</td><td><span class="note">Não citado no site</span></td></tr>
+            <tr id="req-D-02"><th scope="row">D-02</th><td>Sugestões são atributos sobre trechos do texto compartilhado (CRDT) e ficam em .prelo/review.json, nunca como marcação dentro do .typ.</td><td>Aceita · novembro de 2026</td><td><a href="#exp-sugestoes">Por que sugestões não ficam dentro do .typ</a></td></tr>
+            <tr id="req-D-03"><th scope="row">D-03</th><td>Comentários são resolvidos, não aceitos: têm só os estados aberto e resolvido.</td><td>Aceita · novembro de 2026</td><td><a href="#tela-comentarios">Tela 3. Comentários em conversa</a></td></tr>
+            <tr id="req-D-04"><th scope="row">D-04</th><td>Conexão direta: mDNS na rede local e iroh pela internet. Relay só para conectar quando o NAT bloqueia, com tráfego criptografado de ponta a ponta.</td><td>Aceita · novembro de 2026</td><td><a href="#exp-p2p">Como a colaboração funciona sem servidor</a></td></tr>
+            <tr id="req-D-05"><th scope="row">D-05</th><td>Salvar e fechar gravam commit e fazem push no git do grupo; quem abre depois faz pull.</td><td>Aceita · novembro de 2026</td><td><a href="#exp-p2p">Como a colaboração funciona sem servidor</a></td></tr>
+            <tr id="req-D-06"><th scope="row">D-06</th><td>Offline só se comenta, responde, resolve e sugere; essas ações vão para uma fila no disco.</td><td>Aceita · novembro de 2026</td><td><a href="#exp-local">Por que local-first</a></td></tr>
+            <tr id="req-D-07"><th scope="row">D-07</th><td>Ao abrir, reconectar ou salvar, o app recebe as mudanças primeiro e mantém o editor em leitura até terminar.</td><td>Aceita · novembro de 2026</td><td><a href="#exp-local">Por que local-first</a></td></tr>
+            <tr id="req-D-08"><th scope="row">D-08</th><td>⌘S recebe, envia a fila, grava commit e faz push. Sem conexão, guarda local e agenda.</td><td>Aceita · novembro de 2026</td><td><a href="#exp-local">Por que local-first</a></td></tr>
+            <tr id="req-D-09"><th scope="row">D-09</th><td>Aceitar e rejeitar sugestões seguem D-07: só com os arquivos sincronizados.</td><td>Aceita · novembro de 2026</td><td><a href="#exp-local">Por que local-first</a></td></tr>
+            <tr id="req-D-10"><th scope="row">D-10</th><td>typst e Tinymist entram como bibliotecas no núcleo Rust, com a versão do compilador registrada em .prelo/project.json.</td><td>Aceita · novembro de 2026</td><td><a href="#exp-typst">Por que Typst</a></td></tr>
+            <tr id="req-D-11"><th scope="row">D-11</th><td>Dependências com licença MPL-2.0 só entram como exceção nomeada, com motivo, e apenas se usadas sem modificação.</td><td>Aceita · 2026-11-18</td><td><span class="note">Não citado no site</span></td></tr>
+            <tr id="req-D-12"><th scope="row">D-12</th><td>Imagens e outros binários: lista de arquivos no documento compartilhado e bytes enviados direto entre computadores por iroh, com conferência de hash. O git continua levando os arquivos para quem não está online junto.</td><td>Aceita · 2026-11-18</td><td><a href="#guia-convidar">Como convidar um coautor</a></td></tr>
+            <tr id="req-D-13"><th scope="row">D-13</th><td>Arquivos fora da pasta do projeto não são permitidos; o app oferece copiá-los para dentro.</td><td>Aceita · 2026-11-18</td><td><a href="#guia-bib">Como adicionar bibliografia e imagens</a></td></tr>
+            <tr id="req-D-14"><th scope="row">D-14</th><td>.bib e .yml são editados como texto compartilhado, como o .typ; .csl e binários viajam como arquivo inteiro.</td><td>Aceita · 2026-11-18</td><td><span class="note">Não citado no site</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    <h3 id="req-fluxos">Fluxos</h3>
+      <div class="table-wrap" role="region" aria-labelledby="cap-req-fl" tabindex="0">
+        <table class="req-table">
+          <caption id="cap-req-fl">Fluxos de uso citados no site (requisitos §6)</caption>
+          <thead><tr><th scope="col">Código</th><th scope="col">O que significa</th><th scope="col">Onde aparece no site</th></tr></thead>
+          <tbody>
+            <tr id="req-fluxo-6-1"><th scope="row">Fluxo 6.1</th><td><strong>Entrada no projeto.</strong> Do convite do dono até o convidado estar no projeto: código de uso único, nome e chave do convidado, conexão, aprovação do dono, texto primeiro e figuras depois.</td><td><a href="#tela-inicio">Tela 1. Tela inicial</a>, <a href="#tela-colaboradores">Tela 5. Colaboradores, papéis e convites</a></td></tr>
+            <tr id="req-fluxo-6-2"><th scope="row">Fluxo 6.2</th><td><strong>Revisão.</strong> Aceitar ou rejeitar sugestões, uma a uma ou em lote; sugestão que quebra a compilação; desfazer; resolver, reabrir e excluir comentários; preparar submissão.</td><td><a href="#tela-sugestao">Tela 4. Modo sugestão: aceitar e recusar</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+  </div>
+</section>
+
+<!-- =====================================================================
+     PARTE 4 · COMO CONTRIBUIR
+     ===================================================================== -->
+<section id="contribuir" class="part" aria-labelledby="h-contribuir">
+  <div class="wrap">
+    <p class="eyebrow">Contribuir · como o projeto trabalha</p>
+    <h2 id="h-contribuir">Como contribuir</h2>
+    <p>O Prelo é feito em público, no GitHub. Toda mudança entra pelo mesmo caminho: uma issue, testes escritos antes do código, a suíte inteira verde no seu computador e um pull request que passa no CI em macOS, Windows e Linux. As regras valem para todos, inclusive para o dono do repositório e para os agentes de IA que ajudam no projeto.</p>
+
+    <h3 id="contribuir-formas" class="sec-gap">Formas de ajudar</h3>
+    <p>Nem toda contribuição é código. Escolha a que combina com você.</p>
+    <div class="grid">
+      <div class="card">
+        <h4>Relatar um problema</h4>
+        <p>Abra uma <a href="https://github.com/paulossjunior/prelo/issues/new" rel="noopener">issue</a> dizendo o que fez, o que esperava e o que aconteceu, com sistema e versão. Não precisa saber programar.</p>
+      </div>
+      <div class="card">
+        <h4>Testar em outro sistema</h4>
+        <p>Rode o app no Windows ou no Linux e conte o que quebrou. Cada sistema tem particularidades que o CI nem sempre pega.</p>
+      </div>
+      <div class="card">
+        <h4>Melhorar a documentação</h4>
+        <p>Requisitos, arquitetura e decisões ficam em <code>docs/</code>. Texto confuso, exemplo faltando ou item marcado “a definir” são bons pontos de partida.</p>
+      </div>
+      <div class="card">
+        <h4>Escrever código</h4>
+        <p>Pegue uma issue aberta da fase atual e siga o passo a passo abaixo. Comece pelas menores.</p>
+      </div>
+    </div>
+
+    <h3 id="contribuir-preparar" class="sec-gap">1. Prepare o ambiente</h3>
+    <p>Você precisa de três coisas instaladas antes de clonar o projeto.</p>
+    <div class="table-wrap">
+      <table>
+        <caption>Ferramentas necessárias</caption>
+        <thead><tr><th scope="col">Ferramenta</th><th scope="col">Versão</th><th scope="col">Como instalar</th></tr></thead>
+        <tbody>
+          <tr><td>Rust</td><td>a de <code>rust-toolchain.toml</code></td><td><code>rustup</code> instala sozinho ao entrar na pasta</td></tr>
+          <tr><td>Node.js e npm</td><td>24 ou mais nova</td><td>site do Node ou <code>nvm use</code></td></tr>
+          <tr><td>cargo-deny</td><td>atual</td><td><code>cargo install cargo-deny --locked</code></td></tr>
+          <tr><td>tauri-driver</td><td>só Linux e Windows</td><td><code>cargo install tauri-driver --locked</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Além disso, cada sistema pede seu próprio pacote:</p>
+    <ul>
+      <li><strong>macOS:</strong> <code>xcode-select --install</code>.</li>
+      <li><strong>Windows:</strong> Microsoft C++ Build Tools e WebView2 (já vem no Windows 11).</li>
+      <li><strong>Linux (Debian/Ubuntu):</strong> WebKitGTK 4.1 e afins; a lista completa do <code>apt install</code> está no <a href="https://github.com/paulossjunior/prelo#readme" rel="noopener">README</a>.</li>
+    </ul>
+    <p>Depois, clone e instale:</p>
+<pre><code>git clone https://github.com/paulossjunior/prelo.git
+cd prelo
+npm install      # instala dependências e liga a trava de push
+npm run dev      # abre o app</code></pre>
+    <p class="result"><strong>Deu certo se</strong> abrir uma janela “Prelo” mostrando a versão e o seu sistema, por exemplo <code>Prelo 0.1.0 · macos</code>.</p>
+
+    <h3 id="contribuir-issue" class="sec-gap">2. Escolha ou abra uma issue</h3>
+    <p>Todo trabalho começa numa issue. Assim ninguém faz a mesma coisa duas vezes e cada mudança fica ligada ao motivo dela.</p>
+    <ul>
+      <li>Veja as <a href="https://github.com/paulossjunior/prelo/issues" rel="noopener">issues abertas</a>. Os rótulos <code>P0</code> a <code>P3</code> indicam prioridade; o marco (<em>milestone</em>) indica a fase do plano.</li>
+      <li>Comente na issue que vai trabalhar nela antes de começar.</li>
+      <li>Ideia nova? Abra uma issue citando o requisito que ela atende (<code>RF-xx</code> ou <code>RNF-xx</code> em <code>docs/requisitos.md</code>). Se o requisito não existe, a primeira contribuição é propor o texto dele.</li>
+      <li>O projeto segue uma ordem de fases: editor local, comentários e git, tempo real, modo sugestão, papéis e convites. Trabalho de uma fase futura só entra com justificativa.</li>
+    </ul>
+
+    <h3 id="contribuir-tdd" class="sec-gap">3. Escreva o teste antes do código</h3>
+    <p>O Prelo usa TDD (desenvolvimento guiado por testes). Não é preferência: é regra da <a href="https://github.com/paulossjunior/prelo/blob/main/.specify/memory/constitution.md" rel="noopener">constituição do projeto</a>, e o motivo é simples. O app guarda textos inéditos e liga computadores diretamente; uma falha de segurança ou uma regressão custa caro.</p>
+    <ol class="steps">
+      <li><strong>Vermelho.</strong> Escreva um teste que descreve o comportamento esperado. Rode e veja falhar. Se passou de primeira, o teste não está testando o que você pensa.</li>
+      <li><strong>Verde.</strong> Escreva o mínimo de código para o teste passar.</li>
+      <li><strong>Refatore.</strong> Melhore o código mantendo todos os testes verdes.</li>
+    </ol>
+    <p>Três regras complementam o ciclo:</p>
+    <ul>
+      <li><strong>Bug corrigido vem com teste</strong> que reproduz o bug e falhava antes da correção.</li>
+      <li><strong>Teste de segurança junto com o funcional.</strong> Se a mudança recebe dado de fora (arquivo, rede, outro participante), teste também a entrada malformada e a ação proibida.</li>
+      <li><strong>Teste pulado precisa de justificativa</strong> escrita num comentário <code>// justificativa:</code> ao lado. Sem ela, a verificação falha.</li>
+    </ul>
+    <p>Onde ficam os testes:</p>
+    <div class="table-wrap">
+      <table>
+        <caption>Camadas de teste</caption>
+        <thead><tr><th scope="col">Camada</th><th scope="col">Onde</th><th scope="col">Comando</th></tr></thead>
+        <tbody>
+          <tr><td>Núcleo (Rust)</td><td><code>src-tauri/src/</code> e <code>src-tauri/tests/</code></td><td><code>npm run test:rust</code></td></tr>
+          <tr><td>Interface (TypeScript)</td><td><code>src/*.test.ts</code></td><td><code>npm run test:ui</code></td></tr>
+          <tr><td>Ponta a ponta (app real)</td><td><code>e2e/</code></td><td><code>npm run test:e2e</code></td></tr>
+          <tr><td>Dependências</td><td><code>security/</code></td><td><code>npm run audit</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 id="contribuir-verify" class="sec-gap">4. Verifique tudo antes do push</h3>
+    <p>Um único comando roda a suíte inteira: formatação, lint, tipos, testes de todas as camadas e auditoria de licenças e vulnerabilidades.</p>
+<pre><code>npm run verify</code></pre>
+    <p>Ele termina com código 0 só se tudo passar. Quando algo falha, a saída nomeia a etapa e o teste.</p>
+    <p>Você não precisa lembrar de rodar: o <code>npm install</code> liga um <em>hook</em> de <code>pre-push</code> que roda o <code>verify</code> sozinho e bloqueia o push se algo falhar. Em branches <code>feature/*</code> e na <code>dev</code>, ele roda o modo rápido (<code>verify --quick</code>, sem os testes ponta a ponta); push para a <code>main</code> ou de tag roda a suíte completa. <strong>Não use <code>git push --no-verify</code></strong> para contornar; a regra vale para todos, e o CI vai reprovar a mesma coisa depois.</p>
+    <div class="status" role="note" aria-label="Sobre dependências novas">
+      <p><strong>Vai adicionar uma dependência?</strong> Ela precisa ter licença permissiva (MIT, Apache-2.0 ou compatível), listada em <code>security/licenses-allow.txt</code>. Vulnerabilidade conhecida de severidade alta ou crítica só entra com exceção em <code>security/vuln-exceptions.toml</code>, com motivo e data de revisão. Na dúvida, pergunte na issue antes.</p>
+    </div>
+
+    <h3 id="contribuir-pr" class="sec-gap">5. Abra o pull request</h3>
+    <p>O projeto usa gitflow: cada mudança nasce numa branch <code>feature/</code>, entra na <code>dev</code> por pull request, e a <code>dev</code> vai para a <code>main</code> quando sai uma versão. A <code>dev</code> e a <code>main</code> são protegidas: ninguém faz push direto nelas, nem o dono.</p>
+    <div class="table-wrap" role="region" aria-labelledby="cap-gitflow" tabindex="0">
+      <table>
+        <caption id="cap-gitflow">Branches e verificações</caption>
+        <thead><tr><th scope="col">Branch</th><th scope="col">Entra por</th><th scope="col">Hook de pre-push</th><th scope="col">CI exigido</th></tr></thead>
+        <tbody>
+          <tr><td><code>feature/NNN-nome</code></td><td>sai da <code>dev</code></td><td>modo rápido</td><td>roda no pull request</td></tr>
+          <tr><td><code>dev</code></td><td>pull request de feature</td><td>modo rápido</td><td><code>verify</code> no macOS</td></tr>
+          <tr><td><code>main</code></td><td>pull request da <code>dev</code>, nas versões</td><td>suíte completa</td><td><code>verify</code> em macOS, Windows e Linux</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ol class="steps">
+      <li>Crie a branch a partir da <code>dev</code> atualizada, com o número da issue no nome: <code>git switch dev &amp;&amp; git pull &amp;&amp; git switch -c feature/042-corrige-titulo</code>.</li>
+      <li>Faça commits pequenos, com mensagem que diga o que muda e por quê. Deixe o commit do teste antes do commit do código; o histórico mostra o TDD.</li>
+      <li>Envie a branch (<code>git push</code>; o hook roda o modo rápido) e abra o pull request para a <code>dev</code>.</li>
+      <li>Na descrição, cite a issue (<code>Fecha #42</code>), os requisitos atendidos e como você testou.</li>
+      <li>Espere o CI. O merge na <code>dev</code> só libera com o <code>verify</code> verde. A ida da <code>dev</code> para a <code>main</code>, nas versões, exige o <code>verify</code> nos três sistemas.</li>
+    </ol>
+    <p class="result"><strong>O pull request está pronto quando:</strong> cita a issue, tem testes novos que falhavam antes, passa no CI e não traz dependência fora da lista de licenças.</p>
+    <p class="note">Ao contribuir, você licencia sua contribuição sob a mesma licença do projeto (<code>MIT OR Apache-2.0</code>), sem CLA.</p>
+
+    <h3 id="contribuir-feature" class="sec-gap">Para features grandes: o fluxo com spec-kit</h3>
+    <p>Funcionalidade nova (não correção pequena) passa por um roteiro escrito antes do código, com o <a href="https://github.com/github/spec-kit" rel="noopener">spec-kit</a>. Cada passo gera um arquivo em <code>specs/NNN-nome/</code>, revisado antes do próximo.</p>
+    <div class="table-wrap">
+      <table>
+        <caption>Etapas de uma feature</caption>
+        <thead><tr><th scope="col">Etapa</th><th scope="col">Gera</th><th scope="col">Responde</th></tr></thead>
+        <tbody>
+          <tr><td>Especificar</td><td><code>spec.md</code></td><td>O que o usuário ganha e como saber que funciona</td></tr>
+          <tr><td>Esclarecer</td><td>respostas na própria <code>spec.md</code></td><td>Dúvidas que mudam o escopo</td></tr>
+          <tr><td>Planejar</td><td><code>plan.md</code>, contratos, guia de validação</td><td>Como construir e testar</td></tr>
+          <tr><td>Quebrar em tarefas</td><td><code>tasks.md</code> e issues no GitHub</td><td>Em que ordem, com testes antes do código</td></tr>
+          <tr><td>Implementar</td><td>código e testes</td><td>A feature em si, em TDD</td></tr>
+          <tr><td>Validar</td><td>veredito do QA na issue</td><td>Cobre os requisitos? Os testes de segurança existem?</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Veja a feature <a href="https://github.com/paulossjunior/prelo/tree/main/specs/001-app-skeleton" rel="noopener">001-app-skeleton</a> como exemplo completo.</p>
+
+    <h3 id="contribuir-docs" class="sec-gap">Onde está cada coisa</h3>
+    <div class="table-wrap">
+      <table>
+        <caption>Mapa do repositório para quem contribui</caption>
+        <thead><tr><th scope="col">Procura</th><th scope="col">Arquivo</th></tr></thead>
+        <tbody>
+          <tr><td>O que o Prelo deve fazer</td><td><code>docs/requisitos.md</code></td></tr>
+          <tr><td>Como ele é construído</td><td><code>docs/arquitetura.md</code></td></tr>
+          <tr><td>Por que cada decisão foi tomada</td><td><code>docs/adrs.md</code></td></tr>
+          <tr><td>Visão geral, escopo e plano de fases</td><td><code>docs/especificacao.md</code></td></tr>
+          <tr><td>Regras do projeto</td><td><code>.specify/memory/constitution.md</code></td></tr>
+          <tr><td>Comandos e pré-requisitos</td><td><code>README.md</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 id="contribuir-aberto" class="sec-gap">Ainda em aberto</h3>
+    <ul>
+            <li>Código de conduta e canal de conversa (fórum, chat): <span class="tbd">a definir</span>.</li>
+      <li>Modelos de issue e de pull request no GitHub: <span class="tbd">a definir</span>.</li>
+    </ul>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <p><strong>Prelo</strong> · em desenvolvimento · <a href="https://github.com/paulossjunior/prelo" rel="noopener">código no GitHub</a></p>
+    <p>Licença: <code>MIT OR Apache-2.0</code>, à sua escolha. Textos completos em <a href="https://github.com/paulossjunior/prelo/blob/main/LICENSE-MIT" rel="noopener">LICENSE-MIT</a> e <a href="https://github.com/paulossjunior/prelo/blob/main/LICENSE-APACHE" rel="noopener">LICENSE-APACHE</a>.</p>
+    <p class="colophon">Prelo é a prensa tipográfica. Um texto “no prelo” está prestes a ser publicado, que é a fase do artigo que a ferramenta atende.</p>
+    <p class="note">Overleaf, Typst, GitHub e GitLab são marcas de seus donos e aparecem aqui só para comparação ou integração; não são parceiros do projeto.</p>
+  </div>
+</footer>
+</body>
+</html>
