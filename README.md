@@ -59,6 +59,8 @@ No Linux sem tela, rode os testes ponta a ponta sob `xvfb-run`.
 - **TDD** (constituição, Princípio VI): teste primeiro, vendo falhar, depois o código. Teste pulado precisa de comentário `// justificativa:` ao lado.
 - **Push só com `npm run verify` verde.** O hook `.githooks/pre-push` roda a suíte; não use `--no-verify`.
 - **`main` só por pull request** com o CI verde em macOS, Windows e Linux, inclusive para o dono do repositório.
+  A proteção está em [`.github/branch-protection.json`](.github/branch-protection.json); para reaplicar:
+  `gh api -X PUT repos/paulossjunior/prelo/branches/main/protection --input .github/branch-protection.json`.
 - Licenças permitidas: [`security/licenses-allow.txt`](security/licenses-allow.txt). Exceções de vulnerabilidade: [`security/vuln-exceptions.toml`](security/vuln-exceptions.toml), sempre com motivo e data de revisão.
 
 ## Ideias principais
