@@ -261,3 +261,72 @@ describe(".github/release-notes.md", () => {
     expect(text).toContain("Get-FileHash");
   });
 });
+
+// ---------------------------------------------------------------------------------------
+// US4: segurança por construção (FR-010, FR-011, FR-012).
+
+const allSteps = (wf: Yaml): Yaml[] => Object.values(wf.jobs ?? {}).flatMap((j: Yaml) => j.steps ?? []);
+
+describe("release.yml: permissões e segredos", () => {
+  it("escrita só no publish; os demais jobs com exatamente contents: read", () => {
+    const jobs = release().jobs;
+    expect(Object.keys(jobs).length).toBeGreaterThan(0);
+    for (const [name, j] of Object.entries<Yaml>(jobs)) {
+      const expected = name === "publish" ? { contents: "write" } : { contents: "read" };
+      expect(j.permissions, name).toEqual(expected);
+    }
+  });
+
+  it("nenhum segredo além do GITHUB_TOKEN automático, e nada de secrets: inherit", () => {
+    const text = releaseText();
+    const used = [...text.matchAll(/secrets\.([A-Za-z_][A-Za-z0-9_]*)/g)].map((m) => m[1]);
+    expect(used.filter((s) => s !== "GITHUB_TOKEN")).toEqual([]);
+    expect(job("verify").secrets).toBeUndefined();
+  });
+
+  it("nenhuma variável de assinatura ou notarização", () => {
+    for (const re of [/APPLE_/, /TAURI_SIGNING_/, /WINDOWS_CERT/, /\bcodesign\b/, /notar/i]) {
+      expect(releaseText()).not.toMatch(re);
+    }
+  });
+
+  it("toda ação externa fixada por SHA de 40 caracteres, com a versão em comentário", () => {
+    const lines = releaseText().split(/\r?\n/).filter((l) => /^\s*(-\s+)?uses:\s/.test(l));
+    const external = lines.filter((l) => !/uses:\s+\.\//.test(l));
+    expect(external.length).toBeGreaterThan(0);
+    for (const l of external) {
+      expect(l).toMatch(/uses:\s+[\w.-]+\/[\w./-]+@[0-9a-f]{40}\s+#\s+v\d+(\.\d+)*\s*$/);
+    }
+  });
+
+  it.each([
+    ["release.yml", release],
+    ["ci.yml", ci],
+  ])("%s: nenhum valor controlável de fora interpolado em run: (injeção de script)", (_name, wf) => {
+    for (const step of allSteps(wf())) {
+      expect(runOf(step)).not.toMatch(/\$\{\{\s*(github\.ref_name|github\.head_ref|github\.event\.|inputs\.)/);
+    }
+  });
+});
+
+describe("release.yml: self-test fora do instalador", () => {
+  it("nenhum --features, self-test nem VITE_SELF_TEST no workflow de release", () => {
+    const text = releaseText();
+    expect(text).not.toContain("--features");
+    expect(text).not.toContain("VITE_SELF_TEST");
+    for (const s of steps("build").filter((st) => /tauri build/.test(runOf(st)))) {
+      expect(runOf(s)).not.toContain("self-test");
+      expect(s.env ?? {}).toEqual({});
+    }
+  });
+
+  it("varre o binário do app depois do build e antes do upload", () => {
+    const st = steps("build");
+    const build = st.findIndex((s) => /tauri build/.test(runOf(s)));
+    const scan = st.findIndex((s) => /node scripts\/release-artifacts\.mjs scan /.test(runOf(s)));
+    const upload = st.findIndex((s) => usesOf(s).startsWith("actions/upload-artifact@"));
+    expect(scan).toBeGreaterThan(build);
+    expect(scan).toBeLessThan(upload);
+    expect(runOf(st[scan])).toContain("src-tauri/target/${{ matrix.target }}/release/prelo");
+  });
+});

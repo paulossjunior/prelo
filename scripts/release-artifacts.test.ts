@@ -7,7 +7,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  containsSelfTestMarker,
   expectedInstallers,
+  fileHasSelfTestMarker,
   formatSums,
   matchInstallers,
   sha256File,
@@ -189,5 +191,58 @@ describe("CLI sums", () => {
     expect(r.status).toBe(1);
     expect(r.stderr).toContain("release:");
     expect(existsSync(join(d, "SHA256SUMS.txt"))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// US4: o binário que vai para quem baixa não tem o comando de autoteste (FR-010, R7).
+
+const MARKER = "self_test_report";
+
+/** Binário falso: bytes não textuais com a marca (ou não) a partir de `at`. */
+function fakeBinary(size: number, at?: number) {
+  const buf = Buffer.alloc(size);
+  for (let i = 0; i < size; i++) buf[i] = (i * 31 + 7) % 251;
+  if (at !== undefined) buf.write(MARKER, at, "latin1");
+  const path = join(tempDir(), "prelo");
+  writeFileSync(path, buf);
+  return path;
+}
+
+describe("containsSelfTestMarker", () => {
+  it("binário com a marca: true", () => {
+    expect(containsSelfTestMarker(Buffer.from(`\0\x01lixo${MARKER}\0lixo`, "latin1"))).toBe(true);
+  });
+
+  it("binário sem a marca, com nomes parecidos: false", () => {
+    expect(containsSelfTestMarker(Buffer.from("\0get_app_info\0self_test\0report\0self-test", "latin1"))).toBe(false);
+  });
+});
+
+describe("fileHasSelfTestMarker", () => {
+  it("acha a marca que cruza o limite entre blocos de leitura, em qualquer posição", async () => {
+    for (let at = 0; at <= 40 - MARKER.length; at++) {
+      expect(await fileHasSelfTestMarker(fakeBinary(40, at), 8), `posição ${at}`).toBe(true);
+    }
+    expect(await fileHasSelfTestMarker(fakeBinary(40), 8)).toBe(false);
+  });
+});
+
+describe("CLI scan", () => {
+  it("binário com a marca no limite do bloco padrão (64 KiB): sai com 1", () => {
+    const r = cli("scan", fakeBinary(200_000, 65_536 - 5));
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("release: o binário contém a marca self_test_report");
+  });
+
+  it("binário sem a marca: sai com 0", () => {
+    const r = cli("scan", fakeBinary(200_000));
+    expect(r.status, r.stderr).toBe(0);
+  });
+
+  it("binário inexistente: sai com 1", () => {
+    const r = cli("scan", join(tempDir(), "nao-existe"));
+    expect(r.status).toBe(1);
+    expect(r.stderr).toContain("release:");
   });
 });
