@@ -83,19 +83,19 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
 ### Tests for User Story 2 ⚠️ escrever primeiro, ver falhar
 
-- [ ] T009 [P] [US2] Testes em `scripts/release-check.test.ts` ([contracts/release-scripts.md](contracts/release-scripts.md)):
+- [X] T009 [P] [US2] Testes em `scripts/release-check.test.ts` ([contracts/release-scripts.md](contracts/release-scripts.md)):
   - `parseTag` aceita `v0.1.0` e `v10.20.30` e recusa `v1.2`, `1.2.3`, `release-1`, `v1.2.3-rc.1`, `v01.2.3`, `v1.2.3 ` e `v1.2.3;rm -rf` (`data-model.md` Tag de versão.name; o último caso é teste de segurança).
   - `readVersions` e `versionMismatches` nomeiam cada arquivo divergente com o valor (`data-model.md` Versão declarada).
   - `findLicense` cobre ausente, vazio e cada nome aceito (`data-model.md` Arquivo de licença).
   - `isOnMain` usa repositórios git temporários, com commit da `main` e commit só de outra branch (`data-model.md` Tag de versão.commit; padrão de `scripts/hooks.test.ts`, sem herdar `GIT_*`).
   - `checkRelease` devolve as mensagens exatas do contrato.
   - A CLI sai com 1 em cada falha.
-- [ ] T010 [US2] Testes em `scripts/release-workflow.test.ts`: job `preflight` com `contents: read`, checkout `fetch-depth: 0` e execução de `node scripts/release-check.mjs` com a tag vinda de `env`; job `verify` com `uses: ./.github/workflows/ci.yml` e `needs: preflight`; `build.needs` contém `verify` (FR-002, FR-003, FR-004, FR-016). Confirmar que falham
+- [X] T010 [US2] Testes em `scripts/release-workflow.test.ts`: job `preflight` com `contents: read`, checkout `fetch-depth: 0` e execução de `node scripts/release-check.mjs` com a tag vinda de `env`; job `verify` com `uses: ./.github/workflows/ci.yml` e `needs: preflight`; `build.needs` contém `verify` (FR-002, FR-003, FR-004, FR-016). Confirmar que falham
 
 ### Implementation for User Story 2
 
-- [ ] T011 [US2] Implementar `scripts/release-check.mjs` (funções exportadas e CLI) e `scripts/release-check.d.mts` até T009 passar, aplicando `data-model.md` Tag de versão.name (formato), Tag de versão.commit (na `main`), Versão declarada (as três fontes) e Arquivo de licença (nomes aceitos, não vazio)
-- [ ] T012 [US2] Adicionar os jobs `preflight` e `verify` em `.github/workflows/release.yml` e ligar `build.needs: verify` até T010 passar; o job `verify` declara `permissions: contents: read` explicitamente, porque o topo é `permissions: {}` e o workflow chamado só pode reduzir permissões
+- [X] T011 [US2] Implementar `scripts/release-check.mjs` (funções exportadas e CLI) e `scripts/release-check.d.mts` até T009 passar, aplicando `data-model.md` Tag de versão.name (formato), Tag de versão.commit (na `main`), Versão declarada (as três fontes) e Arquivo de licença (nomes aceitos, não vazio)
+- [X] T012 [US2] Adicionar os jobs `preflight` e `verify` em `.github/workflows/release.yml` e ligar `build.needs: verify` até T010 passar; o job `verify` declara `permissions: contents: read` explicitamente, porque o topo é `permissions: {}` e o workflow chamado só pode reduzir permissões
 
 **Checkpoint**: testes de US1 e US2 verdes; `qa` modo validar. **MVP** (US1 + US2).
 
