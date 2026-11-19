@@ -95,6 +95,15 @@ jobs:
         shell: bash
         run: npx --no-install tauri build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
 
+      # FR-005: um só binário para Apple Silicon e Intel.
+      - name: Binário universal (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          archs=" $(lipo -archs src-tauri/target/universal-apple-darwin/release/prelo) "
+          echo "arquiteturas:$archs"
+          case "$archs" in *" x86_64 "*) ;; *) echo "release: falta x86_64 no binário" >&2; exit 1 ;; esac
+          case "$archs" in *" arm64 "*) ;; *) echo "release: falta arm64 no binário" >&2; exit 1 ;; esac
+
       # Confere o artefato real: o comando de autoteste não pode estar no binário (FR-010).
       - name: Binário sem autoteste
         shell: bash
@@ -181,7 +190,7 @@ jobs:
           diff -u "$RUNNER_TEMP/expected.txt" "$RUNNER_TEMP/attached.txt"
 
       - name: Apagar rascunho incompleto
-        if: failure() && steps.create.outputs.created == 'true'
+        if: (failure() || cancelled()) && steps.create.outputs.created == 'true'
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release delete "$TAG" --yes
