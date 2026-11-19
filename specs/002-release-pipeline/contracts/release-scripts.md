@@ -6,7 +6,9 @@ começando por `release:` no stderr.
 
 ## `scripts/release-check.mjs <tag>`
 
-Rodado no job `preflight`, na raiz do repositório. Para no primeiro erro.
+Rodado no job `preflight`, na raiz do repositório, com o commit do `HEAD`. Com a tag fora do
+formato, para aí; senão confere todas as regras e lista cada falha (ex.: os três arquivos
+divergentes de uma vez).
 
 | Função exportada | Entrada | Retorno / erro |
 |---|---|---|

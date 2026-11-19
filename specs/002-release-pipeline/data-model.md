@@ -25,7 +25,9 @@ divergente com o valor encontrado (FR-003).
 
 ## Arquivo de licença
 
-Um de `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING` na raiz, não vazio (FR-016).
+Um de `LICENSE`, `LICENSE.md`, `LICENSE.txt`, `COPYING`, `LICENSE-MIT`, `LICENSE-APACHE` na
+raiz, não vazio (FR-016). Os dois últimos cobrem a licença dupla `MIT OR Apache-2.0`
+adotada em 2026-11-19.
 
 ## Instalador
 
