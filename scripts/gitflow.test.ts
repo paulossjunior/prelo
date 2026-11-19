@@ -21,7 +21,7 @@ function matrixFor(expr: string, ctx: { base_ref?: string; ref: string }): strin
   const m = expr.match(/^\$\{\{ fromJSON\(\(github\.base_ref == '(\w+)' \|\| github\.ref == 'refs\/heads\/(\w+)'\) && '(\[[^']*\])' \|\| '(\[[^']*\])'\) \}\}$/);
   if (!m) throw new Error(`matriz fora do formato esperado: ${expr}`);
   const isDev = ctx.base_ref === m[1] || ctx.ref === `refs/heads/${m[2]}`;
-  return JSON.parse(isDev ? m[3] : m[4]);
+  return JSON.parse((isDev ? m[3] : m[4])!);
 }
 
 describe("ci.yml no gitflow", () => {

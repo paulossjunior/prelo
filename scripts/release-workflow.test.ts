@@ -58,7 +58,7 @@ describe("ci.yml: chamável pela release sem mudar os checks da main", () => {
     const verify = jobs.verify;
     expect(verify.name).toBe("verify (${{ matrix.os }})");
     // Gitflow: a matriz depende do destino; fora da dev (main, tag, workflow_call) são os 3.
-    const full = JSON.parse(String(verify.strategy.matrix.os).match(/\|\| '(\[[^']*\])'\) \}\}$/)![1]);
+    const full = JSON.parse(String(verify.strategy.matrix.os).match(/\|\| '(\[[^']*\])'\) \}\}$/)![1]!);
     const names = (full as string[]).map((os) => verify.name.replace("${{ matrix.os }}", os));
     expect(names).toEqual(["verify (ubuntu-22.04)", "verify (windows-latest)", "verify (macos-latest)"]);
     expect(verify.strategy.matrix.include).toBeUndefined();

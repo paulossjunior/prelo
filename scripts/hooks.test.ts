@@ -39,9 +39,13 @@ function repoWithVerify(code: number) {
       private: true,
       scripts: {
         // Grava o modo pedido (--quick ou completo) para o teste conferir qual suíte rodou.
-        verify: `node -e "require('fs').writeFileSync('../modo.txt', process.argv.includes('--quick') ? 'quick' : 'full'); process.exit(${code})"`,
+        verify: "node verify-falso.js",
       },
     }),
+  );
+  writeFileSync(
+    join(work, "verify-falso.js"),
+    `require("fs").writeFileSync("../modo.txt", process.argv.includes("--quick") ? "quick" : "full");\nprocess.exit(${code});\n`,
   );
   git(work, "config", "core.hooksPath", ".githooks");
   git(work, "add", "-A");
