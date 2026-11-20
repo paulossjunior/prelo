@@ -1,4 +1,5 @@
 mod app_info;
+pub mod project;
 #[cfg(feature = "self-test")]
 mod self_test;
 
