@@ -248,7 +248,11 @@ auditoria confere todos os alvos.
 **Resultado de T008 (2026-11-19)**: `tinymist-query` 0.15.12 removido (D-17, R2);
 `rustls-platform-verifier` trocado por `rustls-native-certs` (decisão do dono). O
 `cargo-deny` acusa `quick-xml` 0.38.4 (RUSTSEC-2026-0194 e RUSTSEC-2026-0195), tratado em
-R14 com exceção aprovada pelo dono. A exceção D-16 aparece como
+R14 com exceção aprovada pelo dono (registrada em `security/vuln-exceptions.toml` e
+`[advisories].ignore`, revisão até 2027-02-17). Com isso, `npm run audit` passa por inteiro:
+exceções válidas, lista de licenças em sincronia, licenças de arquivos embutidos (fontes
+Libertinus OFL-1.1 e dados do `typst-assets`), `cargo-deny` (avisos, licenças, *bans*,
+fontes) e `audit-ci`/licenças npm. A exceção D-16 aparece como
 `license-exception-not-encountered` (aviso, não erro), porque o `cargo-deny` lê só a licença
 declarada do `typst-assets` (Apache-2.0); ela documenta e trava o escopo.
 
