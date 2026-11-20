@@ -12,6 +12,8 @@ Editor desktop para escrever artigos científicos em [Typst](https://typst.app) 
 | [`docs/requisitos.md`](docs/requisitos.md) | Requisitos: papéis, RF e RNF, regras de revisão e sincronização, fluxos |
 | [`docs/arquitetura.md`](docs/arquitetura.md) | Arquitetura: componentes, conexão sem servidor, modelo de revisão, sincronização, acesso a arquivos, riscos técnicos |
 | [`docs/adrs.md`](docs/adrs.md) | Decisões de arquitetura D-01 a D-14 |
+| [`docs/backlog.md`](docs/backlog.md) | Backlog Epic → User Story → Task com links para as issues do GitHub (gerado pela skill `gestor-projeto`) |
+| [`docs/release-plan.md`](docs/release-plan.md) | Plano de releases R0–R5: funcionalidades, RFs, épicos, versão e status de cada release |
 | [`specs/`](specs/) | Features no fluxo [spec-kit](https://github.com/github/spec-kit): spec, plano, tarefas |
 | [`prototype/index.html`](prototype/index.html) | Protótipo clicável da interface. Abra no navegador |
 | `src/` | Interface (Vite + TypeScript) |
