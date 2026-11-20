@@ -43,7 +43,7 @@ Regras sobre comentários:
 
 ### Escrita
 
-- **RF-01** Editor de código Typst com realce de sintaxe, autocompletar e diagnósticos fornecidos pelo Tinymist.
+- **RF-01** Editor de código Typst com realce de sintaxe, autocompletar e diagnósticos fornecidos pelo compilador Typst embutido (`typst-ide` e `typst-syntax` oficiais, D-17).
 - **RF-02** Prévia ao lado do editor, atualizada enquanto se digita (meta: menos de 100 ms em artigos de até 40 páginas).
 - **RF-03** Sincronização entre código e prévia: clicar na prévia leva à linha do código, e vice-versa.
 - **RF-04** Árvore de arquivos e estrutura de seções (outline) com contagem de pendências de revisão por seção.

@@ -46,7 +46,7 @@ flowchart LR
 | Shell | Tauri | Janela, menus, instaladores, ponte entre interface e núcleo | RNF-01 |
 | Editor | CodeMirror 6 + y-codemirror.next | Edição, cursores de outras pessoas, desfazer por usuário | RF-01, RF-14, RF-20 |
 | Documento compartilhado | Yjs (interface) e yrs (núcleo) | CRDT: edições simultâneas se fundem sem conflito, também depois de períodos offline | RF-20, RF-30 |
-| Compilação e prévia | typst + Tinymist, embutidos | Diagnósticos, autocompletar, prévia SVG incremental, PDFs; leitura de arquivos restrita ao projeto ([seção 6](#6-acesso-a-arquivos-pelo-compilador)) | RF-01, RF-02, RF-06, RF-08, RF-09, RF-42–44, RF-50–54 |
+| Compilação e prévia | typst (com `typst-ide`, D-17) + Tinymist (World, VFS, pacotes), embutidos | Diagnósticos, autocompletar e realce pelo `typst-ide`/`typst-syntax` (D-17), prévia SVG incremental, PDFs; leitura de arquivos restrita ao projeto ([seção 6](#6-acesso-a-arquivos-pelo-compilador)) | RF-01, RF-02, RF-06, RF-08, RF-09, RF-42–44, RF-50–54 |
 | Rede | iroh + mDNS | Conexão direta entre computadores ([seção 3](#3-conexão-sem-servidor)) | RF-23, RNF-02 |
 | Histórico | gitoxide | Commit, push, pull, versões nomeadas | RF-33, RF-40, RF-41 |
 
