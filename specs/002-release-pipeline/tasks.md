@@ -169,8 +169,10 @@ o `ci.yml` pode ser chamado. Todas as histórias editam esse esqueleto.
 
 - [X] T022 Documentar em `README.md` a seção "Publicar uma versão" (FR-015): atualizar os três arquivos de versão, PR e merge, `git tag vX.Y.Z origin/main && git push origin vX.Y.Z`, revisar e publicar o rascunho, conferir checksums; citar o pré-requisito de licença (FR-016)
 - [X] T023 Abrir PR e confirmar `npm run verify` verde nos três sistemas pelo CI (checks `verify (<sistema>)` inalterados)
-- [ ] T024 Rodar o [quickstart.md](quickstart.md): cenários locais L1–L4 e, no GitHub, 4, 5, 6 e 8 (possíveis sem licença); apagar tags e rascunhos de teste
-- [ ] T025 Rodar os cenários 1, 2, 3, 7 e 9 do [quickstart.md](quickstart.md) **depois** que o dono adicionar o arquivo de licença (TODO(LICENSE), [research.md](research.md) R10); medir o tempo até o rascunho (SC-003)
+- [X] T024 Rodar o [quickstart.md](quickstart.md): cenários locais L1–L4 e, no GitHub, 4, 5, 6 e 8 (possíveis sem licença); apagar tags e rascunhos de teste
+  - Validado em 2026-11-19: L1–L4 locais; no GitHub, cenário 4 (`v0.0.901`, run 44630756135: commit fora da main), 5 (`v0.0.902`, run 44631063405: versão diverge nos 3 arquivos) e 8 (`v0.0.903-rc.1`: nenhum workflow). Sem rascunho criado; tags de teste apagadas. Cenário 6 (sem licença) não reproduzível depois do PR #37; coberto por `release-check.test.ts`.
+- [X] T025 Rodar os cenários 1, 2, 3, 7 e 9 do [quickstart.md](quickstart.md) **depois** que o dono adicionar o arquivo de licença (TODO(LICENSE), [research.md](research.md) R10); medir o tempo até o rascunho (SC-003)
+  - Validado em 2026-11-19 com a release real v0.1.0 (run 44623769139): cenário 1 (rascunho com `.dmg`, `.exe`, `.AppImage`, `.deb` e `SHA256SUMS.txt` em 17 min 21 s; SC-003 ≤ 60 min), 2 (`shasum -a 256 -c`: 4 OK), 9 (só `publish` com escrita; ordem preflight → verify → build → publish). `.dmg` universal (`lipo -archs`: x86_64 arm64). Pendentes: cenário 3 em Windows e Linux (só macOS conferido) e cenário 7 (exigiria recriar a tag de uma release publicada; coberto por `release-workflow.test.ts`).
 - [X] T026 Validação final pelo agente `qa` (modo validar): suíte completa, cobertura FR-001–FR-016, testes de segurança, ordem TDD pelo histórico git; anexar o veredito na issue #35
 
 ---
