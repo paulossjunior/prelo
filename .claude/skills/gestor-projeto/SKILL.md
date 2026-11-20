@@ -24,6 +24,7 @@ Sem argumento: rode **status**.
 - `docs/requisitos.md`: RF-xx e RNF-xx. `docs/adrs.md`: D-xx. `docs/arquitetura.md` §7: riscos.
 - `specs/*/` (spec-kit): spec.md, plan.md, tasks.md de cada feature, quando existirem.
 - GitHub: `gh issue list`, `gh issue view`, milestones e labels do repositório `origin`.
+- `docs/backlog.md` (gerado por esta skill) e `docs/release-plan.md` (versão → epics).
 
 Toda issue deve citar ao menos um ID de origem (RF, RNF, D, risco ou pendência). Não invente
 requisito: se o trabalho não tem origem nos documentos, a primeira issue é "documentar X",
@@ -93,6 +94,54 @@ Regras:
   repetem entre features.
 - **Labels ausentes** (`epic`, `user-story`, `task`): crie-os no primeiro lote, com
   confirmação.
+
+## Backlog em docs/backlog.md
+
+`docs/backlog.md` é o retrato da Hierarquia em um só arquivo: cada Epic, as User Stories dele e
+as Tasks de cada US, todas com link para a issue no GitHub. O GitHub é a fonte da verdade; o
+arquivo nunca é editado à mão, só regenerado. O documento irmão é `docs/release-plan.md`
+(versão → epics): o backlog diz *o que* existe; o plano de release diz *quando* sai. Ao mexer em
+epics, confira se o plano de release ainda bate, mas não o reescreva nesta operação.
+
+**Formato** (em pt-BR):
+
+- Cabeçalho: data de geração, como regenerar, link para `release-plan.md` e tabela-resumo
+  (Epics, User Stories, Tasks; abertas e fechadas).
+- Um `## [#N](https://github.com/paulossjunior/prelo/issues/N) <título>` por Epic, abertos e
+  fechados, com estado, prioridade, `agente:*`, milestone, progresso (`fechadas/total`) e a
+  fonte: link para o `specs/NNN-*/tasks.md` na `dev` ou, se ainda não estiver lá, na branch da
+  feature.
+- Um `###` por User Story, com estado, prioridade, agente e `fechadas/total` das Tasks.
+- Tasks em lista `- [x]`/`- [ ]` com `[#N](url) T0xx: título · P · agente`. As abertas ficam
+  visíveis; as fechadas de cada US (ou do Epic) vão recolhidas em `<details>` com a contagem.
+- Tasks sem `[USn]` (Setup, Foundational, Polish) ficam em "Tasks direto no Epic".
+- Seção final **Órfãos / inconsistências**.
+
+**Como gerar:** rode, na raiz, `git fetch origin && python3 .claude/skills/gestor-projeto/gerar-backlog.py`
+(só lê o GitHub). O script faz o equivalente a:
+
+```sh
+gh issue list --state all --limit 1000 --json number,title,state,labels,body,milestone
+gh api --paginate repos/{owner}/{repo}/issues/<epic-ou-us>/sub_issues --jq '.[].number'
+git show origin/<branch>:specs/NNN-nome/tasks.md   # checkbox de cada T0xx
+```
+
+A mãe de cada issue é a sub-issue nativa; na falta dela, o `Parte de #N` do corpo. Raiz é
+toda issue com label `epic` ou sem mãe e com filhas (Epic legado).
+
+**Órfãos e inconsistências** (listar, nunca corrigir sem confirmação):
+
+- User Story sem Epic; Task sem User Story nem Epic; issue aberta sem label de nível.
+- `Parte de #N` no corpo sem o vínculo de sub-issue (ou vínculo e corpo divergentes).
+- Issue com filhas sem o label `epic`; filha sem o label `task`; Epic sem milestone.
+- Issue aberta sob Epic fechado; US fechada com Task aberta; US sem Tasks.
+- Estado da issue diferente do checkbox no `tasks.md`; linha do `tasks.md` sem issue.
+
+Cada achado vira proposta de correção no lote da operação **backlog** (ver Confirmação).
+
+**Quando regenerar:** depois de criar ou fechar issues (operações **abrir**, **fechar** e
+`/speckit-github-taskstoissues`), na operação **backlog**, e no planejamento de release, antes
+de atualizar `docs/release-plan.md`.
 
 ## Formato de issue
 
@@ -169,9 +218,10 @@ Ao delegar:
 
 - **status**: issues abertas por fase e prioridade, o que está em andamento, bloqueios, e a
   próxima issue recomendada.
-- **backlog**: compare documentos × issues existentes. Liste o que falta virar issue (RF sem
-  issue, riscos sem spike, pendências sem dono, TODOs nos docs) e o que está obsoleto. Proponha
-  o lote; crie só após confirmação.
+- **backlog**: regenere `docs/backlog.md` (ver Backlog em docs/backlog.md) e compare
+  documentos × issues existentes. Liste o que falta virar issue (RF sem issue, riscos sem
+  spike, pendências sem dono, TODOs nos docs), o que está obsoleto e os órfãos do backlog.
+  Proponha o lote; crie só após confirmação.
 - **priorizar**: aplique a Priorização e proponha mudanças de label/milestone.
 - **abrir <assunto>**: decida o nível (Epic, User Story ou Task) e a mãe, rascunhe a issue no formato acima, procure duplicatas
   (`gh issue list --search`), confirme e crie (`gh issue create --body-file`).
@@ -193,4 +243,5 @@ issue, label ou milestone sem pedido explícito.
 ## Saída
 
 Termine sempre com: o que mudou no GitHub (links das issues), o que foi delegado e para quem,
-e a próxima ação recomendada.
+e a próxima ação recomendada. Se issues foram criadas ou fechadas, regenere `docs/backlog.md`
+e diga quantos órfãos restam.
