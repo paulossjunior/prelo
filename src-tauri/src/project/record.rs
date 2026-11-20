@@ -82,19 +82,72 @@ pub enum SaveError {
 impl ProjectRecord {
     /// Registro novo com a versão do compilador embutido e sem `main`.
     pub fn new(embedded_typst: &str) -> Self {
-        let _ = embedded_typst;
-        todo!("T019")
+        Self {
+            compiler_typst: embedded_typst.to_owned(),
+            main: None,
+            extra: Map::new(),
+            compiler_extra: Map::new(),
+        }
     }
 
     /// Interpreta os bytes do arquivo.
     pub fn parse(bytes: &[u8]) -> Result<Self, InvalidReason> {
-        let _ = bytes;
-        todo!("T019")
+        if bytes.len() as u64 > MAX_RECORD_BYTES {
+            return Err(InvalidReason::TooLarge);
+        }
+        let value: Value =
+            serde_json::from_slice(bytes).map_err(|e| InvalidReason::Json(e.to_string()))?;
+        let Value::Object(mut root) = value else {
+            return Err(InvalidReason::WrongType("(raiz)"));
+        };
+
+        match root.remove("schema") {
+            Some(Value::Number(n)) if n.as_u64() == Some(SCHEMA) => {}
+            Some(Value::Number(n)) => return Err(InvalidReason::UnknownSchema(n.to_string())),
+            Some(_) => return Err(InvalidReason::UnknownSchema("tipo não numérico".into())),
+            None => return Err(InvalidReason::UnknownSchema("ausente".into())),
+        }
+
+        let Some(Value::Object(mut compiler)) = root.remove("compiler") else {
+            return Err(InvalidReason::WrongType("compiler"));
+        };
+        let compiler_typst = match compiler.remove("typst") {
+            Some(Value::String(s)) if !s.trim().is_empty() => s,
+            _ => return Err(InvalidReason::WrongType("compiler.typst")),
+        };
+
+        let main = match root.remove("main") {
+            None => None,
+            Some(Value::String(s)) => {
+                validate_main(&s)?;
+                Some(s)
+            }
+            Some(_) => return Err(InvalidReason::WrongType("main")),
+        };
+
+        Ok(Self {
+            compiler_typst,
+            main,
+            extra: root,
+            compiler_extra: compiler,
+        })
     }
 
     /// Serializa o registro, com os campos desconhecidos preservados.
     pub fn to_json(&self) -> Vec<u8> {
-        todo!("T019")
+        let mut compiler = self.compiler_extra.clone();
+        compiler.insert("typst".into(), Value::String(self.compiler_typst.clone()));
+
+        let mut root = self.extra.clone();
+        root.insert("schema".into(), Value::from(SCHEMA));
+        root.insert("compiler".into(), Value::Object(compiler));
+        if let Some(main) = &self.main {
+            root.insert("main".into(), Value::String(main.clone()));
+        }
+        let mut out =
+            serde_json::to_vec_pretty(&Value::Object(root)).expect("serializar Value nunca falha");
+        out.push(b'\n');
+        out
     }
 
     pub fn schema(&self) -> u64 {
@@ -107,8 +160,7 @@ impl ProjectRecord {
 
     /// Só `update_project_compiler_version` chama isto (FR-012).
     pub fn set_compiler_typst(&mut self, version: &str) {
-        let _ = version;
-        todo!("T019")
+        self.compiler_typst = version.to_owned();
     }
 
     pub fn main(&self) -> Option<&str> {
@@ -117,14 +169,39 @@ impl ProjectRecord {
 
     /// `main` registrado ou [`DEFAULT_MAIN`].
     pub fn main_or_default(&self) -> &str {
-        todo!("T019")
+        self.main.as_deref().unwrap_or(DEFAULT_MAIN)
     }
 
     /// Só `choose_main_file` chama isto. Recusa caminho absoluto, com `..`, vazio ou com `\0`.
     pub fn set_main(&mut self, main: &str) -> Result<(), InvalidReason> {
-        let _ = main;
-        todo!("T019")
+        validate_main(main)?;
+        self.main = Some(main.to_owned());
+        Ok(())
     }
+}
+
+/// Validação textual de `main`, independente do sistema: `/` e `\` contam como separador em
+/// qualquer plataforma, e letra de unidade (`C:`) conta como absoluto. A conferência de que o
+/// arquivo existe dentro da raiz (links simbólicos) é da regra de escopo, ao abrir (T017).
+fn validate_main(main: &str) -> Result<(), InvalidReason> {
+    let bad = |why: &str| Err(InvalidReason::BadMain(format!("{why}: {main:?}")));
+    if main.is_empty() {
+        return bad("vazio");
+    }
+    if main.contains('\0') {
+        return bad("byte nulo");
+    }
+    if main.starts_with('/') || main.starts_with('\\') {
+        return bad("absoluto");
+    }
+    let b = main.as_bytes();
+    if b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':' {
+        return bad("absoluto");
+    }
+    if main.split(['/', '\\']).any(|part| part == "..") {
+        return bad("contém ..");
+    }
+    Ok(())
 }
 
 impl InvalidReason {
@@ -136,40 +213,133 @@ impl InvalidReason {
 
 impl fmt::Display for InvalidReason {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let _ = f;
-        todo!("T019")
+        write!(f, "{RECORD_PATH} inválido, usando os padrões: ")?;
+        match self {
+            Self::TooLarge => write!(f, "maior que 1 MiB"),
+            Self::NotAFile => write!(f, "não é um arquivo comum"),
+            Self::Json(e) => write!(f, "JSON malformado ({e})"),
+            Self::UnknownSchema(s) => write!(f, "schema desconhecido ({s})"),
+            Self::WrongType(field) => write!(f, "campo `{field}` ausente ou com tipo errado"),
+            Self::BadMain(why) => write!(f, "`main` fora do projeto ({why})"),
+            Self::Io(e) => write!(f, "erro de leitura ({e})"),
+        }
+    }
+}
+
+impl std::error::Error for InvalidReason {}
+
+impl fmt::Display for SaveError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Blocked => write!(
+                f,
+                "{RECORD_PATH} inválido não é regravado; use \"Recriar registro\""
+            ),
+            Self::Io(e) => write!(f, "falha ao gravar {RECORD_PATH}: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for SaveError {}
+
+impl From<std::io::Error> for SaveError {
+    fn from(e: std::io::Error) -> Self {
+        Self::Io(e)
     }
 }
 
 impl LoadedRecord {
     /// O arquivo pode ser regravado (criado ou atualizado) sem a pessoa pedir.
     pub fn may_rewrite(&self) -> bool {
-        todo!("T019")
+        !matches!(self.state, RecordState::Invalid(_))
     }
 
     /// Aviso a mostrar ao abrir o projeto, se houver.
     pub fn warning(&self) -> Option<&InvalidReason> {
-        todo!("T019")
+        match &self.state {
+            RecordState::Invalid(reason) => Some(reason),
+            _ => None,
+        }
     }
 }
 
 /// Lê o registro de `root`. Nunca falha: problemas viram [`RecordState::Invalid`] com padrões.
 pub fn load(root: &Path, embedded_typst: &str) -> LoadedRecord {
-    let _ = (root, embedded_typst);
-    todo!("T019")
+    let defaults = |state| LoadedRecord {
+        record: ProjectRecord::new(embedded_typst),
+        state,
+    };
+    match read_limited(&root.join(RECORD_PATH)) {
+        Ok(None) => defaults(RecordState::Missing),
+        Ok(Some(bytes)) => match ProjectRecord::parse(&bytes) {
+            Ok(record) => LoadedRecord {
+                record,
+                state: RecordState::Valid,
+            },
+            Err(reason) => defaults(RecordState::Invalid(reason)),
+        },
+        Err(reason) => defaults(RecordState::Invalid(reason)),
+    }
+}
+
+/// Lê no máximo [`MAX_RECORD_BYTES`] + 1 bytes. Não segue link simbólico nem abre o que não for
+/// arquivo comum (FIFO bloquearia a abertura). `Ok(None)` se não existe.
+fn read_limited(path: &Path) -> Result<Option<Vec<u8>>, InvalidReason> {
+    use std::io::Read;
+
+    let meta = match std::fs::symlink_metadata(path) {
+        Ok(m) => m,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(InvalidReason::Io(e.to_string())),
+    };
+    if !meta.file_type().is_file() {
+        return Err(InvalidReason::NotAFile);
+    }
+    if meta.len() > MAX_RECORD_BYTES {
+        return Err(InvalidReason::TooLarge);
+    }
+    let file = std::fs::File::open(path).map_err(|e| InvalidReason::Io(e.to_string()))?;
+    let mut bytes = Vec::new();
+    file.take(MAX_RECORD_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| InvalidReason::Io(e.to_string()))?;
+    Ok(Some(bytes))
 }
 
 /// Grava o registro de forma atômica. Recusa com [`SaveError::Blocked`] se ele foi lido
 /// inválido. Depois de gravar, o estado passa a [`RecordState::Valid`].
 pub fn save(root: &Path, loaded: &mut LoadedRecord) -> Result<(), SaveError> {
-    let _ = (root, loaded);
-    todo!("T019")
+    if !loaded.may_rewrite() {
+        return Err(SaveError::Blocked);
+    }
+    write_atomic(root, &loaded.record.to_json())?;
+    loaded.state = RecordState::Valid;
+    Ok(())
 }
 
 /// "Recriar registro": sobrescreve o arquivo com um registro novo, descartando o anterior.
 pub fn recreate(root: &Path, embedded_typst: &str) -> Result<LoadedRecord, SaveError> {
-    let _ = (root, embedded_typst);
-    todo!("T019")
+    let mut loaded = LoadedRecord {
+        record: ProjectRecord::new(embedded_typst),
+        state: RecordState::Missing,
+    };
+    save(root, &mut loaded)?;
+    Ok(loaded)
+}
+
+/// Grava num temporário em `.prelo/` e renomeia por cima: uma falha no meio deixa o original
+/// intacto.
+fn write_atomic(root: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let path = root.join(RECORD_PATH);
+    let dir = path.parent().expect("RECORD_PATH tem pasta");
+    std::fs::create_dir_all(dir)?;
+    let mut tmp = tempfile::NamedTempFile::new_in(dir)?;
+    tmp.write_all(bytes)?;
+    tmp.as_file().sync_all()?;
+    tmp.persist(&path).map_err(|e| e.error)?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -198,7 +368,10 @@ mod tests {
             RecordState::Invalid(r) => r.clone(),
             other => panic!("esperava Invalid, veio {other:?}"),
         };
-        assert_eq!(loaded.warning().map(InvalidReason::code), Some(WARNING_CODE));
+        assert_eq!(
+            loaded.warning().map(InvalidReason::code),
+            Some(WARNING_CODE)
+        );
         assert_eq!(loaded.record.main_or_default(), DEFAULT_MAIN);
         assert_eq!(loaded.record.compiler_typst(), EMBEDDED);
         assert!(!loaded.may_rewrite());
@@ -221,8 +394,8 @@ mod tests {
 
     #[test]
     fn main_absent_is_valid_and_defaults() {
-        let r = ProjectRecord::parse(br#"{ "schema": 1, "compiler": { "typst": "0.14.0" } }"#)
-            .unwrap();
+        let r =
+            ProjectRecord::parse(br#"{ "schema": 1, "compiler": { "typst": "0.14.0" } }"#).unwrap();
         assert_eq!(r.main(), None);
         assert_eq!(r.main_or_default(), DEFAULT_MAIN);
         assert_eq!(r.compiler_typst(), "0.14.0");
@@ -373,7 +546,10 @@ mod tests {
             })
             .to_string();
             let r = ProjectRecord::parse(text.as_bytes());
-            assert!(matches!(r, Err(InvalidReason::BadMain(_))), "{main:?}: {r:?}");
+            assert!(
+                matches!(r, Err(InvalidReason::BadMain(_))),
+                "{main:?}: {r:?}"
+            );
             assert!(matches!(
                 assert_invalid_with_defaults(text.as_bytes()),
                 InvalidReason::BadMain(_)
@@ -394,8 +570,14 @@ mod tests {
     fn set_main_rejects_escape_and_keeps_previous() {
         let mut r = ProjectRecord::new(EMBEDDED);
         r.set_main("main.typ").unwrap();
-        assert!(matches!(r.set_main("../x.typ"), Err(InvalidReason::BadMain(_))));
-        assert!(matches!(r.set_main("/x.typ"), Err(InvalidReason::BadMain(_))));
+        assert!(matches!(
+            r.set_main("../x.typ"),
+            Err(InvalidReason::BadMain(_))
+        ));
+        assert!(matches!(
+            r.set_main("/x.typ"),
+            Err(InvalidReason::BadMain(_))
+        ));
         assert_eq!(r.main(), Some("main.typ"));
     }
 
@@ -406,7 +588,10 @@ mod tests {
         let mut loaded = load(dir.path(), EMBEDDED);
         assert!(!loaded.may_rewrite());
         loaded.record.set_main("outro.typ").unwrap();
-        assert!(matches!(save(dir.path(), &mut loaded), Err(SaveError::Blocked)));
+        assert!(matches!(
+            save(dir.path(), &mut loaded),
+            Err(SaveError::Blocked)
+        ));
         assert_eq!(fs::read(dir.path().join(RECORD_PATH)).unwrap(), original);
         assert!(matches!(loaded.state, RecordState::Invalid(_)));
     }
@@ -426,8 +611,11 @@ mod tests {
     fn symlinked_record_is_not_followed() {
         let outside = TempDir::new().unwrap();
         let target = outside.path().join("fora.json");
-        fs::write(&target, br#"{"schema":1,"compiler":{"typst":"0.1.0"},"main":"x.typ"}"#)
-            .unwrap();
+        fs::write(
+            &target,
+            br#"{"schema":1,"compiler":{"typst":"0.1.0"},"main":"x.typ"}"#,
+        )
+        .unwrap();
         let dir = TempDir::new().unwrap();
         fs::create_dir(dir.path().join(".prelo")).unwrap();
         std::os::unix::fs::symlink(&target, dir.path().join(RECORD_PATH)).unwrap();
