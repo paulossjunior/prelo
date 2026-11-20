@@ -26,6 +26,9 @@ Status possíveis: **proposta**, **aceita**, **substituída por D-xx**.
 | [D-12](#d-12-transporte-de-arquivos-binários-entre-coautores) | Transporte de arquivos binários entre coautores | Aceita |
 | [D-13](#d-13-arquivos-fora-do-projeto) | Arquivos fora do projeto | Aceita |
 | [D-14](#d-14-edição-concorrente-de-bibliografia) | Edição concorrente de bibliografia | Aceita |
+| [D-15](#d-15-fontes-embutidas--pasta-do-projeto-licença-ofl-11-aceita-só-para-arquivos-de-fonte) | Fontes: embutidas + pasta do projeto; licença OFL-1.1 aceita só para arquivos de fonte | Aceita |
+| [D-16](#d-16-cc-by-40-e-w3c-só-como-exceção-da-crate-typst-assets) | CC-BY-4.0 e W3C só como exceção da crate `typst-assets` | Aceita |
+| [D-17](#d-17-análise-do-editor-via-typst-ide-oficial-em-vez-de-tinymist-query) | Análise do editor via `typst-ide` oficial em vez de `tinymist-query` | Aceita |
 
 ---
 
@@ -196,3 +199,61 @@ Status possíveis: **proposta**, **aceita**, **substituída por D-xx**.
   - (−) Duas pessoas editando a mesma entrada ao mesmo tempo podem gerar BibLaTeX inválido; o erro aparece como diagnóstico (RF-09), não é evitado.
   - (−) Reescrita do arquivo inteiro por ferramenta externa chega como diff e cai no mesmo problema em aberto da edição fora do app ([arquitetura.md §7](arquitetura.md#7-riscos-técnicos-e-questões-em-aberto)).
   - (−) TODO(bib-grande): medir o custo de um `.bib` com milhares de entradas como `Y.Text` no carregamento e na sincronização.
+
+## D-15 Fontes: embutidas + pasta do projeto; licença OFL-1.1 aceita só para arquivos de fonte
+
+- **Status:** aceita · 2026-11-19 · decisor: dono do projeto (clarificação Q1 da feature 003)
+- **Contexto:** o `.typ` pede fontes pelo nome; quem decide quais existem é o World do núcleo ([arquitetura.md §6.5](arquitetura.md#65-fontes-e-pacotes)). D-10 quer que todos os coautores compilem igual, o que fontes do sistema impedem. Quase todas as fontes livres têm licença própria, em geral SIL OFL-1.1, que RNF-06 não cita. As fontes que o Typst traz embutidas (crate `typst-assets` 0.15.1) têm licenças variadas: Libertinus Serif sob OFL-1.1; New Computer Modern sob GUST Font License (LPPL) e, no caso de NewCM10-Regular, GPL-3.0 com Font Exception; DejaVu Sans Mono sob a licença Bitstream Vera.
+- **Decisão:**
+  - O World entrega só (a) as fontes embutidas no app e (b) os arquivos de fonte da pasta `fonts/` do projeto, que segue RF-08. Fontes instaladas no sistema nunca são lidas.
+  - Arquivos de fonte embutidos no app podem ter licença OFL-1.1, além das licenças permitidas por RNF-06. A exceção vale só para arquivos de fonte: código e demais dependências sob OFL-1.1 continuam proibidos.
+  - Fontes da pasta `fonts/` do projeto são conteúdo do artigo, como figuras: o app não as distribui nem as audita; a licença de cada uma é responsabilidade de quem a adiciona.
+- **Alternativas consideradas:**
+  - Só fontes embutidas: reprodutível, mas o artigo fica limitado ao que o app traz, e modelos de revista com fonte própria não funcionam.
+  - Embutidas + fontes do sistema: cômodo, mas prévia e PDF mudam de um computador para outro, o que anula parte de D-10.
+  - Aceitar também GUST/LPPL e GPL com Font Exception para fontes embutidas: usaria o conjunto do Typst sem mudança, mas amplia a regra de licenças para termos copyleft que o projeto evita (RNF-06, D-11).
+- **Consequências:**
+  - (+) Todos os coautores, na mesma versão do Prelo, compilam com o mesmo conjunto de fontes.
+  - (+) Modelos com fonte própria funcionam com a fonte copiada para `fonts/`, e o `.typ` compila fora do Prelo com `typst compile --font-path fonts` (Princípio I).
+  - (−) As fontes do `typst-assets` sob GUST, GPL e Bitstream Vera não são embutidas, porque a exceção é só para OFL-1.1. O Prelo embute substitutas sob OFL-1.1, e o padrão do Typst para matemática (New Computer Modern Math) e para código (DejaVu Sans Mono) fica diferente do `typst` de linha de comando; quem precisar delas as coloca em `fonts/`.
+  - (−) A comparação de PDF com o `typst` de linha de comando precisa usar o mesmo conjunto de fontes (`--ignore-system-fonts --ignore-embedded-fonts --font-path`).
+  - (−) A OFL-1.1 exige distribuir o aviso de copyright e o texto da licença junto com as fontes; o app precisa exibi-los.
+  - (−) A auditoria de licenças por crate não enxerga arquivos de fonte embutidos; é preciso uma verificação própria desses arquivos.
+
+## D-16 CC-BY-4.0 e W3C só como exceção da crate `typst-assets`
+
+- **Status:** aceita · 2026-11-19 · decisor: dono do projeto
+- **Contexto:** o compilador embutido (D-10) depende da crate `typst-assets`, declarada Apache-2.0. Mesmo sem a feature `fonts`, ela compila para dentro do binário dados com licenças próprias, listadas no `NOTICE` da crate (versão 0.15.1):
+  - perfis de cor ICC (`files/icc/`), sob CC0-1.0;
+  - fontes Foxit (`files/fonts/Foxit*.pfb`), usadas ao embutir PDFs como imagem, sob BSD-3-Clause;
+  - tabelas de HTML (`files/html/data.rs`) derivadas das especificações do WHATWG, sob CC-BY-4.0 (as partes incorporadas em código-fonte, sob BSD-3-Clause);
+  - tabelas de HTML e MathML (`files/html/data.rs`, `files/mathml/data.rs`) derivadas de especificações do W3C (WAI-ARIA 1.1, Referrer Policy, MathML Core), sob a licença de software e documento do W3C (SPDX `W3C-20150513`).
+
+  CC0-1.0 e BSD-3-Clause já estão na lista de RNF-06; CC-BY-4.0 e W3C não. Sem esses dados não há `typst` e, portanto, não há compilação embutida.
+- **Decisão:** CC-BY-4.0 e W3C-20150513 são aceitas só como exceção nomeada da crate `typst-assets` em `src-tauri/deny.toml` (`[[licenses.exceptions]]`), no mesmo padrão de D-11. Não entram na lista geral de licenças permitidas. A exceção é coberta por teste: só `typst-assets` pode tê-la, e as duas licenças não podem aparecer na lista geral. Os avisos de atribuição exigidos pelas duas licenças (texto do `NOTICE` da crate) acompanham o app na tela "Sobre", junto das licenças das fontes (D-15).
+- **Alternativas consideradas:**
+  - Incluir CC-BY-4.0 e W3C na lista geral: outras dependências poderiam trazer essas licenças sem revisão.
+  - *Fork* do `typst-assets` sem esses dados: quebra recursos do Typst (exportação HTML, MathML, atributos ARIA) e obriga a manter um *fork* a cada versão do Typst.
+  - Recusar a crate: impossível sem abandonar o compilador embutido (D-10).
+- **Consequências:**
+  - (+) O compilador embutido fica, sem relaxar a regra para o resto do projeto.
+  - (+) Nova crate com CC-BY-4.0 ou W3C falha na auditoria até alguém registrar outra decisão.
+  - (−) O `cargo-deny` lê só a licença declarada da crate (Apache-2.0); a exceção documenta e trava o escopo, e a verificação dos arquivos embutidos (D-15) lista os dados e suas licenças.
+  - (−) Cada atualização do `typst-assets` exige reler o `NOTICE` e ajustar a exceção se surgir licença nova.
+  - (−) O app precisa exibir os avisos de atribuição de CC-BY-4.0 e W3C.
+
+## D-17 Análise do editor via `typst-ide` oficial em vez de `tinymist-query`
+
+- **Status:** aceita · 2026-11-19 · decisor: dono do projeto
+- **Contexto:** o plano da feature 003 previa autocompletar, realce e *hover* pelo `tinymist-query` (research R2), sobre o World do `tinymist-world`. Ao adicionar as dependências (tarefa T003), o `tinymist-query` 0.15.x publicado no crates.io não compilou com o `typst` 0.15.1 oficial: a crate `tinymist-analysis`, de que ele depende, usa `typst::foundations::FuncInner` e `Func::inner()`, que só existem no *fork* do Typst mantido pelo Tinymist; o `typlite` 0.15.12 também não compila contra `tinymist-world` 0.15.0. Já `tinymist-world`, `tinymist-vfs` e `tinymist-package` 0.15.0 compilam com o `typst` oficial. D-10 exige o compilador embutido, e SC-005 exige PDF idêntico ao do `typst` de linha de comando na mesma versão, o que um *fork* não garante.
+- **Decisão:** autocompletar, diagnósticos, *hover* e a sincronização código ↔ prévia vêm do `typst-ide` oficial (`=0.15.1`), na mesma versão do compilador. O realce de sintaxe vem do próprio Typst (`typst-syntax`: `LinkedNode` e `highlight`). O Tinymist continua em uso só para `tinymist-world`, `tinymist-vfs` e `tinymist-package` (World, VFS com o `PathAccessModel` do Prelo e a trait de registro de pacotes). `tinymist-query` e `typlite` não entram.
+- **Alternativas consideradas:**
+  - `[patch.crates-io]` com o *fork* git do Typst usado pelo Tinymist: o compilador deixaria de ser o oficial (D-10, SC-005), a fonte git é proibida pela auditoria (`sources.unknown-git = "deny"`) e cada versão exigiria acompanhar o *fork*.
+  - Servidor LSP `tinymist` como processo separado: binário extra por sistema, World diferente do da prévia e política de acesso a arquivos fora do núcleo do Prelo (research R2).
+  - Esperar uma versão do `tinymist-query` compatível com o `typst` oficial: sem data, bloqueia a fase 1.
+- **Consequências:**
+  - (+) Compilador, prévia, diagnósticos, autocompletar e PDF saem do mesmo `typst` oficial, na versão registrada (D-10, SC-005).
+  - (+) Menos dependências: sem `tinymist-analysis`, `tinymist-lint`, `tinymist-project` e `typlite`.
+  - (−) Mais código nosso: a camada `lang_service.rs` converte as respostas do `typst-ide` e gera os *tokens* de realce a partir de `typst-syntax`; recursos avançados do Tinymist (análise de tipos, *lint*, *inlay hints*) ficam de fora até nova decisão.
+  - (−) O Tinymist fica restrito a World, VFS e pacotes; a linha "typst + Tinymist" das Restrições Técnicas da constituição continua valendo para essas partes.
+

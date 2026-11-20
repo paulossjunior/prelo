@@ -11,7 +11,11 @@ yanked = "deny"
 # FR-009 bloqueia vulnerabilidades; crate sem manutenção só é cobrada nas dependências
 # diretas (ex.: proc-macro-error chega transitivamente pelo GTK do Tauri no Linux).
 unmaintained = "workspace"
-ignore = []
+ignore = [
+  # quick-xml 0.38 via typst-library → hayagriva → citationberg; ver security/vuln-exceptions.toml.
+  { id = "RUSTSEC-2026-0194", reason = "sem versão corrigida compatível; mitigado por limite de .csl e de tempo de compilação" },
+  { id = "RUSTSEC-2026-0195", reason = "sem versão corrigida compatível; mitigado por limite de .csl e de tempo de compilação" },
+]
 
 [licenses]
 version = 2
@@ -37,6 +41,9 @@ exceptions = [
   { crate = "dtoa-short", allow = ["MPL-2.0"] },
   # Via dirs/dirs-sys (diretórios do sistema), usado sem modificação.
   { crate = "option-ext", allow = ["MPL-2.0"] },
+  # D-16: dados internos do typst-assets (tabelas HTML/MathML do WHATWG e do W3C, ver NOTICE
+  # da crate) entram no binário do compilador embutido (D-10). Só esta crate; nunca na lista geral.
+  { crate = "typst-assets", allow = ["CC-BY-4.0", "W3C-20150513"] },
 ]
 
 [licenses.private]
