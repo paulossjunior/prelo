@@ -104,8 +104,11 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
   "em produção" exige tudo abaixo:
   - a versão que contém a feature foi publicada por tag `vX.Y.Z` na `main`, pelo pipeline de
     release;
-  - os instaladores dessa versão foram baixados do GitHub Releases e o quickstart da feature foi
-    validado na versão publicada em macOS, Windows e Linux, com a evidência registrada no épico;
+  - o instalador dessa versão para macOS foi baixado do GitHub Releases e o quickstart da
+    feature foi validado na versão publicada no macOS, com a evidência registrada no épico
+    (decisão do dono, 2026-11-21: foco no macOS). Windows e Linux continuam suportados
+    (RNF-01) e cobertos pelo verify do CI nos três sistemas; validação manual neles não bloqueia
+    a próxima feature;
   - todas as issues da feature (épico, histórias e tasks) estão fechadas;
   - o QA deu veredito APROVADO.
   Defeito encontrado em produção MUST ser corrigido numa versão PATCH antes de avançar. Exceção
