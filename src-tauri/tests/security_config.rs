@@ -1,5 +1,6 @@
 //! Testes de segurança da configuração da janela (T008, FR-007).
 //! Contrato: specs/001-app-skeleton/contracts/ipc.md, "Permissões da janela".
+//! Atualizado em 003 (T016): specs/003-editor-local/contracts/ipc.md, "Permissões da janela".
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -118,7 +119,20 @@ const ALLOWED_PERMISSIONS: &[&str] = &["allow-get-app-info", "allow-self-test-re
 
 /// Fontes que a CSP pode citar. Qualquer origem de rede além do IPC do Tauri abriria canal para
 /// fora do app (STRIDE: divulgação) e anularia `default-src 'self'`.
-const ALLOWED_CSP_SOURCES: &[&str] = &["'self'", "'none'", "ipc:", "http://ipc.localhost"];
+/// 003 acrescenta `blob:` e o protocolo próprio `prelo-asset` (imagens da prévia, research R4).
+const ALLOWED_CSP_SOURCES: &[&str] = &[
+    "'self'",
+    "'none'",
+    "ipc:",
+    "http://ipc.localhost",
+    "blob:",
+    "prelo-asset:",
+    "http://prelo-asset.localhost",
+];
+
+/// CSP exata de specs/003-editor-local/contracts/ipc.md, "Permissões da janela".
+const EXPECTED_CSP: &str = "default-src 'self'; connect-src ipc: http://ipc.localhost; \
+img-src 'self' blob: prelo-asset: http://prelo-asset.localhost; style-src 'self'";
 
 fn csp_directives(csp: &str) -> Vec<(String, Vec<String>)> {
     csp.split(';')
@@ -156,6 +170,34 @@ fn csp_nenhuma_diretiva_libera_origem_remota() {
             assert!(
                 ALLOWED_CSP_SOURCES.contains(&source.as_str()),
                 "{name} libera fonte fora da lista {ALLOWED_CSP_SOURCES:?}: {source} ({csp})"
+            );
+        }
+    }
+}
+
+#[test]
+fn csp_e_exatamente_a_do_contrato_003() {
+    let csp = csp(&tauri_conf());
+    assert_eq!(
+        csp_directives(&csp),
+        csp_directives(EXPECTED_CSP),
+        "CSP difere de specs/003-editor-local/contracts/ipc.md"
+    );
+}
+
+#[test]
+fn csp_so_libera_blob_e_prelo_asset_para_imagens() {
+    // blob: e prelo-asset servem só às imagens da prévia; em outra diretiva abririam canal novo.
+    let csp = csp(&tauri_conf());
+    for (name, sources) in csp_directives(&csp) {
+        if name == "img-src" {
+            continue;
+        }
+        for source in sources {
+            assert!(
+                !["blob:", "prelo-asset:", "http://prelo-asset.localhost"]
+                    .contains(&source.as_str()),
+                "{name} libera {source}, reservado a img-src ({csp})"
             );
         }
     }
