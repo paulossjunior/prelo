@@ -63,8 +63,9 @@ A `1.0.0` exige só o núcleo da R1: editar um `.typ`, compilar com o compilador
 [#158](https://github.com/paulossjunior/prelo/issues/158). As histórias
 [#156](https://github.com/paulossjunior/prelo/issues/156),
 [#157](https://github.com/paulossjunior/prelo/issues/157) e
-[#159](https://github.com/paulossjunior/prelo/issues/159) seguem planejadas na R1, mas não
-bloqueiam a `1.0.0` (ver [R1](#r1-editor-local)).
+[#159](https://github.com/paulossjunior/prelo/issues/159) também fazem parte da `1.0.0` (label
+`release:1.0.0`), mas não bloqueiam a publicação; se atrasarem, saem numa `1.0.x` (ver
+[R1](#r1-editor-local)).
 
 Funcionalidades por release:
 
@@ -129,20 +130,20 @@ prévia ao vivo e exportar o PDF, sem `typst` instalado. Sem colaboração
 
 **Funcionalidades**
 
-| História de usuário | Prioridade | RFs | Bloqueia a `1.0.0`? | Issue |
+| História de usuário | Prioridade | RFs | Bloqueia a `1.0.0`? | Issue (todas com label `release:1.0.0`) |
 |---|---|---|---|---|
 | Escrever com prévia ao vivo | P1 | RF-01, RF-02, RF-06, RF-07, RNF-03 | **Sim** | [#154](https://github.com/paulossjunior/prelo/issues/154) |
 | Projeto confinado à própria pasta | P1 | RF-08, D-13 | **Sim** (Princípio VI, segurança) | [#155](https://github.com/paulossjunior/prelo/issues/155) |
-| Bibliografia e figuras do projeto | P2 | RF-05, RF-09, RF-50, RF-51, D-14 | Não | [#156](https://github.com/paulossjunior/prelo/issues/156) |
-| Navegar entre código e prévia | P2 | RF-03, RF-04 (sem contagem de pendências) | Não | [#157](https://github.com/paulossjunior/prelo/issues/157) |
+| Bibliografia e figuras do projeto | P2 | RF-05, RF-09, RF-50, RF-51, D-14 | Não (parte da `1.0.0`; se atrasar, `1.0.x`) | [#156](https://github.com/paulossjunior/prelo/issues/156) |
+| Navegar entre código e prévia | P2 | RF-03, RF-04 (sem contagem de pendências) | Não (parte da `1.0.0`; se atrasar, `1.0.x`) | [#157](https://github.com/paulossjunior/prelo/issues/157) |
 | Exportar o PDF | P2 | RF-42 (só PDF), RF-06 | **Sim** | [#158](https://github.com/paulossjunior/prelo/issues/158) |
-| Criar um projeto novo | P3 | RF-07 | Não | [#159](https://github.com/paulossjunior/prelo/issues/159) |
+| Criar um projeto novo | P3 | RF-07 | Não (parte da `1.0.0`; se atrasar, `1.0.x`) | [#159](https://github.com/paulossjunior/prelo/issues/159) |
 
 **Escopo da `1.0.0`.** Decisão do dono (2026-11-21): "a release 1.0.0 deve permitir editar e
 compilar um arquivo typst e gerar o pdf". Por isso a `1.0.0` exige #154 (editar e compilar com
 o compilador embutido, prévia ao vivo), #158 (gerar o PDF) e #155 (confinamento à pasta do
-projeto, obrigatório pelo Princípio VI). #156, #157 e #159 continuam planejadas na R1, mas não
-bloqueiam a `1.0.0`; se atrasarem, saem numa `1.0.x` ou na `1.1.0`.
+projeto, obrigatório pelo Princípio VI). #156, #157 e #159 também fazem parte da `1.0.0` e
+levam a label `release:1.0.0`, mas não bloqueiam a publicação; se atrasarem, saem numa `1.0.x`.
 
 Decisões do dono que entram nesta release (epic #38, spec 003 "Clarifications"): fontes
 embutidas mais a pasta `fonts/` do projeto, sem fontes do sistema (D-15); pacotes `@preview`
@@ -354,7 +355,7 @@ VI, Fluxo de Desenvolvimento) e critérios do épico [#38](https://github.com/pa
 
 "Plano §4" indica que a fase vem de [especificacao.md §4](especificacao.md#4-plano-de-construção).
 "Proposta" indica alocação feita neste plano, sem fase explícita na fonte. "R1, não bloqueia
-1.0.0" indica RF de história da R1 que pode sair numa `1.0.x` ou na `1.1.0`.
+1.0.0" indica RF de história da R1 que faz parte da `1.0.0` mas, se atrasar, sai numa `1.0.x`.
 
 | ID | Resumo | Release | Base da alocação |
 |---|---|---|---|
@@ -441,7 +442,7 @@ VI, Fluxo de Desenvolvimento) e critérios do épico [#38](https://github.com/pa
 
 | ID | Questão | Afeta | Fonte da dúvida |
 |---|---|---|---|
-| Q-01 | **Resolvida** (dono, 2026-11-21): "a release 1.0.0 deve permitir editar e compilar um arquivo typst e gerar o pdf". A R1 é a `1.0.0`; R2–R5 sobem o MINOR (`1.1.0` a `1.4.0`, propostas). Nota: [especificacao.md §3](especificacao.md#3-escopo) usa "primeira versão" para o escopo do produto completo (colaboração, sugestões, git). Este plano lê essa expressão como o conjunto R1–R5, não como a `1.0.0`; o texto da especificação não foi alterado | R1–R5 | Decisão do dono |
+| Q-01 | **Resolvida** (dono, 2026-11-21): "a release 1.0.0 deve permitir editar e compilar um arquivo typst e gerar o pdf". A R1 é a `1.0.0`; R2–R5 sobem o MINOR (`1.1.0` a `1.4.0`, propostas). [especificacao.md §3](especificacao.md#3-escopo) foi alinhada em 2026-11-21 (com aprovação do dono): o escopo listado lá é o do produto completo, entregue em R1–R5, e a `1.0.0` é a fase 1. Não há mais conflito | R1–R5 | Decisão do dono |
 | Q-02 | D-17 (branch 003) troca `tinymist-query` por `typst-ide`, mas RF-01 diz "diagnósticos fornecidos pelo Tinymist" e a constituição lista "typst + Tinymist" na stack. RF-01 e a constituição devem ser atualizados quando a 003 entrar na `dev`? | R1 | `docs/adrs.md` na branch 003; RF-01; constituição, Restrições Técnicas |
 | Q-03 | RF-42 (parte `.typ`), RF-43 e RF-45 não estão em nenhuma fase do §4. A alocação proposta (RF-43 na R2; RF-42 `.typ` e RF-45 na R4) está certa? | R2, R4 | especificacao.md §4 |
 | Q-04 | "Notificações" está na fase 5, mas não há RF para elas. O que notifica, a quem e por qual canal? | R5 | especificacao.md §4 item 5 |

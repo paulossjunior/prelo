@@ -89,7 +89,8 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
 - Desempenho: prévia MUST atualizar em menos de 100 ms após edição em artigos de até 40
   páginas; Salvar SHOULD sincronizar em cerca de 1 s em rede comum (RF-02, RNF-03).
 - Licenças: dependências MUST ter licença permissiva (Apache-2.0, MIT ou compatível) (RNF-06).
-- Escopo v1: LaTeX, web, mobile e submissão a revistas ficam fora (docs/especificacao.md §3).
+- Escopo das releases R1–R5 (1.x): LaTeX, web, mobile e submissão a revistas ficam fora
+  (docs/especificacao.md §3; versões em docs/release-plan.md).
 
 ## Fluxo de Desenvolvimento
 
@@ -129,4 +130,4 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
   (inbound = outbound), sem CLA nem DCO. `package.json` e `src-tauri/Cargo.toml` MUST declarar
   o mesmo identificador SPDX.
 
-**Version**: 1.3.0 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-19
+**Version**: 1.3.1 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-21
