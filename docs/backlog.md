@@ -5,10 +5,11 @@ Hierarquia **Epic → User Story → Task** do GitHub, gerada pela skill `gestor
 verdade, este arquivo é um retrato. Para o mapa de versões (release → epics), veja
 [release-plan.md](release-plan.md).
 
-- Gerado em: 2026-11-20, a partir de `gh issue list --state all` e da API de sub-issues.
+- Gerado em: 2026-11-21, a partir de `gh issue list --state all` e da API de sub-issues.
 - Como regenerar: peça `/gestor-projeto backlog` ou siga a seção "Backlog em docs/backlog.md"
   de `.claude/skills/gestor-projeto/SKILL.md`.
-- Legenda: `[x]` fechada, `[ ]` aberta · prioridade · agente(s) `agente:*`.
+- Legenda: `[x]` fechada, `[ ]` aberta · prioridade · agente(s) `agente:*` · semana
+  (milestone semanal) nas abertas. A release de cada Epic vem do label `release:*`.
 
 ## Resumo
 
@@ -20,15 +21,15 @@ verdade, este arquivo é um retrato. Para o mapa de versões (release → epics)
 
 ## [#1](https://github.com/paulossjunior/prelo/issues/1) Montar esqueleto do app Tauri para macOS, Windows e Linux _(Epic legado, sem label `epic`)_
 
-Estado: **fechada** · Prioridade: P1 · Agente: speckit, qa · Milestone: F1 Editor local  
+Estado: **fechada** · Prioridade: P1 · Agente: speckit, qa · Release: — (milestone de fase: F1 Editor local)  
 Fonte: [`specs/001-app-skeleton/tasks.md`](https://github.com/paulossjunior/prelo/blob/dev/specs/001-app-skeleton/tasks.md) (branch `dev`)
 
 Progresso: 0 US · 31/33 tasks fechadas
 
 ### Tasks direto no Epic (Setup, Foundational, Polish)
 
-- [ ] [#32](https://github.com/paulossjunior/prelo/issues/32) T031: Validar cenários 8–11 do quickstart.md e registrar a saída de gh api .../branches/main/p… · — · speckit
-- [ ] [#33](https://github.com/paulossjunior/prelo/issues/33) T032: Rodar o quickstart.md inteiro em cada sistema disponível e corrigir divergências · — · speckit
+- [ ] [#32](https://github.com/paulossjunior/prelo/issues/32) T031: Validar cenários 8–11 do quickstart.md e registrar a saída de gh api .../branches/main/p… · — · speckit · sem semana
+- [ ] [#33](https://github.com/paulossjunior/prelo/issues/33) T032: Rodar o quickstart.md inteiro em cada sistema disponível e corrigir divergências · — · speckit · sem semana
 
 <details><summary>31 task(s) fechada(s)</summary>
 
@@ -68,7 +69,7 @@ Progresso: 0 US · 31/33 tasks fechadas
 
 ## [#35](https://github.com/paulossjunior/prelo/issues/35) [Epic] Publicar instaladores no GitHub Releases por tag de versão
 
-Estado: **fechada** · Prioridade: — · Agente: speckit, qa · Milestone: —  
+Estado: **fechada** · Prioridade: — · Agente: speckit, qa · Release: —  
 Fonte: [`specs/002-release-pipeline/tasks.md`](https://github.com/paulossjunior/prelo/blob/dev/specs/002-release-pipeline/tasks.md) (branch `dev`)
 
 Progresso: 5 US · 26/26 tasks fechadas
@@ -153,33 +154,33 @@ Estado: **fechada** · P2 · speckit, qa · 4/4 tasks fechadas
 
 ## [#38](https://github.com/paulossjunior/prelo/issues/38) [Epic] Construir o editor local com prévia e compilador Typst embutido
 
-Estado: **aberta** · Prioridade: P1 · Agente: speckit, qa · Milestone: F1 Editor local  
+Estado: **aberta** · Prioridade: P1 · Agente: speckit, qa · Release: — (milestone de fase: F1 Editor local)  
 Fonte: [`specs/003-editor-local/tasks.md`](https://github.com/paulossjunior/prelo/blob/003-editor-local/specs/003-editor-local/tasks.md) (branch `003-editor-local`)
 
 Progresso: 6 US · 10/83 tasks fechadas
 
 ### Tasks direto no Epic (Setup, Foundational, Polish)
 
-- [ ] [#77](https://github.com/paulossjunior/prelo/issues/77) T011: Testes unitários de caminho em src-tauri/src/fs/scope.rs (módulo tests): / inicial relat… · P1 · speckit, qa
-- [ ] [#78](https://github.com/paulossjunior/prelo/issues/78) T012: Testes de segurança de escape em src-tauri/tests/security_file_access.rs (FR-021, FR-022… · P1 · speckit, qa
-- [ ] [#79](https://github.com/paulossjunior/prelo/issues/79) T013: Testes do registro em src-tauri/src/project/record.rs (módulo tests) cobrindo data-model… · P1 · speckit, qa
-- [ ] [#80](https://github.com/paulossjunior/prelo/issues/80) T014: Testes de agenda em src-tauri/src/compile/scheduler.rs (módulo tests) com World falso: f… · P1 · speckit, qa
-- [ ] [#81](https://github.com/paulossjunior/prelo/issues/81) T015: Testes de segurança do IPC em src-tauri/tests/security_ipc.rs (mock runtime): todo coman… · P1 · speckit, qa
-- [ ] [#82](https://github.com/paulossjunior/prelo/issues/82) T016: Atualizar src-tauri/tests/security_config.rs: CSP exatamente a de contracts/ipc.md; capa… · P1 · speckit, qa
-- [ ] [#83](https://github.com/paulossjunior/prelo/issues/83) T017: Implementar src-tauri/src/fs/scope.rs conforme file-access.md passos 2–7 (canonicalizaçã… · P1 · speckit, qa
-- [ ] [#84](https://github.com/paulossjunior/prelo/issues/84) T018: Implementar src-tauri/src/fs/access_model.rs: PathAccessModel do Prelo usando scope.rs, … · P1 · speckit, qa
-- [ ] [#147](https://github.com/paulossjunior/prelo/issues/147) T019: Implementar src-tauri/src/project/record.rs com data-model.md ProjectRecord.schema, Proj… · P1 · speckit, qa
-- [ ] [#85](https://github.com/paulossjunior/prelo/issues/85) T020: Implementar src-tauri/src/world/mod.rs e src-tauri/src/world/fonts.rs (só fontes embutid… · P1 · speckit, qa
-- [ ] [#86](https://github.com/paulossjunior/prelo/issues/86) T021: Implementar src-tauri/src/compile/scheduler.rs com data-model.md Compilation.compileId e… · P1 · speckit, qa
-- [ ] [#87](https://github.com/paulossjunior/prelo/issues/87) T022: Implementar src-tauri/src/commands.rs e registro em src-tauri/src/lib.rs (validação de p… · P1 · speckit, qa
-- [ ] [#88](https://github.com/paulossjunior/prelo/issues/88) T023: Criar src/ipc.ts com wrappers tipados dos comandos e eventos de contracts/ipc.md e teste… · P1 · speckit, qa
-- [ ] [#140](https://github.com/paulossjunior/prelo/issues/140) T075: Escrever src-tauri/tests/perf_preview.rs (--release): p95 edição→PreviewUpdate em artigo… · P1 · speckit, qa
-- [ ] [#141](https://github.com/paulossjunior/prelo/issues/141) T076: Otimizar o necessário (compilação incremental, diff de páginas, prelo-asset) em src-taur… · P1 · speckit, qa
-- [ ] [#142](https://github.com/paulossjunior/prelo/issues/142) T077: Teste de encerramento forçado em scripts/self-test.mjs: matar o processo 2 s após a últi… · P1 · speckit, qa
-- [ ] [#143](https://github.com/paulossjunior/prelo/issues/143) T078: Teste de threads abandonadas em src-tauri/tests/security_malformed.rs: após 3 compilaçõe… · P1 · speckit, qa
-- [ ] [#144](https://github.com/paulossjunior/prelo/issues/144) T079: Atualizar README.md: fontes embutidas e licenças, pasta fonts/ e typst compile --font-pa… · P1 · speckit, qa
-- [ ] [#145](https://github.com/paulossjunior/prelo/issues/145) T080: Rodar o roteiro de quickstart.md e npm run verify nos três sistemas; corrigir o que falh… · P1 · speckit, qa
-- [ ] [#146](https://github.com/paulossjunior/prelo/issues/146) T081: Validação do QA: cobertura de FR-001 a FR-029 por ao menos um teste que falhou antes (SC… · P1 · speckit, qa
+- [ ] [#77](https://github.com/paulossjunior/prelo/issues/77) T011: Testes unitários de caminho em src-tauri/src/fs/scope.rs (módulo tests): / inicial relat… · P1 · speckit, qa · sem semana
+- [ ] [#78](https://github.com/paulossjunior/prelo/issues/78) T012: Testes de segurança de escape em src-tauri/tests/security_file_access.rs (FR-021, FR-022… · P1 · speckit, qa · sem semana
+- [ ] [#79](https://github.com/paulossjunior/prelo/issues/79) T013: Testes do registro em src-tauri/src/project/record.rs (módulo tests) cobrindo data-model… · P1 · speckit, qa · sem semana
+- [ ] [#80](https://github.com/paulossjunior/prelo/issues/80) T014: Testes de agenda em src-tauri/src/compile/scheduler.rs (módulo tests) com World falso: f… · P1 · speckit, qa · sem semana
+- [ ] [#81](https://github.com/paulossjunior/prelo/issues/81) T015: Testes de segurança do IPC em src-tauri/tests/security_ipc.rs (mock runtime): todo coman… · P1 · speckit, qa · sem semana
+- [ ] [#82](https://github.com/paulossjunior/prelo/issues/82) T016: Atualizar src-tauri/tests/security_config.rs: CSP exatamente a de contracts/ipc.md; capa… · P1 · speckit, qa · sem semana
+- [ ] [#83](https://github.com/paulossjunior/prelo/issues/83) T017: Implementar src-tauri/src/fs/scope.rs conforme file-access.md passos 2–7 (canonicalizaçã… · P1 · speckit, qa · sem semana
+- [ ] [#84](https://github.com/paulossjunior/prelo/issues/84) T018: Implementar src-tauri/src/fs/access_model.rs: PathAccessModel do Prelo usando scope.rs, … · P1 · speckit, qa · sem semana
+- [ ] [#147](https://github.com/paulossjunior/prelo/issues/147) T019: Implementar src-tauri/src/project/record.rs com data-model.md ProjectRecord.schema, Proj… · P1 · speckit, qa · sem semana
+- [ ] [#85](https://github.com/paulossjunior/prelo/issues/85) T020: Implementar src-tauri/src/world/mod.rs e src-tauri/src/world/fonts.rs (só fontes embutid… · P1 · speckit, qa · sem semana
+- [ ] [#86](https://github.com/paulossjunior/prelo/issues/86) T021: Implementar src-tauri/src/compile/scheduler.rs com data-model.md Compilation.compileId e… · P1 · speckit, qa · sem semana
+- [ ] [#87](https://github.com/paulossjunior/prelo/issues/87) T022: Implementar src-tauri/src/commands.rs e registro em src-tauri/src/lib.rs (validação de p… · P1 · speckit, qa · sem semana
+- [ ] [#88](https://github.com/paulossjunior/prelo/issues/88) T023: Criar src/ipc.ts com wrappers tipados dos comandos e eventos de contracts/ipc.md e teste… · P1 · speckit, qa · sem semana
+- [ ] [#140](https://github.com/paulossjunior/prelo/issues/140) T075: Escrever src-tauri/tests/perf_preview.rs (--release): p95 edição→PreviewUpdate em artigo… · P1 · speckit, qa · sem semana
+- [ ] [#141](https://github.com/paulossjunior/prelo/issues/141) T076: Otimizar o necessário (compilação incremental, diff de páginas, prelo-asset) em src-taur… · P1 · speckit, qa · sem semana
+- [ ] [#142](https://github.com/paulossjunior/prelo/issues/142) T077: Teste de encerramento forçado em scripts/self-test.mjs: matar o processo 2 s após a últi… · P1 · speckit, qa · sem semana
+- [ ] [#143](https://github.com/paulossjunior/prelo/issues/143) T078: Teste de threads abandonadas em src-tauri/tests/security_malformed.rs: após 3 compilaçõe… · P1 · speckit, qa · sem semana
+- [ ] [#144](https://github.com/paulossjunior/prelo/issues/144) T079: Atualizar README.md: fontes embutidas e licenças, pasta fonts/ e typst compile --font-pa… · P1 · speckit, qa · sem semana
+- [ ] [#145](https://github.com/paulossjunior/prelo/issues/145) T080: Rodar o roteiro de quickstart.md e npm run verify nos três sistemas; corrigir o que falh… · P1 · speckit, qa · sem semana
+- [ ] [#146](https://github.com/paulossjunior/prelo/issues/146) T081: Validação do QA: cobertura de FR-001 a FR-029 por ao menos um teste que falhou antes (SC… · P1 · speckit, qa · sem semana
 
 <details><summary>10 task(s) fechada(s)</summary>
 
@@ -200,84 +201,84 @@ Progresso: 6 US · 10/83 tasks fechadas
 
 Estado: **aberta** · P1 · speckit, qa · 0/16 tasks fechadas
 
-- [ ] [#89](https://github.com/paulossjunior/prelo/issues/89) T024: Testes de compilação em src-tauri/tests/compile_basic.rs: abrir projeto compila o arquiv… · P1 · speckit, qa
-- [ ] [#90](https://github.com/paulossjunior/prelo/issues/90) T025: Testes de prévia em src-tauri/src/compile/preview.rs (módulo tests): hash por página; Pr… · P1 · speckit, qa
-- [ ] [#91](https://github.com/paulossjunior/prelo/issues/91) T026: Testes de versão em src-tauri/tests/compile_version.rs: compiler_info.embedded igual à v… · P1 · speckit, qa
-- [ ] [#92](https://github.com/paulossjunior/prelo/issues/92) T027: Testes de gravação em src-tauri/src/fs/save.rs (módulo tests) para data-model.md OpenFil… · P1 · speckit, qa
-- [ ] [#93](https://github.com/paulossjunior/prelo/issues/93) T028: Testes de mudança externa em src-tauri/src/fs/watch.rs (módulo tests) para OpenFile.last… · P1 · speckit, qa
-- [ ] [#94](https://github.com/paulossjunior/prelo/issues/94) T029: Testes do serviço de linguagem em src-tauri/tests/lang_service.rs: autocompletar de funç… · P1 · speckit, qa
-- [ ] [#95](https://github.com/paulossjunior/prelo/issues/95) T030: Testes de interface em src/editor/editor.test.ts, src/editor/diagnostics.test.ts, src/pr… · P1 · speckit, qa
-- [ ] [#96](https://github.com/paulossjunior/prelo/issues/96) T031: Teste ponta a ponta em e2e/editor.e2e.ts e no autoteste (src/self-test.ts, src-tauri/src… · P1 · speckit, qa
-- [ ] [#97](https://github.com/paulossjunior/prelo/issues/97) T032: Implementar src-tauri/src/project/mod.rs: open_project_dialog (diálogo nativo pelo núcle… · P1 · speckit, qa
-- [ ] [#98](https://github.com/paulossjunior/prelo/issues/98) T033: Implementar src-tauri/src/fs/save.rs com data-model.md OpenFile.text, OpenFile.version e… · P1 · speckit, qa
-- [ ] [#99](https://github.com/paulossjunior/prelo/issues/99) T034: Implementar src-tauri/src/fs/watch.rs com notify e data-model.md OpenFile.lastSavedHash,… · P1 · speckit, qa
-- [ ] [#100](https://github.com/paulossjunior/prelo/issues/100) T035: Implementar src-tauri/src/compile/preview.rs (SVG por página com typst-svg, hash, subscr… · P1 · speckit, qa
-- [ ] [#101](https://github.com/paulossjunior/prelo/issues/101) T036: Implementar src-tauri/src/lang_service.rs sobre typst-ide (autocomplete, tooltip) e typs… · P1 · speckit, qa
-- [ ] [#102](https://github.com/paulossjunior/prelo/issues/102) T037: Implementar src/editor/editor.ts, src/editor/highlight.ts, src/editor/completion.ts, src… · P1 · speckit, qa
-- [ ] [#103](https://github.com/paulossjunior/prelo/issues/103) T038: Implementar src/preview/preview.ts e src/project/tree.ts até a parte de prévia e árvore … · P1 · speckit, qa
-- [ ] [#104](https://github.com/paulossjunior/prelo/issues/104) T039: Implementar src/about.ts (versão embutida e registrada, aviso de diferença, licenças das… · P1 · speckit, qa
+- [ ] [#89](https://github.com/paulossjunior/prelo/issues/89) T024: Testes de compilação em src-tauri/tests/compile_basic.rs: abrir projeto compila o arquiv… · P1 · speckit, qa · sem semana
+- [ ] [#90](https://github.com/paulossjunior/prelo/issues/90) T025: Testes de prévia em src-tauri/src/compile/preview.rs (módulo tests): hash por página; Pr… · P1 · speckit, qa · sem semana
+- [ ] [#91](https://github.com/paulossjunior/prelo/issues/91) T026: Testes de versão em src-tauri/tests/compile_version.rs: compiler_info.embedded igual à v… · P1 · speckit, qa · sem semana
+- [ ] [#92](https://github.com/paulossjunior/prelo/issues/92) T027: Testes de gravação em src-tauri/src/fs/save.rs (módulo tests) para data-model.md OpenFil… · P1 · speckit, qa · sem semana
+- [ ] [#93](https://github.com/paulossjunior/prelo/issues/93) T028: Testes de mudança externa em src-tauri/src/fs/watch.rs (módulo tests) para OpenFile.last… · P1 · speckit, qa · sem semana
+- [ ] [#94](https://github.com/paulossjunior/prelo/issues/94) T029: Testes do serviço de linguagem em src-tauri/tests/lang_service.rs: autocompletar de funç… · P1 · speckit, qa · sem semana
+- [ ] [#95](https://github.com/paulossjunior/prelo/issues/95) T030: Testes de interface em src/editor/editor.test.ts, src/editor/diagnostics.test.ts, src/pr… · P1 · speckit, qa · sem semana
+- [ ] [#96](https://github.com/paulossjunior/prelo/issues/96) T031: Teste ponta a ponta em e2e/editor.e2e.ts e no autoteste (src/self-test.ts, src-tauri/src… · P1 · speckit, qa · sem semana
+- [ ] [#97](https://github.com/paulossjunior/prelo/issues/97) T032: Implementar src-tauri/src/project/mod.rs: open_project_dialog (diálogo nativo pelo núcle… · P1 · speckit, qa · sem semana
+- [ ] [#98](https://github.com/paulossjunior/prelo/issues/98) T033: Implementar src-tauri/src/fs/save.rs com data-model.md OpenFile.text, OpenFile.version e… · P1 · speckit, qa · sem semana
+- [ ] [#99](https://github.com/paulossjunior/prelo/issues/99) T034: Implementar src-tauri/src/fs/watch.rs com notify e data-model.md OpenFile.lastSavedHash,… · P1 · speckit, qa · sem semana
+- [ ] [#100](https://github.com/paulossjunior/prelo/issues/100) T035: Implementar src-tauri/src/compile/preview.rs (SVG por página com typst-svg, hash, subscr… · P1 · speckit, qa · sem semana
+- [ ] [#101](https://github.com/paulossjunior/prelo/issues/101) T036: Implementar src-tauri/src/lang_service.rs sobre typst-ide (autocomplete, tooltip) e typs… · P1 · speckit, qa · sem semana
+- [ ] [#102](https://github.com/paulossjunior/prelo/issues/102) T037: Implementar src/editor/editor.ts, src/editor/highlight.ts, src/editor/completion.ts, src… · P1 · speckit, qa · sem semana
+- [ ] [#103](https://github.com/paulossjunior/prelo/issues/103) T038: Implementar src/preview/preview.ts e src/project/tree.ts até a parte de prévia e árvore … · P1 · speckit, qa · sem semana
+- [ ] [#104](https://github.com/paulossjunior/prelo/issues/104) T039: Implementar src/about.ts (versão embutida e registrada, aviso de diferença, licenças das… · P1 · speckit, qa · sem semana
 
 ### [#155](https://github.com/paulossjunior/prelo/issues/155) [003/US2] Projeto confinado à própria pasta
 
 Estado: **aberta** · P1 · speckit, qa · 0/12 tasks fechadas
 
-- [ ] [#105](https://github.com/paulossjunior/prelo/issues/105) T040: Testes de entrada malformada em src-tauri/tests/security_malformed.rs (FR-024, FR-030, S… · P1 · speckit, qa
-- [ ] [#106](https://github.com/paulossjunior/prelo/issues/106) T041: Teste de autocompletar de caminhos em src-tauri/tests/security_file_access.rs: com link … · P1 · speckit, qa
-- [ ] [#107](https://github.com/paulossjunior/prelo/issues/107) T042: Testes de plugins em src-tauri/tests/security_plugins.rs para data-model.md PluginApprov… · P1 · speckit, qa
-- [ ] [#108](https://github.com/paulossjunior/prelo/issues/108) T043: Testes de pacotes em src-tauri/tests/security_packages.rs com *fetcher* injetado (sem re… · P1 · speckit, qa
-- [ ] [#109](https://github.com/paulossjunior/prelo/issues/109) T044: Testes de interface em src/project/prompts.test.ts: pedido de confirmação de plugin most… · P1 · speckit, qa
-- [ ] [#110](https://github.com/paulossjunior/prelo/issues/110) T045: Mapear erros do compilador e de leitura para Diagnostic com kind e linha em src-tauri/sr… · P1 · speckit, qa
-- [ ] [#111](https://github.com/paulossjunior/prelo/issues/111) T046: Filtrar sugestões de caminho por scope.rs em src-tauri/src/lang_service.rs até T041 pass… · P1 · speckit, qa
-- [ ] [#112](https://github.com/paulossjunior/prelo/issues/112) T047: Implementar src-tauri/src/world/plugins.rs com data-model.md PluginApproval.projectRoot,… · P1 · speckit, qa
-- [ ] [#113](https://github.com/paulossjunior/prelo/issues/113) T048: Implementar src-tauri/src/world/packages.rs com data-model.md PackageCacheEntry.spec, Pa… · P1 · speckit, qa
-- [ ] [#114](https://github.com/paulossjunior/prelo/issues/114) T049: Implementar o pedido de confirmação de plugin e a ação "Baixar de novo" em src/project/p… · P1 · speckit, qa
-- [ ] [#161](https://github.com/paulossjunior/prelo/issues/161) T082: Testes de segurança em src-tauri/tests/security_malformed.rs para RUSTSEC-2026-0194/0195… · P1 · speckit, qa
-- [ ] [#162](https://github.com/paulossjunior/prelo/issues/162) T083: Implementar o limite de 1 MiB para .csl em src-tauri/src/fs/scope.rs/src-tauri/src/fs/ac… · P1 · speckit, qa
+- [ ] [#105](https://github.com/paulossjunior/prelo/issues/105) T040: Testes de entrada malformada em src-tauri/tests/security_malformed.rs (FR-024, FR-030, S… · P1 · speckit, qa · sem semana
+- [ ] [#106](https://github.com/paulossjunior/prelo/issues/106) T041: Teste de autocompletar de caminhos em src-tauri/tests/security_file_access.rs: com link … · P1 · speckit, qa · sem semana
+- [ ] [#107](https://github.com/paulossjunior/prelo/issues/107) T042: Testes de plugins em src-tauri/tests/security_plugins.rs para data-model.md PluginApprov… · P1 · speckit, qa · sem semana
+- [ ] [#108](https://github.com/paulossjunior/prelo/issues/108) T043: Testes de pacotes em src-tauri/tests/security_packages.rs com *fetcher* injetado (sem re… · P1 · speckit, qa · sem semana
+- [ ] [#109](https://github.com/paulossjunior/prelo/issues/109) T044: Testes de interface em src/project/prompts.test.ts: pedido de confirmação de plugin most… · P1 · speckit, qa · sem semana
+- [ ] [#110](https://github.com/paulossjunior/prelo/issues/110) T045: Mapear erros do compilador e de leitura para Diagnostic com kind e linha em src-tauri/sr… · P1 · speckit, qa · sem semana
+- [ ] [#111](https://github.com/paulossjunior/prelo/issues/111) T046: Filtrar sugestões de caminho por scope.rs em src-tauri/src/lang_service.rs até T041 pass… · P1 · speckit, qa · sem semana
+- [ ] [#112](https://github.com/paulossjunior/prelo/issues/112) T047: Implementar src-tauri/src/world/plugins.rs com data-model.md PluginApproval.projectRoot,… · P1 · speckit, qa · sem semana
+- [ ] [#113](https://github.com/paulossjunior/prelo/issues/113) T048: Implementar src-tauri/src/world/packages.rs com data-model.md PackageCacheEntry.spec, Pa… · P1 · speckit, qa · sem semana
+- [ ] [#114](https://github.com/paulossjunior/prelo/issues/114) T049: Implementar o pedido de confirmação de plugin e a ação "Baixar de novo" em src/project/p… · P1 · speckit, qa · sem semana
+- [ ] [#161](https://github.com/paulossjunior/prelo/issues/161) T082: Testes de segurança em src-tauri/tests/security_malformed.rs para RUSTSEC-2026-0194/0195… · P1 · speckit, qa · sem semana
+- [ ] [#162](https://github.com/paulossjunior/prelo/issues/162) T083: Implementar o limite de 1 MiB para .csl em src-tauri/src/fs/scope.rs/src-tauri/src/fs/ac… · P1 · speckit, qa · sem semana
 
 ### [#156](https://github.com/paulossjunior/prelo/issues/156) [003/US3] Bibliografia e figuras do projeto
 
 Estado: **aberta** · P2 · speckit, qa · 0/11 tasks fechadas
 
-- [ ] [#115](https://github.com/paulossjunior/prelo/issues/115) T050: Testes em src-tauri/tests/compile_bibliography.rs: .bib, .yml, vários arquivos, .csl do … · P1 · speckit, qa
-- [ ] [#116](https://github.com/paulossjunior/prelo/issues/116) T051: Testes em src-tauri/tests/compile_images.rs: PNG, JPEG, GIF (estática), SVG, PDF e WebP … · P1 · speckit, qa
-- [ ] [#117](https://github.com/paulossjunior/prelo/issues/117) T052: Testes em src-tauri/tests/compile_fonts.rs: fonte de fonts/ é usada; fonte só instalada … · P1 · speckit, qa
-- [ ] [#118](https://github.com/paulossjunior/prelo/issues/118) T053: Teste em src-tauri/tests/compile_packages.rs com *fetcher* local: primeira compilação ba… · P1 · speckit, qa
-- [ ] [#119](https://github.com/paulossjunior/prelo/issues/119) T054: Testes de cópia para o projeto em src-tauri/tests/compile_copy_into_project.rs (D-13, FR… · P1 · speckit, qa
-- [ ] [#120](https://github.com/paulossjunior/prelo/issues/120) T055: Teste de protocolo prelo-asset em src-tauri/src/compile/preview.rs (módulo tests): data:… · P1 · speckit, qa
-- [ ] [#121](https://github.com/paulossjunior/prelo/issues/121) T056: Completar src-tauri/src/world/fonts.rs com a leitura de fonts/**/*.{ttf,otf,ttc,otc} pel… · P1 · speckit, qa
-- [ ] [#122](https://github.com/paulossjunior/prelo/issues/122) T057: Garantir cache de bytes e imagens decodificadas por conteúdo em src-tauri/src/fs/access_… · P1 · speckit, qa
-- [ ] [#123](https://github.com/paulossjunior/prelo/issues/123) T058: Implementar o protocolo prelo-asset em src-tauri/src/compile/preview.rs e src-tauri/src/… · P1 · speckit, qa
-- [ ] [#124](https://github.com/paulossjunior/prelo/issues/124) T059: Implementar copy_into_project e a oferta em src-tauri/src/commands.rs e src/project/prom… · P1 · speckit, qa
-- [ ] [#125](https://github.com/paulossjunior/prelo/issues/125) T060: Ligar à compilação os estilos .csl do projeto, a recompilação ao salvar .bib/.yml (src-t… · P1 · speckit, qa
+- [ ] [#115](https://github.com/paulossjunior/prelo/issues/115) T050: Testes em src-tauri/tests/compile_bibliography.rs: .bib, .yml, vários arquivos, .csl do … · P1 · speckit, qa · sem semana
+- [ ] [#116](https://github.com/paulossjunior/prelo/issues/116) T051: Testes em src-tauri/tests/compile_images.rs: PNG, JPEG, GIF (estática), SVG, PDF e WebP … · P1 · speckit, qa · sem semana
+- [ ] [#117](https://github.com/paulossjunior/prelo/issues/117) T052: Testes em src-tauri/tests/compile_fonts.rs: fonte de fonts/ é usada; fonte só instalada … · P1 · speckit, qa · sem semana
+- [ ] [#118](https://github.com/paulossjunior/prelo/issues/118) T053: Teste em src-tauri/tests/compile_packages.rs com *fetcher* local: primeira compilação ba… · P1 · speckit, qa · sem semana
+- [ ] [#119](https://github.com/paulossjunior/prelo/issues/119) T054: Testes de cópia para o projeto em src-tauri/tests/compile_copy_into_project.rs (D-13, FR… · P1 · speckit, qa · sem semana
+- [ ] [#120](https://github.com/paulossjunior/prelo/issues/120) T055: Teste de protocolo prelo-asset em src-tauri/src/compile/preview.rs (módulo tests): data:… · P1 · speckit, qa · sem semana
+- [ ] [#121](https://github.com/paulossjunior/prelo/issues/121) T056: Completar src-tauri/src/world/fonts.rs com a leitura de fonts/**/*.{ttf,otf,ttc,otc} pel… · P1 · speckit, qa · sem semana
+- [ ] [#122](https://github.com/paulossjunior/prelo/issues/122) T057: Garantir cache de bytes e imagens decodificadas por conteúdo em src-tauri/src/fs/access_… · P1 · speckit, qa · sem semana
+- [ ] [#123](https://github.com/paulossjunior/prelo/issues/123) T058: Implementar o protocolo prelo-asset em src-tauri/src/compile/preview.rs e src-tauri/src/… · P1 · speckit, qa · sem semana
+- [ ] [#124](https://github.com/paulossjunior/prelo/issues/124) T059: Implementar copy_into_project e a oferta em src-tauri/src/commands.rs e src/project/prom… · P1 · speckit, qa · sem semana
+- [ ] [#125](https://github.com/paulossjunior/prelo/issues/125) T060: Ligar à compilação os estilos .csl do projeto, a recompilação ao salvar .bib/.yml (src-t… · P1 · speckit, qa · sem semana
 
 ### [#157](https://github.com/paulossjunior/prelo/issues/157) [003/US4] Navegar entre código e prévia
 
 Estado: **aberta** · P2 · speckit, qa · 0/4 tasks fechadas
 
-- [ ] [#126](https://github.com/paulossjunior/prelo/issues/126) T061: Testes em src-tauri/tests/compile_sync.rs: jump_from_click em parágrafo do principal e d… · P1 · speckit, qa
-- [ ] [#127](https://github.com/paulossjunior/prelo/issues/127) T062: Testes de interface em src/preview/sync.test.ts e src/project/outline.test.ts: clique co… · P1 · speckit, qa
-- [ ] [#128](https://github.com/paulossjunior/prelo/issues/128) T063: Implementar src-tauri/src/compile/sync.rs (typst_ide::jump_from_click, jump_from_cursor,… · P1 · speckit, qa
-- [ ] [#129](https://github.com/paulossjunior/prelo/issues/129) T064: Implementar src/preview/sync.ts e src/project/outline.ts até T062 passar · P1 · speckit, qa
+- [ ] [#126](https://github.com/paulossjunior/prelo/issues/126) T061: Testes em src-tauri/tests/compile_sync.rs: jump_from_click em parágrafo do principal e d… · P1 · speckit, qa · sem semana
+- [ ] [#127](https://github.com/paulossjunior/prelo/issues/127) T062: Testes de interface em src/preview/sync.test.ts e src/project/outline.test.ts: clique co… · P1 · speckit, qa · sem semana
+- [ ] [#128](https://github.com/paulossjunior/prelo/issues/128) T063: Implementar src-tauri/src/compile/sync.rs (typst_ide::jump_from_click, jump_from_cursor,… · P1 · speckit, qa · sem semana
+- [ ] [#129](https://github.com/paulossjunior/prelo/issues/129) T064: Implementar src/preview/sync.ts e src/project/outline.ts até T062 passar · P1 · speckit, qa · sem semana
 
 ### [#158](https://github.com/paulossjunior/prelo/issues/158) [003/US5] Exportar o PDF
 
 Estado: **aberta** · P2 · speckit, qa · 0/6 tasks fechadas
 
-- [ ] [#130](https://github.com/paulossjunior/prelo/issues/130) T065: Testes em src-tauri/tests/compile_export.rs: PDF com o mesmo número de páginas e tamanho… · P1 · speckit, qa
-- [ ] [#131](https://github.com/paulossjunior/prelo/issues/131) T066: Teste de equivalência em src-tauri/tests/equivalence.rs (feature equivalence, PRELO_TYPS… · P1 · speckit, qa
-- [ ] [#132](https://github.com/paulossjunior/prelo/issues/132) T067: Implementar src-tauri/src/compile/export.rs (typst-pdf, gravação atômica) e export_pdf_d… · P1 · speckit, qa
-- [ ] [#133](https://github.com/paulossjunior/prelo/issues/133) T068: Escrever teste em src/export.test.ts: ação "Exportar PDF" chama export_pdf_dialog; compi… · P1 · speckit, qa
-- [ ] [#134](https://github.com/paulossjunior/prelo/issues/134) T069: Adicionar a ação "Exportar PDF" com lista de erros em src/main.ts até T068 passar · P1 · speckit, qa
-- [ ] [#135](https://github.com/paulossjunior/prelo/issues/135) T070: Adicionar job de equivalência ao CI em .github/workflows/ci.yml (instala typst 0.15.1 só… · P1 · speckit, qa
+- [ ] [#130](https://github.com/paulossjunior/prelo/issues/130) T065: Testes em src-tauri/tests/compile_export.rs: PDF com o mesmo número de páginas e tamanho… · P1 · speckit, qa · sem semana
+- [ ] [#131](https://github.com/paulossjunior/prelo/issues/131) T066: Teste de equivalência em src-tauri/tests/equivalence.rs (feature equivalence, PRELO_TYPS… · P1 · speckit, qa · sem semana
+- [ ] [#132](https://github.com/paulossjunior/prelo/issues/132) T067: Implementar src-tauri/src/compile/export.rs (typst-pdf, gravação atômica) e export_pdf_d… · P1 · speckit, qa · sem semana
+- [ ] [#133](https://github.com/paulossjunior/prelo/issues/133) T068: Escrever teste em src/export.test.ts: ação "Exportar PDF" chama export_pdf_dialog; compi… · P1 · speckit, qa · sem semana
+- [ ] [#134](https://github.com/paulossjunior/prelo/issues/134) T069: Adicionar a ação "Exportar PDF" com lista de erros em src/main.ts até T068 passar · P1 · speckit, qa · sem semana
+- [ ] [#135](https://github.com/paulossjunior/prelo/issues/135) T070: Adicionar job de equivalência ao CI em .github/workflows/ci.yml (instala typst 0.15.1 só… · P1 · speckit, qa · sem semana
 
 ### [#159](https://github.com/paulossjunior/prelo/issues/159) [003/US6] Criar um projeto novo
 
 Estado: **aberta** · P3 · speckit, qa · 0/4 tasks fechadas
 
-- [ ] [#136](https://github.com/paulossjunior/prelo/issues/136) T071: Testes em src-tauri/tests/project_create.rs: pasta vazia → main.typ mínimo e .prelo/proj… · P1 · speckit, qa
-- [ ] [#137](https://github.com/paulossjunior/prelo/issues/137) T072: Escrever teste em src/project/tree.test.ts: ação "Novo projeto" chama create_project_dia… · P1 · speckit, qa
-- [ ] [#138](https://github.com/paulossjunior/prelo/issues/138) T073: Implementar create_project_dialog em src-tauri/src/project/mod.rs gravando data-model.md… · P1 · speckit, qa
-- [ ] [#139](https://github.com/paulossjunior/prelo/issues/139) T074: Adicionar a ação "Novo projeto" em src/main.ts até T072 passar · P1 · speckit, qa
+- [ ] [#136](https://github.com/paulossjunior/prelo/issues/136) T071: Testes em src-tauri/tests/project_create.rs: pasta vazia → main.typ mínimo e .prelo/proj… · P1 · speckit, qa · sem semana
+- [ ] [#137](https://github.com/paulossjunior/prelo/issues/137) T072: Escrever teste em src/project/tree.test.ts: ação "Novo projeto" chama create_project_dia… · P1 · speckit, qa · sem semana
+- [ ] [#138](https://github.com/paulossjunior/prelo/issues/138) T073: Implementar create_project_dialog em src-tauri/src/project/mod.rs gravando data-model.md… · P1 · speckit, qa · sem semana
+- [ ] [#139](https://github.com/paulossjunior/prelo/issues/139) T074: Adicionar a ação "Novo projeto" em src/main.ts até T072 passar · P1 · speckit, qa · sem semana
 
 ## Órfãos / inconsistências
 
@@ -285,6 +286,7 @@ Estado: **aberta** · P3 · speckit, qa · 0/4 tasks fechadas
 - Citam `Parte de #155` no corpo, mas não são sub-issues de #155 (vincular pela API) (2): [#161](https://github.com/paulossjunior/prelo/issues/161), [#162](https://github.com/paulossjunior/prelo/issues/162)
 - Citam `Parte de #35` no corpo, mas não são sub-issues de #35 (vincular pela API) (1): [#151](https://github.com/paulossjunior/prelo/issues/151)
 - Citam `Parte de #1` no corpo, mas não são sub-issues de #1 (vincular pela API) (33): [#2](https://github.com/paulossjunior/prelo/issues/2), [#3](https://github.com/paulossjunior/prelo/issues/3), [#4](https://github.com/paulossjunior/prelo/issues/4), [#5](https://github.com/paulossjunior/prelo/issues/5), [#6](https://github.com/paulossjunior/prelo/issues/6), [#7](https://github.com/paulossjunior/prelo/issues/7), [#8](https://github.com/paulossjunior/prelo/issues/8), [#9](https://github.com/paulossjunior/prelo/issues/9), [#10](https://github.com/paulossjunior/prelo/issues/10), [#11](https://github.com/paulossjunior/prelo/issues/11), [#12](https://github.com/paulossjunior/prelo/issues/12), [#13](https://github.com/paulossjunior/prelo/issues/13), [#14](https://github.com/paulossjunior/prelo/issues/14), [#15](https://github.com/paulossjunior/prelo/issues/15), [#16](https://github.com/paulossjunior/prelo/issues/16), [#17](https://github.com/paulossjunior/prelo/issues/17), [#18](https://github.com/paulossjunior/prelo/issues/18), [#19](https://github.com/paulossjunior/prelo/issues/19), [#20](https://github.com/paulossjunior/prelo/issues/20), [#21](https://github.com/paulossjunior/prelo/issues/21), [#22](https://github.com/paulossjunior/prelo/issues/22), [#23](https://github.com/paulossjunior/prelo/issues/23), [#24](https://github.com/paulossjunior/prelo/issues/24), [#25](https://github.com/paulossjunior/prelo/issues/25), [#26](https://github.com/paulossjunior/prelo/issues/26), [#27](https://github.com/paulossjunior/prelo/issues/27), [#28](https://github.com/paulossjunior/prelo/issues/28), [#29](https://github.com/paulossjunior/prelo/issues/29), [#30](https://github.com/paulossjunior/prelo/issues/30), [#31](https://github.com/paulossjunior/prelo/issues/31), [#32](https://github.com/paulossjunior/prelo/issues/32), [#33](https://github.com/paulossjunior/prelo/issues/33), [#34](https://github.com/paulossjunior/prelo/issues/34)
+- Epics com milestone de fase e sem label `release:*` (migrar, ver Milestones semanais) (2): [#1](https://github.com/paulossjunior/prelo/issues/1), [#38](https://github.com/paulossjunior/prelo/issues/38)
 - Filhas de #1 sem o label `task` (33): [#2](https://github.com/paulossjunior/prelo/issues/2), [#3](https://github.com/paulossjunior/prelo/issues/3), [#4](https://github.com/paulossjunior/prelo/issues/4), [#5](https://github.com/paulossjunior/prelo/issues/5), [#6](https://github.com/paulossjunior/prelo/issues/6), [#7](https://github.com/paulossjunior/prelo/issues/7), [#8](https://github.com/paulossjunior/prelo/issues/8), [#9](https://github.com/paulossjunior/prelo/issues/9), [#10](https://github.com/paulossjunior/prelo/issues/10), [#11](https://github.com/paulossjunior/prelo/issues/11), [#12](https://github.com/paulossjunior/prelo/issues/12), [#13](https://github.com/paulossjunior/prelo/issues/13), [#14](https://github.com/paulossjunior/prelo/issues/14), [#15](https://github.com/paulossjunior/prelo/issues/15), [#16](https://github.com/paulossjunior/prelo/issues/16), [#17](https://github.com/paulossjunior/prelo/issues/17), [#18](https://github.com/paulossjunior/prelo/issues/18), [#19](https://github.com/paulossjunior/prelo/issues/19), [#20](https://github.com/paulossjunior/prelo/issues/20), [#21](https://github.com/paulossjunior/prelo/issues/21), [#22](https://github.com/paulossjunior/prelo/issues/22), [#23](https://github.com/paulossjunior/prelo/issues/23), [#24](https://github.com/paulossjunior/prelo/issues/24), [#25](https://github.com/paulossjunior/prelo/issues/25), [#26](https://github.com/paulossjunior/prelo/issues/26), [#27](https://github.com/paulossjunior/prelo/issues/27), [#28](https://github.com/paulossjunior/prelo/issues/28), [#29](https://github.com/paulossjunior/prelo/issues/29), [#30](https://github.com/paulossjunior/prelo/issues/30), [#31](https://github.com/paulossjunior/prelo/issues/31), [#32](https://github.com/paulossjunior/prelo/issues/32), [#33](https://github.com/paulossjunior/prelo/issues/33), [#34](https://github.com/paulossjunior/prelo/issues/34)
 - Abertas, mas o Epic #1 está fechado (2): [#32](https://github.com/paulossjunior/prelo/issues/32), [#33](https://github.com/paulossjunior/prelo/issues/33)
-- Epics sem milestone de fase (1): [#35](https://github.com/paulossjunior/prelo/issues/35)
+- Epics sem label `release:*` (1): [#35](https://github.com/paulossjunior/prelo/issues/35)

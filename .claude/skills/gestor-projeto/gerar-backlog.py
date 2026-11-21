@@ -97,11 +97,18 @@ def short(t, k=95):
     return t if len(t) <= k else t[: k - 1] + "…"
 
 
+def week(i):
+    """Milestone semanal (\"Semana AAAA-Www ...\") da issue, ou 'sem semana'."""
+    ms = (i.get("milestone") or {}).get("title") or ""
+    return ms if ms.startswith("Semana ") else "sem semana"
+
+
 def tline(n):
     i = issues[n]
     st, pr, ag, ex = meta(i)
     box = "x" if i["state"] == "CLOSED" else " "
-    return f"- [{box}] {ref(n)} {short(i['title'])} · {pr} · {ag}{ex}"
+    wk = f" · {week(i)}" if i["state"] == "OPEN" else ""
+    return f"- [{box}] {ref(n)} {short(i['title'])} · {pr} · {ag}{wk}{ex}"
 
 
 def tid(n):
@@ -157,11 +164,15 @@ for e in roots:
     tot["epic_" + st] += 1
     legacy = "" if level(ei) == "epic" else " _(Epic legado, sem label `epic`)_"
     body += [f"## {ref(e)} {short(ei['title'], 120)}{legacy}", ""]
-    ms = (ei.get("milestone") or {}).get("title") or "—"
-    if ms == "—":
-        grp("Epics sem milestone de fase", e)
+    rel = ", ".join(l.removeprefix("release:") for l in ei["lab"] if l.startswith("release:"))
+    ms = (ei.get("milestone") or {}).get("title") or ""
+    legacy_ms = ms and not ms.startswith("Semana ")
+    if not rel:
+        rel = f"— (milestone de fase: {ms})" if legacy_ms else "—"
+        grp("Epics com milestone de fase e sem label `release:*` (migrar, ver Milestones semanais)"
+            if legacy_ms else "Epics sem label `release:*`", e)
     srcl = f"[`{src[0]}`]({URL}/blob/{src[1]}/{src[0]}) (branch `{src[1]}`)" if src else "—"
-    body += [f"Estado: **{st}** · Prioridade: {pr} · Agente: {ag} · Milestone: {ms}{ex}  ",
+    body += [f"Estado: **{st}** · Prioridade: {pr} · Agente: {ag} · Release: {rel}{ex}  ",
              f"Fonte: {srcl}", ""]
     kids = children.get(e, [])
     us = sorted((k for k in kids if level(issues[k]) == "user-story"),
@@ -245,7 +256,8 @@ verdade, este arquivo é um retrato. Para o mapa de versões (release → epics)
 - Gerado em: {DATE}, a partir de `gh issue list --state all` e da API de sub-issues.
 - Como regenerar: peça `/gestor-projeto backlog` ou siga a seção "Backlog em docs/backlog.md"
   de `.claude/skills/gestor-projeto/SKILL.md`.
-- Legenda: `[x]` fechada, `[ ]` aberta · prioridade · agente(s) `agente:*`.
+- Legenda: `[x]` fechada, `[ ]` aberta · prioridade · agente(s) `agente:*` · semana
+  (milestone semanal) nas abertas. A release de cada Epic vem do label `release:*`.
 
 ## Resumo
 
