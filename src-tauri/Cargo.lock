@@ -3760,6 +3760,7 @@ version = "0.1.0"
 dependencies = [
  "dirs 6.0.0",
  "flate2",
+ "libc",
  "notify",
  "rustls",
  "rustls-native-certs",
@@ -3779,6 +3780,7 @@ dependencies = [
  "typst-pdf",
  "typst-svg",
  "ureq",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

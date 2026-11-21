@@ -12,8 +12,10 @@
 mod support;
 
 use std::path::Path;
+#[cfg(unix)]
 use std::sync::mpsc;
 use std::sync::Arc;
+#[cfg(unix)]
 use std::time::Duration;
 
 use prelo_lib::fs::scope::{Refusal, Scope, MAX_CSL_BYTES, MAX_FILE_BYTES};

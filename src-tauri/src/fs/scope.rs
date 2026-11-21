@@ -7,7 +7,9 @@
 //! regular e que o caminho real continua sob a raiz, conferir o tamanho e só então ler.
 
 use std::fmt;
-use std::path::{Path, PathBuf};
+use std::fs::File;
+use std::io::Read;
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 /// Limite de tamanho por arquivo lido: 256 MB (MiB), research R11.
@@ -32,15 +34,41 @@ pub enum Refusal {
 impl Refusal {
     /// Caminho como foi pedido no `.typ`.
     pub fn requested(&self) -> &str {
-        todo!()
+        match self {
+            Refusal::NotFound { requested }
+            | Refusal::OutsideProject { requested }
+            | Refusal::SpecialFile { requested }
+            | Refusal::TooLarge { requested, .. } => requested,
+        }
     }
 }
 
 impl fmt::Display for Refusal {
-    fn fmt(&self, _f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        todo!()
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Refusal::NotFound { requested } => {
+                write!(f, "arquivo não encontrado: `{requested}`")
+            }
+            Refusal::OutsideProject { requested } => write!(
+                f,
+                "acesso recusado: `{requested}` fica fora da pasta do projeto"
+            ),
+            Refusal::SpecialFile { requested } => {
+                write!(f, "acesso recusado: `{requested}` não é um arquivo comum")
+            }
+            Refusal::TooLarge { requested, limit } if *limit == MAX_CSL_BYTES => {
+                write!(f, "estilo grande demais: `{requested}` (limite 1 MiB)")
+            }
+            Refusal::TooLarge { requested, limit } => write!(
+                f,
+                "arquivo grande demais: `{requested}` (limite {} MB)",
+                limit / (1024 * 1024)
+            ),
+        }
     }
 }
+
+impl std::error::Error for Refusal {}
 
 /// Observador chamado com o caminho canônico logo antes de cada abertura.
 pub type OpenObserver = Arc<dyn Fn(&Path) + Send + Sync>;
@@ -60,8 +88,11 @@ impl fmt::Debug for Scope {
 
 impl Scope {
     /// Canonicaliza a raiz uma vez, ao abrir.
-    pub fn new(_root: impl AsRef<Path>) -> std::io::Result<Self> {
-        todo!()
+    pub fn new(root: impl AsRef<Path>) -> std::io::Result<Self> {
+        Ok(Self {
+            root: std::fs::canonicalize(root)?,
+            observer: None,
+        })
     }
 
     /// Raiz canônica.
@@ -86,8 +117,58 @@ impl Scope {
 
     /// Como [`Scope::resolve`], com o caminho pedido relativo à pasta de `current`, o arquivo
     /// (relativo à raiz) que faz o pedido. `/` inicial em `requested` é a raiz.
-    pub fn resolve_from(&self, _current: &str, _requested: &str) -> Result<PathBuf, Refusal> {
-        todo!()
+    pub fn resolve_from(&self, current: &str, requested: &str) -> Result<PathBuf, Refusal> {
+        let not_found = || Refusal::NotFound {
+            requested: requested.into(),
+        };
+        let outside = || Refusal::OutsideProject {
+            requested: requested.into(),
+        };
+        if requested.is_empty() || requested.contains('\0') || current.contains('\0') {
+            return Err(not_found());
+        }
+
+        // Passo 2: junta, com normalização léxica. `..` além da raiz é recusado aqui, sem
+        // tocar o disco fora do projeto (nem para saber se o alvo existe).
+        let relative = match requested.strip_prefix('/') {
+            Some(from_root) => PathBuf::from(from_root),
+            None => {
+                let current = current.strip_prefix('/').unwrap_or(current);
+                Path::new(current)
+                    .parent()
+                    .unwrap_or(Path::new(""))
+                    .join(requested)
+            }
+        };
+        let mut joined = self.root.clone();
+        let mut depth = 0usize;
+        for component in relative.components() {
+            match component {
+                Component::Normal(name) => {
+                    joined.push(name);
+                    depth += 1;
+                }
+                Component::CurDir => {}
+                Component::ParentDir => {
+                    if depth == 0 {
+                        return Err(outside());
+                    }
+                    joined.pop();
+                    depth -= 1;
+                }
+                // Caminho absoluto do sistema ou prefixo de unidade (Windows).
+                Component::RootDir | Component::Prefix(_) => return Err(outside()),
+            }
+        }
+
+        // Passo 3: resolve links simbólicos (e junções no Windows).
+        let canonical = std::fs::canonicalize(&joined).map_err(|_| not_found())?;
+
+        // Passo 4: prefixo da raiz canônica, por componentes.
+        if !canonical.starts_with(&self.root) {
+            return Err(outside());
+        }
+        Ok(canonical)
     }
 
     /// Passos 2–7 e leitura, para um caminho relativo à raiz.
@@ -96,9 +177,176 @@ impl Scope {
     }
 
     /// Passos 2–7 e leitura, com o caminho pedido relativo à pasta de `current`.
-    pub fn read_from(&self, _current: &str, _requested: &str) -> Result<Vec<u8>, Refusal> {
-        todo!()
+    pub fn read_from(&self, current: &str, requested: &str) -> Result<Vec<u8>, Refusal> {
+        let canonical = self.resolve_from(current, requested)?;
+        let not_found = || Refusal::NotFound {
+            requested: requested.into(),
+        };
+        let outside = || Refusal::OutsideProject {
+            requested: requested.into(),
+        };
+        let special = || Refusal::SpecialFile {
+            requested: requested.into(),
+        };
+
+        // Antes de abrir: pasta, FIFO e dispositivo nem chegam a ser abertos.
+        let meta = std::fs::symlink_metadata(&canonical).map_err(|_| not_found())?;
+        if !meta.file_type().is_file() {
+            return Err(special());
+        }
+
+        // Passo 5: abre sem bloquear e sem seguir link no último componente.
+        if let Some(observer) = &self.observer {
+            observer(&canonical);
+        }
+        let file = open_no_follow(&canonical).map_err(|e| {
+            if is_link_error(&e) {
+                outside()
+            } else {
+                not_found()
+            }
+        })?;
+
+        // Passo 6: no descritor aberto, arquivo regular e caminho real sob a raiz.
+        let meta = file.metadata().map_err(|_| not_found())?;
+        if !meta.file_type().is_file() {
+            return Err(special());
+        }
+        // Sem como confirmar o caminho real do descritor, recusa como fora do projeto.
+        let real = descriptor_path(&file).map_err(|_| outside())?;
+        if !real.starts_with(&self.root) {
+            return Err(outside());
+        }
+
+        // Passo 7: limite de tamanho (1 MiB para `.csl`).
+        let is_csl = |p: &Path| {
+            p.extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("csl"))
+        };
+        let limit = if is_csl(Path::new(requested)) || is_csl(&canonical) || is_csl(&real) {
+            MAX_CSL_BYTES
+        } else {
+            MAX_FILE_BYTES
+        };
+        let too_large = || Refusal::TooLarge {
+            requested: requested.into(),
+            limit,
+        };
+        if meta.len() > limit {
+            return Err(too_large());
+        }
+
+        // Lê no máximo `limit` + 1 bytes: arquivo que cresceu depois da conferência também
+        // é recusado.
+        let mut bytes = Vec::with_capacity(meta.len() as usize);
+        file.take(limit + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| not_found())?;
+        if bytes.len() as u64 > limit {
+            return Err(too_large());
+        }
+        Ok(bytes)
     }
+}
+
+/// Abre para leitura com `O_NONBLOCK` (FIFO não bloqueia) e `O_NOFOLLOW` (último componente
+/// não pode ser link) em Unix; no Windows, abre o ponto de reanálise em si, sem segui-lo.
+fn open_no_follow(path: &Path) -> std::io::Result<File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK | libc::O_NOFOLLOW | libc::O_CLOEXEC);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    options.open(path)
+}
+
+/// `O_NOFOLLOW` sobre link simbólico falha com `ELOOP` (Linux, macOS) ou `EMLINK` (BSD).
+fn is_link_error(error: &std::io::Error) -> bool {
+    #[cfg(unix)]
+    {
+        matches!(error.raw_os_error(), Some(libc::ELOOP) | Some(libc::EMLINK))
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = error;
+        false
+    }
+}
+
+/// Caminho real do arquivo aberto, lido do descritor (research R11).
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
+    use std::os::fd::AsRawFd;
+    std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd()))
+}
+
+#[cfg(any(target_os = "macos", target_os = "ios"))]
+fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
+    use std::ffi::OsStr;
+    use std::os::fd::AsRawFd;
+    use std::os::unix::ffi::OsStrExt;
+
+    let mut buf = vec![0u8; libc::PATH_MAX as usize];
+    // SAFETY: F_GETPATH grava no máximo PATH_MAX bytes, terminados em NUL, em `buf`.
+    let rc = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETPATH, buf.as_mut_ptr()) };
+    if rc == -1 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+    Ok(PathBuf::from(OsStr::from_bytes(&buf[..len])))
+}
+
+#[cfg(windows)]
+fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFinalPathNameByHandleW, FILE_NAME_NORMALIZED, VOLUME_NAME_DOS,
+    };
+
+    let handle = file.as_raw_handle();
+    let mut buf = vec![0u16; 1024];
+    loop {
+        // SAFETY: `handle` é válido enquanto `file` vive; `buf` tem `buf.len()` u16.
+        let len = unsafe {
+            GetFinalPathNameByHandleW(
+                handle,
+                buf.as_mut_ptr(),
+                buf.len() as u32,
+                FILE_NAME_NORMALIZED | VOLUME_NAME_DOS,
+            )
+        } as usize;
+        if len == 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        if len < buf.len() {
+            // Mesmo formato `\\?\C:\...` de `std::fs::canonicalize`.
+            return Ok(PathBuf::from(OsString::from_wide(&buf[..len])));
+        }
+        buf.resize(len + 1, 0);
+    }
+}
+
+/// Sistema sem forma conhecida de ler o caminho do descritor: recusa toda leitura.
+#[cfg(not(any(
+    target_os = "linux",
+    target_os = "android",
+    target_os = "macos",
+    target_os = "ios",
+    windows
+)))]
+fn descriptor_path(_file: &File) -> std::io::Result<PathBuf> {
+    Err(std::io::Error::other(
+        "caminho do descritor indisponível neste sistema",
+    ))
 }
 
 #[cfg(test)]
