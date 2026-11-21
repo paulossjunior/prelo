@@ -89,7 +89,8 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
 - Desempenho: prévia MUST atualizar em menos de 100 ms após edição em artigos de até 40
   páginas; Salvar SHOULD sincronizar em cerca de 1 s em rede comum (RF-02, RNF-03).
 - Licenças: dependências MUST ter licença permissiva (Apache-2.0, MIT ou compatível) (RNF-06).
-- Escopo v1: LaTeX, web, mobile e submissão a revistas ficam fora (docs/especificacao.md §3).
+- Escopo das releases R1–R5 (1.x): LaTeX, web, mobile e submissão a revistas ficam fora
+  (docs/especificacao.md §3; versões em docs/release-plan.md).
 
 ## Fluxo de Desenvolvimento
 
@@ -98,6 +99,20 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
   MUST citar os requisitos que atende.
 - Construção MUST seguir a ordem do plano (docs/especificacao.md §4): editor local → comentários e git →
   tempo real → modo sugestão → papéis e convites. Pular fase exige justificativa no plan.md.
+- Transição entre features: uma feature nova (especificação ou implementação) MUST NOT começar
+  enquanto a anterior não estiver funcionando corretamente em produção. Para este app desktop,
+  "em produção" exige tudo abaixo:
+  - a versão que contém a feature foi publicada por tag `vX.Y.Z` na `main`, pelo pipeline de
+    release;
+  - o instalador dessa versão para macOS foi baixado do GitHub Releases e o quickstart da
+    feature foi validado na versão publicada no macOS, com a evidência registrada no épico
+    (decisão do dono, 2026-11-21: foco no macOS). Windows e Linux continuam suportados
+    (RNF-01) e cobertos pelo verify do CI nos três sistemas; validação manual neles não bloqueia
+    a próxima feature;
+  - todas as issues da feature (épico, histórias e tasks) estão fechadas;
+  - o QA deu veredito APROVADO.
+  Defeito encontrado em produção MUST ser corrigido numa versão PATCH antes de avançar. Exceção
+  só com justificativa escrita no plan.md da feature seguinte e aprovação do dono.
 - Sincronização, merge CRDT, fila offline e geração do texto aceito MUST ter testes
   automatizados de integração, incluindo cenários de dois pares e de reconexão (Princípio VI).
 - Gitflow: `feature/NNN-nome` sai da `dev` e volta a ela por pull request; a `dev` vai para a
@@ -129,4 +144,4 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
   (inbound = outbound), sem CLA nem DCO. `package.json` e `src-tauri/Cargo.toml` MUST declarar
   o mesmo identificador SPDX.
 
-**Version**: 1.3.0 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-19
+**Version**: 1.4.0 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-21
