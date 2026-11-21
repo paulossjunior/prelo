@@ -21,7 +21,7 @@ verdade, este arquivo é um retrato. Para o mapa de versões (release → epics)
 
 ## [#1](https://github.com/paulossjunior/prelo/issues/1) Montar esqueleto do app Tauri para macOS, Windows e Linux _(Epic legado, sem label `epic`)_
 
-Estado: **fechada** · Prioridade: P1 · Agente: speckit, qa · Release: — (milestone de fase: F1 Editor local)  
+Estado: **fechada** · Prioridade: P1 · Agente: speckit, qa · Release: 0.1.0  
 Fonte: [`specs/001-app-skeleton/tasks.md`](https://github.com/paulossjunior/prelo/blob/dev/specs/001-app-skeleton/tasks.md) (branch `dev`)
 
 Progresso: 0 US · 31/33 tasks fechadas
@@ -69,7 +69,7 @@ Progresso: 0 US · 31/33 tasks fechadas
 
 ## [#35](https://github.com/paulossjunior/prelo/issues/35) [Epic] Publicar instaladores no GitHub Releases por tag de versão
 
-Estado: **fechada** · Prioridade: — · Agente: speckit, qa · Release: —  
+Estado: **fechada** · Prioridade: — · Agente: speckit, qa · Release: 0.1.0  
 Fonte: [`specs/002-release-pipeline/tasks.md`](https://github.com/paulossjunior/prelo/blob/dev/specs/002-release-pipeline/tasks.md) (branch `dev`)
 
 Progresso: 5 US · 26/26 tasks fechadas
@@ -154,22 +154,22 @@ Estado: **fechada** · P2 · speckit, qa · 4/4 tasks fechadas
 
 ## [#38](https://github.com/paulossjunior/prelo/issues/38) [Epic] Construir o editor local com prévia e compilador Typst embutido
 
-Estado: **aberta** · Prioridade: P1 · Agente: speckit, qa · Release: — (milestone de fase: F1 Editor local)  
+Estado: **aberta** · Prioridade: P1 · Agente: speckit, qa · Release: 1.0.0  
 Fonte: [`specs/003-editor-local/tasks.md`](https://github.com/paulossjunior/prelo/blob/003-editor-local/specs/003-editor-local/tasks.md) (branch `003-editor-local`)
 
 Progresso: 6 US · 10/83 tasks fechadas
 
 ### Tasks direto no Epic (Setup, Foundational, Polish)
 
-- [ ] [#77](https://github.com/paulossjunior/prelo/issues/77) T011: Testes unitários de caminho em src-tauri/src/fs/scope.rs (módulo tests): / inicial relat… · P1 · speckit, qa · sem semana
-- [ ] [#78](https://github.com/paulossjunior/prelo/issues/78) T012: Testes de segurança de escape em src-tauri/tests/security_file_access.rs (FR-021, FR-022… · P1 · speckit, qa · sem semana
-- [ ] [#79](https://github.com/paulossjunior/prelo/issues/79) T013: Testes do registro em src-tauri/src/project/record.rs (módulo tests) cobrindo data-model… · P1 · speckit, qa · sem semana
-- [ ] [#80](https://github.com/paulossjunior/prelo/issues/80) T014: Testes de agenda em src-tauri/src/compile/scheduler.rs (módulo tests) com World falso: f… · P1 · speckit, qa · sem semana
-- [ ] [#81](https://github.com/paulossjunior/prelo/issues/81) T015: Testes de segurança do IPC em src-tauri/tests/security_ipc.rs (mock runtime): todo coman… · P1 · speckit, qa · sem semana
-- [ ] [#82](https://github.com/paulossjunior/prelo/issues/82) T016: Atualizar src-tauri/tests/security_config.rs: CSP exatamente a de contracts/ipc.md; capa… · P1 · speckit, qa · sem semana
-- [ ] [#83](https://github.com/paulossjunior/prelo/issues/83) T017: Implementar src-tauri/src/fs/scope.rs conforme file-access.md passos 2–7 (canonicalizaçã… · P1 · speckit, qa · sem semana
+- [ ] [#77](https://github.com/paulossjunior/prelo/issues/77) T011: Testes unitários de caminho em src-tauri/src/fs/scope.rs (módulo tests): / inicial relat… · P1 · speckit, qa · Semana 2026-W48 (23–29 nov)
+- [ ] [#78](https://github.com/paulossjunior/prelo/issues/78) T012: Testes de segurança de escape em src-tauri/tests/security_file_access.rs (FR-021, FR-022… · P1 · speckit, qa · Semana 2026-W48 (23–29 nov)
+- [ ] [#79](https://github.com/paulossjunior/prelo/issues/79) T013: Testes do registro em src-tauri/src/project/record.rs (módulo tests) cobrindo data-model… · P1 · speckit, qa · Semana 2026-W48 (23–29 nov)
+- [ ] [#80](https://github.com/paulossjunior/prelo/issues/80) T014: Testes de agenda em src-tauri/src/compile/scheduler.rs (módulo tests) com World falso: f… · P1 · speckit, qa · Semana 2026-W48 (23–29 nov)
+- [ ] [#81](https://github.com/paulossjunior/prelo/issues/81) T015: Testes de segurança do IPC em src-tauri/tests/security_ipc.rs (mock runtime): todo coman… · P1 · speckit, qa · Semana 2026-W48 (23–29 nov)
+- [ ] [#82](https://github.com/paulossjunior/prelo/issues/82) T016: Atualizar src-tauri/tests/security_config.rs: CSP exatamente a de contracts/ipc.md; capa… · P1 · speckit, qa · Semana 2026-W48 (23–29 nov)
+- [ ] [#83](https://github.com/paulossjunior/prelo/issues/83) T017: Implementar src-tauri/src/fs/scope.rs conforme file-access.md passos 2–7 (canonicalizaçã… · P1 · speckit, qa · Semana 2026-W48 (23–29 nov)
 - [ ] [#84](https://github.com/paulossjunior/prelo/issues/84) T018: Implementar src-tauri/src/fs/access_model.rs: PathAccessModel do Prelo usando scope.rs, … · P1 · speckit, qa · sem semana
-- [ ] [#147](https://github.com/paulossjunior/prelo/issues/147) T019: Implementar src-tauri/src/project/record.rs com data-model.md ProjectRecord.schema, Proj… · P1 · speckit, qa · sem semana
+- [ ] [#147](https://github.com/paulossjunior/prelo/issues/147) T019: Implementar src-tauri/src/project/record.rs com data-model.md ProjectRecord.schema, Proj… · P1 · speckit, qa · Semana 2026-W48 (23–29 nov)
 - [ ] [#85](https://github.com/paulossjunior/prelo/issues/85) T020: Implementar src-tauri/src/world/mod.rs e src-tauri/src/world/fonts.rs (só fontes embutid… · P1 · speckit, qa · sem semana
 - [ ] [#86](https://github.com/paulossjunior/prelo/issues/86) T021: Implementar src-tauri/src/compile/scheduler.rs com data-model.md Compilation.compileId e… · P1 · speckit, qa · sem semana
 - [ ] [#87](https://github.com/paulossjunior/prelo/issues/87) T022: Implementar src-tauri/src/commands.rs e registro em src-tauri/src/lib.rs (validação de p… · P1 · speckit, qa · sem semana
@@ -206,7 +206,7 @@ Estado: **aberta** · P1 · speckit, qa · 0/16 tasks fechadas
 - [ ] [#91](https://github.com/paulossjunior/prelo/issues/91) T026: Testes de versão em src-tauri/tests/compile_version.rs: compiler_info.embedded igual à v… · P1 · speckit, qa · sem semana
 - [ ] [#92](https://github.com/paulossjunior/prelo/issues/92) T027: Testes de gravação em src-tauri/src/fs/save.rs (módulo tests) para data-model.md OpenFil… · P1 · speckit, qa · sem semana
 - [ ] [#93](https://github.com/paulossjunior/prelo/issues/93) T028: Testes de mudança externa em src-tauri/src/fs/watch.rs (módulo tests) para OpenFile.last… · P1 · speckit, qa · sem semana
-- [ ] [#94](https://github.com/paulossjunior/prelo/issues/94) T029: Testes do serviço de linguagem em src-tauri/tests/lang_service.rs: autocompletar de funç… · P1 · speckit, qa · sem semana
+- [ ] [#94](https://github.com/paulossjunior/prelo/issues/94) T029: Testes do serviço de linguagem em src-tauri/tests/lang_service.rs (D-17): autocompletar … · P1 · speckit, qa · sem semana
 - [ ] [#95](https://github.com/paulossjunior/prelo/issues/95) T030: Testes de interface em src/editor/editor.test.ts, src/editor/diagnostics.test.ts, src/pr… · P1 · speckit, qa · sem semana
 - [ ] [#96](https://github.com/paulossjunior/prelo/issues/96) T031: Teste ponta a ponta em e2e/editor.e2e.ts e no autoteste (src/self-test.ts, src-tauri/src… · P1 · speckit, qa · sem semana
 - [ ] [#97](https://github.com/paulossjunior/prelo/issues/97) T032: Implementar src-tauri/src/project/mod.rs: open_project_dialog (diálogo nativo pelo núcle… · P1 · speckit, qa · sem semana
@@ -286,7 +286,5 @@ Estado: **aberta** · P3 · speckit, qa · 0/4 tasks fechadas
 - Citam `Parte de #155` no corpo, mas não são sub-issues de #155 (vincular pela API) (2): [#161](https://github.com/paulossjunior/prelo/issues/161), [#162](https://github.com/paulossjunior/prelo/issues/162)
 - Citam `Parte de #35` no corpo, mas não são sub-issues de #35 (vincular pela API) (1): [#151](https://github.com/paulossjunior/prelo/issues/151)
 - Citam `Parte de #1` no corpo, mas não são sub-issues de #1 (vincular pela API) (33): [#2](https://github.com/paulossjunior/prelo/issues/2), [#3](https://github.com/paulossjunior/prelo/issues/3), [#4](https://github.com/paulossjunior/prelo/issues/4), [#5](https://github.com/paulossjunior/prelo/issues/5), [#6](https://github.com/paulossjunior/prelo/issues/6), [#7](https://github.com/paulossjunior/prelo/issues/7), [#8](https://github.com/paulossjunior/prelo/issues/8), [#9](https://github.com/paulossjunior/prelo/issues/9), [#10](https://github.com/paulossjunior/prelo/issues/10), [#11](https://github.com/paulossjunior/prelo/issues/11), [#12](https://github.com/paulossjunior/prelo/issues/12), [#13](https://github.com/paulossjunior/prelo/issues/13), [#14](https://github.com/paulossjunior/prelo/issues/14), [#15](https://github.com/paulossjunior/prelo/issues/15), [#16](https://github.com/paulossjunior/prelo/issues/16), [#17](https://github.com/paulossjunior/prelo/issues/17), [#18](https://github.com/paulossjunior/prelo/issues/18), [#19](https://github.com/paulossjunior/prelo/issues/19), [#20](https://github.com/paulossjunior/prelo/issues/20), [#21](https://github.com/paulossjunior/prelo/issues/21), [#22](https://github.com/paulossjunior/prelo/issues/22), [#23](https://github.com/paulossjunior/prelo/issues/23), [#24](https://github.com/paulossjunior/prelo/issues/24), [#25](https://github.com/paulossjunior/prelo/issues/25), [#26](https://github.com/paulossjunior/prelo/issues/26), [#27](https://github.com/paulossjunior/prelo/issues/27), [#28](https://github.com/paulossjunior/prelo/issues/28), [#29](https://github.com/paulossjunior/prelo/issues/29), [#30](https://github.com/paulossjunior/prelo/issues/30), [#31](https://github.com/paulossjunior/prelo/issues/31), [#32](https://github.com/paulossjunior/prelo/issues/32), [#33](https://github.com/paulossjunior/prelo/issues/33), [#34](https://github.com/paulossjunior/prelo/issues/34)
-- Epics com milestone de fase e sem label `release:*` (migrar, ver Milestones semanais) (2): [#1](https://github.com/paulossjunior/prelo/issues/1), [#38](https://github.com/paulossjunior/prelo/issues/38)
 - Filhas de #1 sem o label `task` (33): [#2](https://github.com/paulossjunior/prelo/issues/2), [#3](https://github.com/paulossjunior/prelo/issues/3), [#4](https://github.com/paulossjunior/prelo/issues/4), [#5](https://github.com/paulossjunior/prelo/issues/5), [#6](https://github.com/paulossjunior/prelo/issues/6), [#7](https://github.com/paulossjunior/prelo/issues/7), [#8](https://github.com/paulossjunior/prelo/issues/8), [#9](https://github.com/paulossjunior/prelo/issues/9), [#10](https://github.com/paulossjunior/prelo/issues/10), [#11](https://github.com/paulossjunior/prelo/issues/11), [#12](https://github.com/paulossjunior/prelo/issues/12), [#13](https://github.com/paulossjunior/prelo/issues/13), [#14](https://github.com/paulossjunior/prelo/issues/14), [#15](https://github.com/paulossjunior/prelo/issues/15), [#16](https://github.com/paulossjunior/prelo/issues/16), [#17](https://github.com/paulossjunior/prelo/issues/17), [#18](https://github.com/paulossjunior/prelo/issues/18), [#19](https://github.com/paulossjunior/prelo/issues/19), [#20](https://github.com/paulossjunior/prelo/issues/20), [#21](https://github.com/paulossjunior/prelo/issues/21), [#22](https://github.com/paulossjunior/prelo/issues/22), [#23](https://github.com/paulossjunior/prelo/issues/23), [#24](https://github.com/paulossjunior/prelo/issues/24), [#25](https://github.com/paulossjunior/prelo/issues/25), [#26](https://github.com/paulossjunior/prelo/issues/26), [#27](https://github.com/paulossjunior/prelo/issues/27), [#28](https://github.com/paulossjunior/prelo/issues/28), [#29](https://github.com/paulossjunior/prelo/issues/29), [#30](https://github.com/paulossjunior/prelo/issues/30), [#31](https://github.com/paulossjunior/prelo/issues/31), [#32](https://github.com/paulossjunior/prelo/issues/32), [#33](https://github.com/paulossjunior/prelo/issues/33), [#34](https://github.com/paulossjunior/prelo/issues/34)
 - Abertas, mas o Epic #1 está fechado (2): [#32](https://github.com/paulossjunior/prelo/issues/32), [#33](https://github.com/paulossjunior/prelo/issues/33)
-- Epics sem label `release:*` (1): [#35](https://github.com/paulossjunior/prelo/issues/35)

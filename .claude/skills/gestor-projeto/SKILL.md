@@ -34,7 +34,7 @@ delegada ao `doc-tecnica`.
 
 | Grupo | Valores | Uso |
 |---|---|---|
-| Release (label) | `release:1.0.0` (R1, fase 1), `release:1.1.0` (R2, fase 2), `release:1.2.0` (R3, fase 3), `release:1.3.0` (R4, fase 4), `release:1.4.0` (R5, fase 5) | A release que a issue serve, conforme `docs/release-plan.md`; uma por issue. Substitui as antigas milestones de fase (`F1 Editor local`...) |
+| Release (label) | `release:0.1.0` (R0, fundação: epics #1 e #35), `release:1.0.0` (R1, fase 1), `release:1.1.0` (R2, fase 2), `release:1.2.0` (R3, fase 3), `release:1.3.0` (R4, fase 4), `release:1.4.0` (R5, fase 5) | A release que a issue serve, conforme `docs/release-plan.md`; uma por issue. Substitui as antigas milestones de fase (`F1 Editor local`...) |
 | Semana (milestone) | `Semana 2026-W48 (23–29 nov)` | A semana (sprint) em que a issue será feita; ver Milestones semanais |
 | Prioridade (label) | `P0` bloqueia tudo, `P1` próxima, `P2` nesta fase, `P3` depois | Uma por issue |
 | Nível (label) | `epic`, `user-story`, `task` | Uma por issue; ver Hierarquia |
@@ -158,8 +158,8 @@ fica no label `release:*` (ver Taxonomia), nunca na milestone.
 
 - Título: `Semana AAAA-Www (d–d mês)`, semana ISO de segunda a domingo, mês abreviado em
   minúsculas. Ex.: `Semana 2026-W48 (23–29 nov)`; quando cruza o mês, `Semana 2026-W49 (30 nov–6 dez)`.
-- `due_on`: o domingo da semana às 12:00 UTC (`<domingo>T12:00:00Z`). O GitHub trata o prazo
-  do milestone como data; meio-dia UTC mostra domingo em qualquer fuso das Américas e da Europa.
+- `due_on`: o domingo da semana às 12:00 UTC (`<domingo>T12:00:00Z`). O GitHub guarda só a
+  data do prazo (grava `<domingo>T00:00:00Z`); o horário enviado é ignorado.
   Ex.: W48 → `2026-11-29T12:00:00Z`. Para calcular a semana: `python3 -c "import datetime as d; t=d.date.today(); m=t-d.timedelta(t.weekday()); print(t.isocalendar()[:2], m, m+d.timedelta(6))"`.
 - Descrição: a meta da semana em uma frase + a release que ela serve. Ex.: `Meta: prévia ao
   vivo compilando com o compilador embutido. Serve R1 / 1.0.0`.
@@ -205,13 +205,16 @@ seguinte. Não crie semanas adiantadas além disso.
 
 1. Crie os labels que faltarem:
    `gh label create "release:1.0.0" --color 0E8A16 --description "R1 Editor local"`
-   (idem `release:1.1.0` R2, `release:1.2.0` R3, `release:1.3.0` R4, `release:1.4.0` R5,
+   (idem `release:0.1.0` R0, `release:1.1.0` R2, `release:1.2.0` R3, `release:1.3.0` R4, `release:1.4.0` R5,
    conforme `docs/release-plan.md`).
-2. Para cada issue com milestone de fase (ex.: `F1 Editor local` → `release:1.0.0`), aplique
-   o label: `gh issue edit N --add-label release:1.0.0`. As abertas ficam sem milestone até o
+2. Para cada issue com milestone de fase, aplique o label da release do Epic dela (ex.: em
+   `F1 Editor local`, features 001/002 → `release:0.1.0`, feature 003 → `release:1.0.0`): `gh issue edit N --add-label release:1.0.0`. As abertas ficam sem milestone até o
    próximo **sprint**; as fechadas podem manter a milestone antiga.
 3. Feche a milestone de fase quando nenhuma issue aberta depender dela; não a apague sem pedido
    explícito.
+
+   Feita em 2026-11-21: labels `release:0.1.0` a `release:1.4.0` criados e `F1 Editor local`
+   fechada.
 
 ## Formato de issue
 
