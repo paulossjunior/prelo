@@ -37,9 +37,11 @@ Nenhuma data de entrega foi definida pelo time. Onde a fonte não traz data, o p
   trabalho prometido sem as releases seguintes.
 - **Nenhuma release viola os princípios I–VI**, mesmo parcial. Exemplo: a R2 não pode gravar
   comentário dentro do `.typ` "por enquanto" (Princípio I).
-- **Versão SemVer.** Enquanto o Prelo está em `0.x`, cada release com funcionalidade nova sobe
-  o MINOR. As versões das releases R1 em diante são **propostas** e dependem de confirmação do
-  dono (ver [Q-01](#7-questões-em-aberto)).
+- **Versão SemVer.** A `0.1.0` (R0) foi a única versão `0.x`. A `1.0.0` é a primeira versão
+  estável e corresponde à R1: editar e compilar um arquivo Typst e gerar o PDF (decisão do dono,
+  2026-11-21, [Q-01](#7-questões-em-aberto)). Depois dela, cada release com funcionalidade nova
+  sobe o MINOR (`1.1.0`, `1.2.0`…); correções sobem o PATCH (`1.0.x`). As versões da R2 em
+  diante são **propostas**.
 - **Publicação.** Toda release sai por tag `vX.Y.Z` na `main`, pelo pipeline da feature 002, e
   só fica pública quando o dono publica o rascunho
   ([README, "Publicar uma versão"](../README.md#publicar-uma-versão)).
@@ -49,18 +51,27 @@ Nenhuma data de entrega foi definida pelo time. Onde a fonte não traz data, o p
 | Release | Fase (§4) | Objetivo em uma linha | Quem usa | Versão | Status |
 |---|---|---|---|---|---|
 | [R0 Fundação](#r0-fundação) | antes da fase 1 | App vazio que abre nos três sistemas, com suíte, auditoria e instaladores publicados por tag | Quem constrói o Prelo | `0.1.0` | **Entregue** (2026-11-19) |
-| [R1 Editor local](#r1-editor-local) | 1 | Escrever um artigo Typst sozinho, com prévia ao vivo e PDF, sem `typst` instalado | Autor individual | `0.2.0` (proposta) | **Em andamento** |
-| [R2 Comentários e histórico](#r2-comentários-e-histórico) | 2 | Comentar e versionar o artigo, colaborando em horários diferentes pelo git | Dono e coautores, assíncrono | `0.3.0` (proposta) | Planejado |
-| [R3 Tempo real sem servidor](#r3-tempo-real-sem-servidor) | 3 | Editar ao mesmo tempo, sem servidor, com fila offline e edição só sobre versão sincronizada | Dono e coautores, simultâneo | `0.4.0` (proposta) | Planejado |
-| [R4 Modo sugestão](#r4-modo-sugestão) | 4 | Sugerir, aceitar e rejeitar mudanças, com prévia marcada e PDF de diferenças | Coautores revisando entre si | `0.5.0` (proposta) | Planejado |
-| [R5 Papéis e convites](#r5-papéis-e-convites) | 5 | Convidar revisor e leitor com aprovação do dono, remover pessoas e mudar papéis | Dono, revisor, leitor | a definir ([Q-01](#7-questões-em-aberto)) | Planejado |
+| [R1 Editor local](#r1-editor-local) | 1 | Escrever um artigo Typst sozinho, com prévia ao vivo e PDF, sem `typst` instalado | Autor individual | `1.0.0` | **Em andamento** |
+| [R2 Comentários e histórico](#r2-comentários-e-histórico) | 2 | Comentar e versionar o artigo, colaborando em horários diferentes pelo git | Dono e coautores, assíncrono | `1.1.0` (proposta) | Planejado |
+| [R3 Tempo real sem servidor](#r3-tempo-real-sem-servidor) | 3 | Editar ao mesmo tempo, sem servidor, com fila offline e edição só sobre versão sincronizada | Dono e coautores, simultâneo | `1.2.0` (proposta) | Planejado |
+| [R4 Modo sugestão](#r4-modo-sugestão) | 4 | Sugerir, aceitar e rejeitar mudanças, com prévia marcada e PDF de diferenças | Coautores revisando entre si | `1.3.0` (proposta) | Planejado |
+| [R5 Papéis e convites](#r5-papéis-e-convites) | 5 | Convidar revisor e leitor com aprovação do dono, remover pessoas e mudar papéis | Dono, revisor, leitor | `1.4.0` (proposta) | Planejado |
+
+A `1.0.0` exige só o núcleo da R1: editar um `.typ`, compilar com o compilador embutido
+(prévia ao vivo) e exportar o PDF, ou seja, [#154](https://github.com/paulossjunior/prelo/issues/154),
+[#155](https://github.com/paulossjunior/prelo/issues/155) e
+[#158](https://github.com/paulossjunior/prelo/issues/158). As histórias
+[#156](https://github.com/paulossjunior/prelo/issues/156),
+[#157](https://github.com/paulossjunior/prelo/issues/157) e
+[#159](https://github.com/paulossjunior/prelo/issues/159) seguem planejadas na R1, mas não
+bloqueiam a `1.0.0` (ver [R1](#r1-editor-local)).
 
 Funcionalidades por release:
 
 | Release | Funcionalidades principais | RFs | Épico |
 |---|---|---|---|
 | R0 | Janela Tauri nos três sistemas; ponte interface ↔ núcleo; `npm run verify`; auditoria de licenças e vulnerabilidades; trava de push; instaladores no GitHub Releases | — (RNF-01, RNF-06; D-01) | [#1](https://github.com/paulossjunior/prelo/issues/1), [#35](https://github.com/paulossjunior/prelo/issues/35) |
-| R1 | Abrir e criar projeto; editor com realce, autocompletar e diagnósticos; prévia ao vivo; compilador embutido; código ↔ prévia; bibliografia e figuras; escopo de arquivos; exportar PDF | RF-01 a RF-09, RF-42 (parcial), RF-50, RF-51 | [#38](https://github.com/paulossjunior/prelo/issues/38) |
+| R1 | **Bloqueiam a `1.0.0`:** editor com realce, autocompletar e diagnósticos; prévia ao vivo; compilador embutido; escopo de arquivos; exportar PDF. **Não bloqueiam:** código ↔ prévia; bibliografia e figuras; criar projeto novo | RF-01 a RF-09, RF-42 (parcial), RF-50, RF-51 | [#38](https://github.com/paulossjunior/prelo/issues/38) |
 | R2 | Comentários com respostas e menções; aba Resolvidos; commit e push pelo app; versões nomeadas; Salvar e fechar sincronizam pelo git | RF-16, RF-17, RF-33, RF-34, RF-36, RF-40, RF-41; parciais: RF-04, RF-32, RF-38 | (épico a criar) |
 | R3 | Documento Yjs; mDNS e iroh; convite por código; identidade por chave; cursores e presença; estados de sincronização; fila offline; arquivos pendentes | RF-20, RF-23, RF-30, RF-31, RF-35, RF-37, RF-52, RF-53; parciais: RF-21, RF-22, RF-32, RF-38 | (épico a criar) |
 | R4 | Modos Editando, Sugerindo e Lendo; sugestões; aceitar e rejeitar, em lote e com desfazer; teste de compilação por sugestão; prévia com marcações; commit proposto; PDF de diferenças | RF-10 a RF-15, RF-18, RF-19, RF-44, RF-54 | (épico a criar) |
@@ -105,7 +116,7 @@ quickstart em cada sistema). Elas não impediram a `v0.1.0`, mas a DoD comum
 | Campo | Valor |
 |---|---|
 | Status | **Em andamento**. Spec, plano e tarefas na branch `003-editor-local`; tarefas T001–T010 fechadas no GitHub, as demais abertas |
-| Versão | `0.2.0` (proposta) |
+| Versão | `1.0.0` (decisão do dono, 2026-11-21) |
 | Milestone | [F1 Editor local](https://github.com/paulossjunior/prelo/milestone/1) |
 | Épico | [#38](https://github.com/paulossjunior/prelo/issues/38) |
 | Spec | `specs/003-editor-local/spec.md` (branch `origin/003-editor-local`, ainda não está na `dev`) |
@@ -118,14 +129,20 @@ prévia ao vivo e exportar o PDF, sem `typst` instalado. Sem colaboração
 
 **Funcionalidades**
 
-| História de usuário | Prioridade | RFs | Issue |
-|---|---|---|---|
-| Escrever com prévia ao vivo | P1 | RF-01, RF-02, RF-06, RF-07, RNF-03 | [#154](https://github.com/paulossjunior/prelo/issues/154) |
-| Projeto confinado à própria pasta | P1 | RF-08, D-13 | [#155](https://github.com/paulossjunior/prelo/issues/155) |
-| Bibliografia e figuras do projeto | P2 | RF-05, RF-09, RF-50, RF-51, D-14 | [#156](https://github.com/paulossjunior/prelo/issues/156) |
-| Navegar entre código e prévia | P2 | RF-03, RF-04 (sem contagem de pendências) | [#157](https://github.com/paulossjunior/prelo/issues/157) |
-| Exportar o PDF | P2 | RF-42 (só PDF), RF-06 | [#158](https://github.com/paulossjunior/prelo/issues/158) |
-| Criar um projeto novo | P3 | RF-07 | [#159](https://github.com/paulossjunior/prelo/issues/159) |
+| História de usuário | Prioridade | RFs | Bloqueia a `1.0.0`? | Issue |
+|---|---|---|---|---|
+| Escrever com prévia ao vivo | P1 | RF-01, RF-02, RF-06, RF-07, RNF-03 | **Sim** | [#154](https://github.com/paulossjunior/prelo/issues/154) |
+| Projeto confinado à própria pasta | P1 | RF-08, D-13 | **Sim** (Princípio VI, segurança) | [#155](https://github.com/paulossjunior/prelo/issues/155) |
+| Bibliografia e figuras do projeto | P2 | RF-05, RF-09, RF-50, RF-51, D-14 | Não | [#156](https://github.com/paulossjunior/prelo/issues/156) |
+| Navegar entre código e prévia | P2 | RF-03, RF-04 (sem contagem de pendências) | Não | [#157](https://github.com/paulossjunior/prelo/issues/157) |
+| Exportar o PDF | P2 | RF-42 (só PDF), RF-06 | **Sim** | [#158](https://github.com/paulossjunior/prelo/issues/158) |
+| Criar um projeto novo | P3 | RF-07 | Não | [#159](https://github.com/paulossjunior/prelo/issues/159) |
+
+**Escopo da `1.0.0`.** Decisão do dono (2026-11-21): "a release 1.0.0 deve permitir editar e
+compilar um arquivo typst e gerar o pdf". Por isso a `1.0.0` exige #154 (editar e compilar com
+o compilador embutido, prévia ao vivo), #158 (gerar o PDF) e #155 (confinamento à pasta do
+projeto, obrigatório pelo Princípio VI). #156, #157 e #159 continuam planejadas na R1, mas não
+bloqueiam a `1.0.0`; se atrasarem, saem numa `1.0.x` ou na `1.1.0`.
 
 Decisões do dono que entram nesta release (epic #38, spec 003 "Clarifications"): fontes
 embutidas mais a pasta `fonts/` do projeto, sem fontes do sistema (D-15); pacotes `@preview`
@@ -139,6 +156,11 @@ arquivos pendentes (RF-52 a RF-54), PDF com comentários e de diferenças, `.typ
 
 **Critérios de saída** (além da [DoD comum](#4-definition-of-done-comum); fonte: epic #38 e
 spec 003 SC-001 a SC-010)
+
+**Critério obrigatório da `1.0.0`:** editar um arquivo `.typ`, compilá-lo com o compilador
+embutido (prévia ao vivo) e exportar o PDF, com #154, #155 e #158 concluídas. Os critérios
+numerados abaixo valem para as histórias que entrarem na `1.0.0`; os de histórias que não
+bloqueiam (critério 6, de #157) passam a valer na versão em que elas saírem.
 
 1. Prévia atualiza em menos de 100 ms em 95% das edições num artigo de fixture de 40 páginas
    (SC-001), também com imagens grandes que a edição não toca (SC-002).
@@ -156,7 +178,7 @@ spec 003 SC-001 a SC-010)
 | Campo | Valor |
 |---|---|
 | Status | Planejado. Sem spec |
-| Versão | `0.3.0` (proposta) |
+| Versão | `1.1.0` (proposta) |
 | Milestone | (milestone a criar; sugestão: "F2 Comentários e histórico") |
 | Épico | (épico a criar) |
 | Depende de | R1 |
@@ -198,7 +220,7 @@ A colaboração é assíncrona: o git é o canal (D-05) e Salvar sincroniza por 
 | Campo | Valor |
 |---|---|
 | Status | Planejado. Sem spec |
-| Versão | `0.4.0` (proposta) |
+| Versão | `1.2.0` (proposta) |
 | Milestone | (milestone a criar; sugestão: "F3 Tempo real sem servidor") |
 | Épico | (épico a criar) |
 | Depende de | R2 (o git continua sendo o canal para quem não está online, D-05) |
@@ -239,7 +261,7 @@ a ponta, e nunca editar sobre versão antiga
 | Campo | Valor |
 |---|---|
 | Status | Planejado. Sem spec |
-| Versão | `0.5.0` (proposta) |
+| Versão | `1.3.0` (proposta) |
 | Milestone | (milestone a criar; sugestão: "F4 Modo sugestão") |
 | Épico | (épico a criar) |
 | Depende de | R3 (sugestões são atributos do CRDT, D-02) |
@@ -280,7 +302,7 @@ pode ser aceita, rejeitada e desfeita
 | Campo | Valor |
 |---|---|
 | Status | Planejado. Sem spec |
-| Versão | a definir ([Q-01](#7-questões-em-aberto)) |
+| Versão | `1.4.0` (proposta) |
 | Milestone | (milestone a criar; sugestão: "F5 Papéis e convites") |
 | Épico | (épico a criar) |
 | Depende de | R3 (convites e identidade) e R4 (o revisor só sugere) |
@@ -331,19 +353,20 @@ VI, Fluxo de Desenvolvimento) e critérios do épico [#38](https://github.com/pa
 ## 5. Rastreabilidade RF/RNF → release
 
 "Plano §4" indica que a fase vem de [especificacao.md §4](especificacao.md#4-plano-de-construção).
-"Proposta" indica alocação feita neste plano, sem fase explícita na fonte.
+"Proposta" indica alocação feita neste plano, sem fase explícita na fonte. "R1, não bloqueia
+1.0.0" indica RF de história da R1 que pode sair numa `1.0.x` ou na `1.1.0`.
 
 | ID | Resumo | Release | Base da alocação |
 |---|---|---|---|
 | RF-01 | Editor com realce, autocompletar e diagnósticos | R1 | Plano §4 item 1; spec 003 |
 | RF-02 | Prévia ao vivo, < 100 ms | R1 | Plano §4 item 1; spec 003 |
-| RF-03 | Código ↔ prévia | R1 | Plano §4 item 1; spec 003 |
-| RF-04 | Árvore e outline | R1; contagem de pendências em R2 e R4 | Spec 003 (sem contagem); proposta |
-| RF-05 | `.bib` e figuras | R1 | Spec 003 |
+| RF-03 | Código ↔ prévia | R1, não bloqueia 1.0.0 | Plano §4 item 1; spec 003 |
+| RF-04 | Árvore e outline | R1, não bloqueia 1.0.0; contagem de pendências em R2 e R4 | Spec 003 (sem contagem); proposta |
+| RF-05 | `.bib` e figuras | R1, não bloqueia 1.0.0 | Spec 003 |
 | RF-06 | Compilador embutido | R1 | Spec 003; D-10 |
-| RF-07 | Versão do compilador em `.prelo/project.json` | R1 | Spec 003 |
+| RF-07 | Versão do compilador em `.prelo/project.json` | R1 (#154 bloqueia 1.0.0; parte de #159 não bloqueia) | Spec 003 |
 | RF-08 | Leitura só dentro da raiz | R1 | Spec 003 |
-| RF-09 | BibLaTeX, Hayagriva, CSL | R1 | Spec 003 |
+| RF-09 | BibLaTeX, Hayagriva, CSL | R1, não bloqueia 1.0.0 | Spec 003 |
 | RF-10 | Modos Editando, Sugerindo, Lendo | R4 | Plano §4 item 4 |
 | RF-11 | Sugestões marcadas | R4 | Plano §4 item 4 |
 | RF-12 | Aceitar e rejeitar | R4 | Plano §4 item 4 |
@@ -374,8 +397,8 @@ VI, Fluxo de Desenvolvimento) e critérios do épico [#38](https://github.com/pa
 | RF-43 | PDF com comentários | R2 | Proposta ([Q-03](#7-questões-em-aberto)) |
 | RF-44 | PDF de diferenças | R4 | Plano §4 item 4 |
 | RF-45 | Preparar submissão | R4 | Proposta ([Q-03](#7-questões-em-aberto)) |
-| RF-50 | Formatos de imagem | R1 | Spec 003 |
-| RF-51 | Cache de imagem | R1 | Spec 003 |
+| RF-50 | Formatos de imagem | R1, não bloqueia 1.0.0 | Spec 003 |
+| RF-51 | Cache de imagem | R1, não bloqueia 1.0.0 | Spec 003 |
 | RF-52 | Arquivo pendente na prévia | R3 | Spec 003 FR-033; D-12 |
 | RF-53 | PDF final bloqueado com pendência | R3 | Spec 003 FR-033; D-12 |
 | RF-54 | Pendência não desativa Aceitar | R4 | Depende de RF-15 |
@@ -394,7 +417,7 @@ VI, Fluxo de Desenvolvimento) e critérios do épico [#38](https://github.com/pa
 
 - A ordem das fases é a da constituição; mudar exige justificativa no `plan.md` da feature.
 - Uma release por fase. Se uma fase for grande demais, ela pode sair em mais de uma release
-  `0.x`, sem mudar a ordem.
+  (MINOR ou PATCH), sem mudar a ordem.
 - O pipeline da feature 002 continua sendo o único caminho de publicação.
 - Instaladores seguem sem assinatura de código até decisão em contrário (spec 002).
 
@@ -418,7 +441,7 @@ VI, Fluxo de Desenvolvimento) e critérios do épico [#38](https://github.com/pa
 
 | ID | Questão | Afeta | Fonte da dúvida |
 |---|---|---|---|
-| Q-01 | Qual versão SemVer cada release recebe? Em particular, a "primeira versão" de [especificacao.md §3](especificacao.md#3-escopo) é a `1.0.0`, e ela corresponde ao fim da R5? | R1–R5 | Nenhuma fonte define versão-alvo |
+| Q-01 | **Resolvida** (dono, 2026-11-21): "a release 1.0.0 deve permitir editar e compilar um arquivo typst e gerar o pdf". A R1 é a `1.0.0`; R2–R5 sobem o MINOR (`1.1.0` a `1.4.0`, propostas). Nota: [especificacao.md §3](especificacao.md#3-escopo) usa "primeira versão" para o escopo do produto completo (colaboração, sugestões, git). Este plano lê essa expressão como o conjunto R1–R5, não como a `1.0.0`; o texto da especificação não foi alterado | R1–R5 | Decisão do dono |
 | Q-02 | D-17 (branch 003) troca `tinymist-query` por `typst-ide`, mas RF-01 diz "diagnósticos fornecidos pelo Tinymist" e a constituição lista "typst + Tinymist" na stack. RF-01 e a constituição devem ser atualizados quando a 003 entrar na `dev`? | R1 | `docs/adrs.md` na branch 003; RF-01; constituição, Restrições Técnicas |
 | Q-03 | RF-42 (parte `.typ`), RF-43 e RF-45 não estão em nenhuma fase do §4. A alocação proposta (RF-43 na R2; RF-42 `.typ` e RF-45 na R4) está certa? | R2, R4 | especificacao.md §4 |
 | Q-04 | "Notificações" está na fase 5, mas não há RF para elas. O que notifica, a quem e por qual canal? | R5 | especificacao.md §4 item 5 |
