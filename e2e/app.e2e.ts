@@ -2,7 +2,7 @@ import { $, browser, expect } from "@wdio/globals";
 
 describe("janela do Prelo", () => {
   it("abre com o título Prelo", async () => {
-    await expect(browser).toHaveTitle("Prelo");
+    await expect(browser).toHaveTitle("Prelo-QUEBRADO-cenario-9");
   });
 
   it("mostra versão e sistema vindos do núcleo", async () => {
