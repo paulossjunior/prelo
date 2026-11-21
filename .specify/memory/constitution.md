@@ -99,6 +99,17 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
   MUST citar os requisitos que atende.
 - Construção MUST seguir a ordem do plano (docs/especificacao.md §4): editor local → comentários e git →
   tempo real → modo sugestão → papéis e convites. Pular fase exige justificativa no plan.md.
+- Transição entre features: uma feature nova (especificação ou implementação) MUST NOT começar
+  enquanto a anterior não estiver funcionando corretamente em produção. Para este app desktop,
+  "em produção" exige tudo abaixo:
+  - a versão que contém a feature foi publicada por tag `vX.Y.Z` na `main`, pelo pipeline de
+    release;
+  - os instaladores dessa versão foram baixados do GitHub Releases e o quickstart da feature foi
+    validado na versão publicada em macOS, Windows e Linux, com a evidência registrada no épico;
+  - todas as issues da feature (épico, histórias e tasks) estão fechadas;
+  - o QA deu veredito APROVADO.
+  Defeito encontrado em produção MUST ser corrigido numa versão PATCH antes de avançar. Exceção
+  só com justificativa escrita no plan.md da feature seguinte e aprovação do dono.
 - Sincronização, merge CRDT, fila offline e geração do texto aceito MUST ter testes
   automatizados de integração, incluindo cenários de dois pares e de reconexão (Princípio VI).
 - Gitflow: `feature/NNN-nome` sai da `dev` e volta a ela por pull request; a `dev` vai para a
@@ -130,4 +141,4 @@ regressão caras; TDD mantém o comportamento especificado verificável desde o 
   (inbound = outbound), sem CLA nem DCO. `package.json` e `src-tauri/Cargo.toml` MUST declarar
   o mesmo identificador SPDX.
 
-**Version**: 1.3.1 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-21
+**Version**: 1.4.0 | **Ratified**: 2026-11-18 | **Last Amended**: 2026-11-21
