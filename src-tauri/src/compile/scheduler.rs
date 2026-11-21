@@ -6,8 +6,10 @@
 //! cancelamento) e a próxima edição compila numa thread nova com um World novo. Resultado de
 //! compilação mais antiga que a última entregue é descartado (FR-015).
 
-use std::sync::mpsc::{self, Receiver};
-use std::time::Duration;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
+use std::thread;
+use std::time::{Duration, Instant};
 
 use crate::diagnostic::{Diagnostic, Kind};
 
@@ -53,14 +55,72 @@ pub struct Compilation<O> {
 
 /// Diagnóstico de compilação abandonada por tempo.
 pub fn timeout_diagnostic(limit: Duration) -> Diagnostic {
-    let _ = limit;
-    Diagnostic::error(Kind::Typst, String::new())
+    let limit = if limit.subsec_millis() == 0 {
+        format!("{} s", limit.as_secs())
+    } else {
+        format!("{} ms", limit.as_millis())
+    };
+    let mut diag = Diagnostic::error(Kind::Typst, format!("compilação excedeu {limit}"));
+    diag.hints
+        .push("a prévia volta a compilar na próxima edição".to_owned());
+    diag
+}
+
+/// Compilação em andamento, vista pelo vigia.
+struct Running {
+    id: u64,
+    started: Instant,
+}
+
+/// Estado compartilhado entre `submit`, a thread de compilação e o vigia.
+struct State<I, O> {
+    /// Fila de tamanho 1.
+    pending: Option<(u64, I)>,
+    running: Option<Running>,
+    /// Último `compileId` atribuído.
+    last_id: u64,
+    /// Último `compileId` entregue; resultado com id igual ou menor é descartado.
+    last_delivered: u64,
+    /// Geração da thread de compilação válida; muda a cada abandono.
+    generation: u64,
+    shutdown: bool,
+    tx: Sender<Compilation<O>>,
+}
+
+impl<I, O> State<I, O> {
+    /// Entrega se `compile_id` for mais novo que o último entregue; senão descarta.
+    fn deliver(&mut self, compilation: Compilation<O>) {
+        if compilation.compile_id > self.last_delivered {
+            self.last_delivered = compilation.compile_id;
+            // Receptor largado: ninguém mais quer resultados; ignorar.
+            let _ = self.tx.send(compilation);
+        }
+    }
+}
+
+type NewCompiler<C> = Box<dyn Fn() -> C + Send + Sync>;
+
+struct Shared<C: Compiler> {
+    state: Mutex<State<C::Input, C::Output>>,
+    /// Acorda a thread de compilação (edição nova, encerramento).
+    work: Condvar,
+    /// Acorda o vigia (compilação começou ou terminou, encerramento).
+    watch: Condvar,
+    new_compiler: NewCompiler<C>,
+    timeout: Duration,
+}
+
+impl<C: Compiler> Shared<C> {
+    fn lock(&self) -> MutexGuard<'_, State<C::Input, C::Output>> {
+        // Nada sob a trava entra em pânico; se entrar, o estado continua coerente.
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
 }
 
 /// Agenda de compilação. Ao ser largada, as threads ociosas terminam; uma thread presa numa
 /// compilação termina quando a compilação terminar, e o resultado é descartado.
 pub struct Scheduler<C: Compiler> {
-    _marker: std::marker::PhantomData<C>,
+    shared: Arc<Shared<C>>,
 }
 
 impl<C: Compiler> Scheduler<C> {
@@ -81,22 +141,156 @@ impl<C: Compiler> Scheduler<C> {
     where
         F: Fn() -> C + Send + Sync + 'static,
     {
-        let _ = (new_compiler, timeout);
-        let (_tx, rx) = mpsc::channel();
-        (
-            Self {
-                _marker: std::marker::PhantomData,
-            },
-            rx,
-        )
+        let (tx, rx) = mpsc::channel();
+        let shared = Arc::new(Shared {
+            state: Mutex::new(State {
+                pending: None,
+                running: None,
+                last_id: 0,
+                last_delivered: 0,
+                generation: 0,
+                shutdown: false,
+                tx,
+            }),
+            work: Condvar::new(),
+            watch: Condvar::new(),
+            new_compiler: Box::new(new_compiler),
+            timeout,
+        });
+        spawn_worker(&shared, 0);
+        let watchdog = Arc::clone(&shared);
+        thread::Builder::new()
+            .name("prelo-compile-watchdog".to_owned())
+            .spawn(move || watch(&watchdog))
+            .expect("falha ao criar a thread do vigia de compilação");
+        (Self { shared }, rx)
     }
 
     /// Põe uma edição na fila, substituindo a pendente, e devolve o `compileId` dela. Não
     /// bloqueia, mesmo com uma compilação em andamento ou presa.
     pub fn submit(&self, input: C::Input) -> u64 {
-        let _ = input;
-        0
+        let mut state = self.shared.lock();
+        state.last_id += 1;
+        let id = state.last_id;
+        state.pending = Some((id, input));
+        drop(state);
+        self.shared.work.notify_all();
+        id
     }
+}
+
+impl<C: Compiler> Drop for Scheduler<C> {
+    fn drop(&mut self) {
+        self.shared.lock().shutdown = true;
+        self.shared.work.notify_all();
+        self.shared.watch.notify_all();
+    }
+}
+
+/// Cria a thread de compilação da geração `generation`, com um World novo.
+fn spawn_worker<C: Compiler>(shared: &Arc<Shared<C>>, generation: u64) {
+    let shared = Arc::clone(shared);
+    thread::Builder::new()
+        .name(format!("prelo-compile-{generation}"))
+        .spawn(move || {
+            let compiler = (shared.new_compiler)();
+            work(&shared, compiler, generation);
+        })
+        .expect("falha ao criar a thread de compilação");
+}
+
+/// Laço da thread de compilação: pega a edição pendente, compila sem a trava e entrega. Sai no
+/// encerramento ou quando foi abandonada (geração velha).
+fn work<C: Compiler>(shared: &Shared<C>, mut compiler: C, generation: u64) {
+    loop {
+        let (id, input) = {
+            let mut state = shared.lock();
+            loop {
+                if state.shutdown || state.generation != generation {
+                    return;
+                }
+                if let Some(job) = state.pending.take() {
+                    state.running = Some(Running {
+                        id: job.0,
+                        started: Instant::now(),
+                    });
+                    break job;
+                }
+                state = shared
+                    .work
+                    .wait(state)
+                    .unwrap_or_else(PoisonError::into_inner);
+            }
+        };
+        shared.watch.notify_all();
+
+        let started = Instant::now();
+        let outcome = compiler.compile(input);
+        let duration_ms = millis(started.elapsed());
+
+        let mut state = shared.lock();
+        if state.generation != generation {
+            // Abandonada pelo vigia e já entregue como `Abandonada`: descarta e termina.
+            return;
+        }
+        state.running = None;
+        let status = if outcome.output.is_some() {
+            Status::Ok
+        } else {
+            Status::ComErros
+        };
+        state.deliver(Compilation {
+            compile_id: id,
+            status,
+            output: outcome.output,
+            diagnostics: outcome.diagnostics,
+            duration_ms,
+        });
+        drop(state);
+        shared.watch.notify_all();
+    }
+}
+
+/// Vigia: abandona a compilação que passar do limite e põe uma thread nova no lugar.
+fn watch<C: Compiler>(shared: &Arc<Shared<C>>) {
+    let mut state = shared.lock();
+    loop {
+        if state.shutdown {
+            return;
+        }
+        let Some(running) = &state.running else {
+            state = shared
+                .watch
+                .wait(state)
+                .unwrap_or_else(PoisonError::into_inner);
+            continue;
+        };
+        let elapsed = running.started.elapsed();
+        if elapsed < shared.timeout {
+            state = shared
+                .watch
+                .wait_timeout(state, shared.timeout - elapsed)
+                .unwrap_or_else(PoisonError::into_inner)
+                .0;
+            continue;
+        }
+        let id = running.id;
+        state.running = None;
+        state.generation += 1;
+        let generation = state.generation;
+        state.deliver(Compilation {
+            compile_id: id,
+            status: Status::Abandonada,
+            output: None,
+            diagnostics: vec![timeout_diagnostic(shared.timeout)],
+            duration_ms: millis(elapsed),
+        });
+        spawn_worker(shared, generation);
+    }
+}
+
+fn millis(d: Duration) -> u64 {
+    u64::try_from(d.as_millis()).unwrap_or(u64::MAX)
 }
 
 #[cfg(test)]
@@ -104,9 +298,7 @@ mod tests {
     use super::*;
     use crate::diagnostic::Severity;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Condvar, Mutex};
-    use std::thread::{self, ThreadId};
-    use std::time::Instant;
+    use std::thread::ThreadId;
 
     /// Folga para esperar um evento que deve acontecer.
     const WAIT: Duration = Duration::from_secs(5);
@@ -313,6 +505,8 @@ mod tests {
         assert_eq!(c.status, Status::Ok);
         assert_eq!((c.compile_id, c.output.unwrap().tag), (latest, "c"));
         h.assert_quiet();
+        // Só "a" e "c" começaram; "b" nunca chegou ao compilador.
+        h.wait_started("c");
         assert!(
             h.started.try_recv().is_err(),
             "a edição substituída não pode compilar"
