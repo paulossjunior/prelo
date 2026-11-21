@@ -17,21 +17,19 @@ verdade, este arquivo é um retrato. Para o mapa de versões (release → epics)
 |---|---|
 | Epics | 3 (1 abertas, 2 fechadas) |
 | User Stories | 11 (6 abertas, 5 fechadas) |
-| Tasks | 142 (75 abertas, 67 fechadas) |
+| Tasks | 142 (73 abertas, 69 fechadas) |
 
 ## [#1](https://github.com/paulossjunior/prelo/issues/1) Montar esqueleto do app Tauri para macOS, Windows e Linux _(Epic legado, sem label `epic`)_
 
 Estado: **fechada** · Prioridade: P1 · Agente: speckit, qa · Release: 0.1.0  
 Fonte: [`specs/001-app-skeleton/tasks.md`](https://github.com/paulossjunior/prelo/blob/dev/specs/001-app-skeleton/tasks.md) (branch `dev`)
 
-Progresso: 0 US · 31/33 tasks fechadas
+Progresso: 0 US · 33/33 tasks fechadas
 
 ### Tasks direto no Epic (Setup, Foundational, Polish)
 
-- [ ] [#32](https://github.com/paulossjunior/prelo/issues/32) T031: Validar cenários 8–11 do quickstart.md e registrar a saída de gh api .../branches/main/p… · — · speckit · sem semana
-- [ ] [#33](https://github.com/paulossjunior/prelo/issues/33) T032: Rodar o quickstart.md inteiro em cada sistema disponível e corrigir divergências · — · speckit · sem semana
 
-<details><summary>31 task(s) fechada(s)</summary>
+<details><summary>33 task(s) fechada(s)</summary>
 
 - [x] [#2](https://github.com/paulossjunior/prelo/issues/2) T001: Criar configuração raiz: package.json (nome prelo, versão 0.1.0, engines.node >=24, scri… · — · speckit
 - [x] [#3](https://github.com/paulossjunior/prelo/issues/3) T002: Criar o núcleo Tauri 2 mínimo: src-tauri/Cargo.toml (tauri 2.12, tauri-build, feature op… · — · speckit
@@ -63,6 +61,8 @@ Progresso: 0 US · 31/33 tasks fechadas
 - [x] [#29](https://github.com/paulossjunior/prelo/issues/29) T028: Criar .githooks/pre-push (POSIX sh, executável, roda npm run verify e repassa o código) … · — · speckit
 - [x] [#30](https://github.com/paulossjunior/prelo/issues/30) T029: Criar .github/workflows/ci.yml: gatilhos pull_request e push; job verify com matriz ubun… · — · speckit
 - [x] [#31](https://github.com/paulossjunior/prelo/issues/31) T030: Abrir PR da branch 001-app-skeleton, esperar o CI verde nos três sistemas e então aplica… · — · speckit, humano
+- [x] [#32](https://github.com/paulossjunior/prelo/issues/32) T031: Validar cenários 8–11 do quickstart.md e registrar a saída de gh api .../branches/main/p… · — · speckit
+- [x] [#33](https://github.com/paulossjunior/prelo/issues/33) T032: Rodar o quickstart.md inteiro em cada sistema disponível e corrigir divergências · — · speckit
 - [x] [#34](https://github.com/paulossjunior/prelo/issues/34) T033: Validação final pelo agente qa (modo validar): suíte completa, cobertura FR-001–FR-014, … · — · qa
 
 </details>
@@ -287,4 +287,4 @@ Estado: **aberta** · P3 · speckit, qa · 0/4 tasks fechadas
 - Citam `Parte de #35` no corpo, mas não são sub-issues de #35 (vincular pela API) (1): [#151](https://github.com/paulossjunior/prelo/issues/151)
 - Citam `Parte de #1` no corpo, mas não são sub-issues de #1 (vincular pela API) (33): [#2](https://github.com/paulossjunior/prelo/issues/2), [#3](https://github.com/paulossjunior/prelo/issues/3), [#4](https://github.com/paulossjunior/prelo/issues/4), [#5](https://github.com/paulossjunior/prelo/issues/5), [#6](https://github.com/paulossjunior/prelo/issues/6), [#7](https://github.com/paulossjunior/prelo/issues/7), [#8](https://github.com/paulossjunior/prelo/issues/8), [#9](https://github.com/paulossjunior/prelo/issues/9), [#10](https://github.com/paulossjunior/prelo/issues/10), [#11](https://github.com/paulossjunior/prelo/issues/11), [#12](https://github.com/paulossjunior/prelo/issues/12), [#13](https://github.com/paulossjunior/prelo/issues/13), [#14](https://github.com/paulossjunior/prelo/issues/14), [#15](https://github.com/paulossjunior/prelo/issues/15), [#16](https://github.com/paulossjunior/prelo/issues/16), [#17](https://github.com/paulossjunior/prelo/issues/17), [#18](https://github.com/paulossjunior/prelo/issues/18), [#19](https://github.com/paulossjunior/prelo/issues/19), [#20](https://github.com/paulossjunior/prelo/issues/20), [#21](https://github.com/paulossjunior/prelo/issues/21), [#22](https://github.com/paulossjunior/prelo/issues/22), [#23](https://github.com/paulossjunior/prelo/issues/23), [#24](https://github.com/paulossjunior/prelo/issues/24), [#25](https://github.com/paulossjunior/prelo/issues/25), [#26](https://github.com/paulossjunior/prelo/issues/26), [#27](https://github.com/paulossjunior/prelo/issues/27), [#28](https://github.com/paulossjunior/prelo/issues/28), [#29](https://github.com/paulossjunior/prelo/issues/29), [#30](https://github.com/paulossjunior/prelo/issues/30), [#31](https://github.com/paulossjunior/prelo/issues/31), [#32](https://github.com/paulossjunior/prelo/issues/32), [#33](https://github.com/paulossjunior/prelo/issues/33), [#34](https://github.com/paulossjunior/prelo/issues/34)
 - Filhas de #1 sem o label `task` (33): [#2](https://github.com/paulossjunior/prelo/issues/2), [#3](https://github.com/paulossjunior/prelo/issues/3), [#4](https://github.com/paulossjunior/prelo/issues/4), [#5](https://github.com/paulossjunior/prelo/issues/5), [#6](https://github.com/paulossjunior/prelo/issues/6), [#7](https://github.com/paulossjunior/prelo/issues/7), [#8](https://github.com/paulossjunior/prelo/issues/8), [#9](https://github.com/paulossjunior/prelo/issues/9), [#10](https://github.com/paulossjunior/prelo/issues/10), [#11](https://github.com/paulossjunior/prelo/issues/11), [#12](https://github.com/paulossjunior/prelo/issues/12), [#13](https://github.com/paulossjunior/prelo/issues/13), [#14](https://github.com/paulossjunior/prelo/issues/14), [#15](https://github.com/paulossjunior/prelo/issues/15), [#16](https://github.com/paulossjunior/prelo/issues/16), [#17](https://github.com/paulossjunior/prelo/issues/17), [#18](https://github.com/paulossjunior/prelo/issues/18), [#19](https://github.com/paulossjunior/prelo/issues/19), [#20](https://github.com/paulossjunior/prelo/issues/20), [#21](https://github.com/paulossjunior/prelo/issues/21), [#22](https://github.com/paulossjunior/prelo/issues/22), [#23](https://github.com/paulossjunior/prelo/issues/23), [#24](https://github.com/paulossjunior/prelo/issues/24), [#25](https://github.com/paulossjunior/prelo/issues/25), [#26](https://github.com/paulossjunior/prelo/issues/26), [#27](https://github.com/paulossjunior/prelo/issues/27), [#28](https://github.com/paulossjunior/prelo/issues/28), [#29](https://github.com/paulossjunior/prelo/issues/29), [#30](https://github.com/paulossjunior/prelo/issues/30), [#31](https://github.com/paulossjunior/prelo/issues/31), [#32](https://github.com/paulossjunior/prelo/issues/32), [#33](https://github.com/paulossjunior/prelo/issues/33), [#34](https://github.com/paulossjunior/prelo/issues/34)
-- Abertas, mas o Epic #1 está fechado (2): [#32](https://github.com/paulossjunior/prelo/issues/32), [#33](https://github.com/paulossjunior/prelo/issues/33)
+- Estado da issue diverge do checkbox em `specs/001-app-skeleton/tasks.md` (branch `dev`) (2): [#32](https://github.com/paulossjunior/prelo/issues/32), [#33](https://github.com/paulossjunior/prelo/issues/33)
