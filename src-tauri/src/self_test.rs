@@ -192,7 +192,26 @@ mod tests {
             editor_marked: true,
             compiler_shown: format!("Typst {}", crate::commands::EMBEDDED_TYPST),
             failure: None,
+            layout_problems: Vec::new(),
         }
+    }
+
+    #[test]
+    fn layout_problems_e_opcional_no_json_e_vazio_por_padrao() {
+        let s: Scenario = serde_json::from_str(
+            r#"{"projectOpened":true,"previewChanged":true,"errorLine":3,"diagnosticLine":3,
+               "editorMarked":true,"compilerShown":"Typst"}"#,
+        )
+        .unwrap();
+        assert!(s.layout_problems.is_empty());
+    }
+
+    #[test]
+    fn recusa_problema_de_layout_no_app_real_com_a_descricao() {
+        let mut s = ok_scenario();
+        s.layout_problems = vec!["CSP bloqueou style-src-elem: inline".into()];
+        let err = check(&expected(), V, 10, &s, None).unwrap_err();
+        assert!(err.contains("CSP bloqueou style-src-elem"), "{err}");
     }
 
     #[test]
@@ -225,6 +244,9 @@ mod tests {
             Box::new(|s| s.editor_marked = false),
             Box::new(|s| s.compiler_shown = "Typst 0.0.0".into()),
             Box::new(|s| s.failure = Some("prévia não chegou".into())),
+            Box::new(|s| {
+                s.layout_problems = vec!["números de linha não estão numa coluna".into()]
+            }),
         ];
         for change in cases {
             let mut s = ok_scenario();
