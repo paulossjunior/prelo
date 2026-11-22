@@ -492,8 +492,16 @@ fn documento_bibliografia_estilo_e_dados_fora_da_raiz() {
 #[test]
 fn documento_link_simbolico_versionado_para_fora() {
     let doc = Doc::new();
-    symlink(&doc.case.outside.secret(), &doc.case.project.path("dados.csv")).unwrap();
-    symlink(&doc.case.outside.root(), &doc.case.project.path("pasta-fora")).unwrap();
+    symlink(
+        &doc.case.outside.secret(),
+        &doc.case.project.path("dados.csv"),
+    )
+    .unwrap();
+    symlink(
+        &doc.case.outside.root(),
+        &doc.case.project.path("pasta-fora"),
+    )
+    .unwrap();
     doc.assert_refused(
         "#csv(\"dados.csv\")",
         "",
@@ -540,7 +548,10 @@ fn documento_fifo_na_raiz_e_recusado_sem_bloquear() {
         .iter()
         .find(|d| d.kind == Kind::Access)
         .expect("diagnóstico de acesso");
-    assert_eq!(diag.message, "acesso recusado: `fila` não é um arquivo comum");
+    assert_eq!(
+        diag.message,
+        "acesso recusado: `fila` não é um arquivo comum"
+    );
     doc.assert_contained(&diagnostics);
 }
 

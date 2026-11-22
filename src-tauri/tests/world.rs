@@ -97,7 +97,10 @@ fn fonte_do_sistema_pedida_no_typ_nao_e_usada() {
         .iter()
         .find(|d| d.severity == Severity::Warning)
         .expect("aviso de fonte desconhecida");
-    assert!(warning.message.contains("unknown font family"), "{warning:?}");
+    assert!(
+        warning.message.contains("unknown font family"),
+        "{warning:?}"
+    );
     assert_eq!(warning.kind, Kind::Typst);
     let doc = outcome.output.expect("compilou com fonte de reserva");
     let mut out = Vec::new();
@@ -116,14 +119,24 @@ fn matematica_e_raw_usam_os_padroes_do_world() {
 
 #[test]
 fn escolha_de_fonte_no_typ_vence_o_padrao_do_world() {
-    let (_project, mut world) = single_file(
-        "#show raw: set text(font: \"Libertinus Sans\")\n\
-         #show math.equation: set text(font: \"Libertinus Serif\")\n\
-         `codigo` $x$",
-    );
+    let (_project, mut world) =
+        single_file("#show raw: set text(font: \"Libertinus Sans\")\n`codigo` $x$");
     let used = families(&mut world);
     assert!(!used.contains(&fonts::RAW_FAMILY.to_string()), "{used:?}");
     assert!(used.contains(&"Libertinus Sans".to_string()), "{used:?}");
+
+    // Matemática numa fonte sem tabela MATH: vale a escolha do documento, e o Typst avisa.
+    let (_project, mut world) =
+        single_file("#show math.equation: set text(font: \"Libertinus Serif\")\n$x$");
+    let outcome = world.compile();
+    assert!(
+        outcome
+            .diagnostics
+            .iter()
+            .any(|d| d.message == "current font is not designed for math"),
+        "{:?}",
+        outcome.diagnostics
+    );
 }
 
 #[test]

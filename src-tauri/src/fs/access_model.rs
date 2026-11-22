@@ -94,7 +94,11 @@ impl AccessModel {
     }
 
     /// Passo 1: o arquivo `requested` (relativo à raiz) está aberto no editor com `text`.
-    pub fn set_overlay(&self, requested: &str, text: impl Into<String>) -> Result<PathBuf, Refusal> {
+    pub fn set_overlay(
+        &self,
+        requested: &str,
+        text: impl Into<String>,
+    ) -> Result<PathBuf, Refusal> {
         let path = self.lexical_path(requested)?;
         self.overlay_write()
             .insert(path.clone(), Bytes::from_string(text.into()));
@@ -181,7 +185,10 @@ impl PathAccessModel for AccessModel {
         // Passo 9: cache por conteúdo.
         let hash: [u8; 32] = Sha256::digest(&bytes).into();
         let mut cache = lock(&self.cache);
-        Ok(cache.entry(hash).or_insert_with(|| Bytes::new(bytes)).clone())
+        Ok(cache
+            .entry(hash)
+            .or_insert_with(|| Bytes::new(bytes))
+            .clone())
     }
 }
 

@@ -10,6 +10,7 @@ mod self_test;
 #[cfg(all(feature = "self-test", not(debug_assertions)))]
 compile_error!("a feature `self-test` só é permitida em build de depuração");
 mod webview_args;
+pub mod world;
 
 use tauri::{Builder, Runtime};
 

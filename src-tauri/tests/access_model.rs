@@ -63,7 +63,10 @@ fn text(bytes: &Bytes) -> &str {
 #[test]
 fn le_arquivo_dentro_da_raiz_pela_regra_de_escopo() {
     let case = Case::new();
-    assert_eq!(text(&case.read("capitulos/cap1.typ").unwrap()), "== Capítulo 1");
+    assert_eq!(
+        text(&case.read("capitulos/cap1.typ").unwrap()),
+        "== Capítulo 1"
+    );
     assert_eq!(case.opens.all(), vec![case.abs("capitulos/cap1.typ")]);
 }
 
@@ -110,7 +113,12 @@ fn fechar_arquivo_volta_a_ler_do_disco() {
 #[test]
 fn overlay_recusa_caminho_fora_da_raiz() {
     let case = Case::new();
-    for requested in ["../fora.typ", "/../fora.typ", "capitulos/../../fora.typ", ""] {
+    for requested in [
+        "../fora.typ",
+        "/../fora.typ",
+        "capitulos/../../fora.typ",
+        "",
+    ] {
         assert!(
             case.model.set_overlay(requested, "x").is_err(),
             "{requested:?} aceito no overlay"
