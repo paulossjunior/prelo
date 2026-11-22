@@ -6,6 +6,7 @@
 //! cancelamento) e a próxima edição compila numa thread nova com um World novo. Resultado de
 //! compilação mais antiga que a última entregue é descartado (FR-015).
 
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread;
@@ -63,6 +64,20 @@ pub fn timeout_diagnostic(limit: Duration) -> Diagnostic {
     let mut diag = Diagnostic::error(Kind::Typst, format!("compilação excedeu {limit}"));
     diag.hints
         .push("a prévia volta a compilar na próxima edição".to_owned());
+    diag
+}
+
+/// Diagnóstico de compilação interrompida por erro interno (pânico) do compilador.
+pub fn panic_diagnostic() -> Diagnostic {
+    let mut diag = Diagnostic::error(
+        Kind::Typst,
+        "erro interno do compilador ao processar o projeto",
+    );
+    diag.hints.push(
+        "a prévia volta a compilar na próxima edição; se o erro se repetir, desfaça a última \
+         alteração"
+            .to_owned(),
+    );
     diag
 }
 
@@ -225,8 +240,20 @@ fn work<C: Compiler>(shared: &Shared<C>, mut compiler: C, generation: u64) {
         shared.watch.notify_all();
 
         let started = Instant::now();
-        let outcome = compiler.compile(input);
+        // Pânico do compilador com entrada malformada (FR-024) vira diagnóstico na hora, sem
+        // esperar o vigia. O World pode ter ficado incoerente: a próxima edição usa um novo.
+        let result = panic::catch_unwind(AssertUnwindSafe(|| compiler.compile(input)));
         let duration_ms = millis(started.elapsed());
+        let (outcome, broken) = match result {
+            Ok(outcome) => (outcome, false),
+            Err(_) => (
+                Outcome {
+                    output: None,
+                    diagnostics: vec![panic_diagnostic()],
+                },
+                true,
+            ),
+        };
 
         let mut state = shared.lock();
         if state.generation != generation {
@@ -248,6 +275,9 @@ fn work<C: Compiler>(shared: &Shared<C>, mut compiler: C, generation: u64) {
         });
         drop(state);
         shared.watch.notify_all();
+        if broken {
+            compiler = (shared.new_compiler)();
+        }
     }
 }
 
