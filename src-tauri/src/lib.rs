@@ -29,7 +29,18 @@ pub fn configure_with_state<R: Runtime>(
 ) -> Builder<R> {
     builder
         .manage(state)
-        .invoke_handler(tauri::generate_handler![app_info::get_app_info])
+        .invoke_handler(tauri::generate_handler![
+            app_info::get_app_info,
+            commands::list_tree,
+            commands::choose_main_file,
+            commands::open_file,
+            commands::edit_file,
+            commands::save_file,
+            commands::resolve_external_change,
+            commands::complete,
+            commands::semantic_tokens,
+            commands::jump_from_cursor
+        ])
 }
 
 /// Variante de teste: acrescenta `self_test_report` (nunca em release).
@@ -42,6 +53,15 @@ pub fn configure_with_state<R: Runtime>(
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             app_info::get_app_info,
+            commands::list_tree,
+            commands::choose_main_file,
+            commands::open_file,
+            commands::edit_file,
+            commands::save_file,
+            commands::resolve_external_change,
+            commands::complete,
+            commands::semantic_tokens,
+            commands::jump_from_cursor,
             self_test::self_test_report
         ])
 }

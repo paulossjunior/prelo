@@ -1,14 +1,41 @@
-//! Comandos IPC da feature 003 (specs/003-editor-local/contracts/ipc.md). Esqueleto: só a
-//! superfície usada pelos testes (T015); a implementação entra com T022.
+//! Comandos IPC da feature 003 (specs/003-editor-local/contracts/ipc.md; T022).
+//!
+//! Toda entrada da interface é recusada por padrão: cada comando lê seus argumentos de um
+//! objeto JSON com campos exatos (`deny_unknown_fields`) e todo `path` passa por
+//! [`validate_path`] antes de qualquer outra coisa. O caminho validado é relativo à raiz,
+//! canônico (links resolvidos) e nunca absoluto; caminho absoluto, `..` além da raiz ou link
+//! para fora vira `path_outside_project` sem tocar o disco fora do projeto nem chegar ao motor.
+//!
+//! O que depende do World (T020) e dos serviços de prévia e linguagem (T035, T036) passa pelo
+//! trait [`Engine`]; até lá, [`Unavailable`] responde `not_implemented`. Gravação
+//! (`save_file`, T033) e mudança externa (`resolve_external_change`, T034) já validam o
+//! caminho e respondem `not_implemented`.
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::path::{Component, Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
-use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use tauri::ipc::{InvokeBody, Request};
+use tauri::State;
+
+use crate::fs::scope::{Refusal, Scope, MAX_FILE_BYTES};
+use crate::project::record::{self, LoadedRecord, RecordState};
 
 /// Versão do compilador embutido (`typst` no Cargo.toml; T026 confere contra o Cargo.lock).
 pub const EMBEDDED_TYPST: &str = "0.15.1";
+
+const OUTSIDE: &str = "path_outside_project";
+const NOT_FOUND: &str = "not_found";
+const INVALID_ARGUMENTS: &str = "invalid_arguments";
+const NO_PROJECT: &str = "no_project";
+const NOT_IMPLEMENTED: &str = "not_implemented";
+
+/// Profundidade e quantidade máximas de nós de `list_tree` (pasta enorme não trava o núcleo).
+const TREE_MAX_DEPTH: usize = 32;
+const TREE_MAX_NODES: usize = 10_000;
 
 /// Caminho pedido pela interface, já validado: dentro da raiz, canônico.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,13 +45,54 @@ pub struct ProjectPath {
 }
 
 impl ProjectPath {
+    /// Relativo à raiz, com `/` como separador e sem `.`/`..` (ex.: `capitulos/intro.typ`).
     pub fn relative(&self) -> &str {
         &self.relative
     }
 
+    /// Caminho canônico no disco (dentro da raiz).
     pub fn absolute(&self) -> &Path {
         &self.absolute
     }
+}
+
+/// Caminho absoluto em qualquer sistema: `/`, `\`, `C:` ou o que o sistema considera absoluto.
+fn is_absolute(requested: &str) -> bool {
+    let b = requested.as_bytes();
+    requested.starts_with('/')
+        || requested.starts_with('\\')
+        || (b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':')
+        || Path::new(requested).has_root()
+        || Path::new(requested).is_absolute()
+}
+
+fn refusal_code(refusal: &Refusal) -> &'static str {
+    match refusal {
+        Refusal::OutsideProject { .. } => OUTSIDE,
+        Refusal::NotFound { .. } | Refusal::SpecialFile { .. } => NOT_FOUND,
+        Refusal::TooLarge { .. } => "too_large",
+    }
+}
+
+/// Validação comum a todo `path` vindo da interface (contracts/ipc.md): absoluto ou fora da
+/// raiz (por `..` ou link) → `path_outside_project`; inexistente → `not_found`.
+pub fn validate_path(scope: &Scope, requested: &str) -> Result<ProjectPath, &'static str> {
+    if is_absolute(requested) {
+        return Err(OUTSIDE);
+    }
+    let canonical = scope.resolve(requested).map_err(|r| refusal_code(&r))?;
+    let inside = canonical.strip_prefix(scope.root()).map_err(|_| OUTSIDE)?;
+    let mut parts = Vec::new();
+    for component in inside.components() {
+        match component {
+            Component::Normal(name) => parts.push(name.to_str().ok_or(NOT_FOUND)?),
+            _ => return Err(OUTSIDE),
+        }
+    }
+    Ok(ProjectPath {
+        relative: parts.join("/"),
+        absolute: canonical,
+    })
 }
 
 /// `{ page, xPt, yPt }` de `jump_from_cursor`.
@@ -36,7 +104,8 @@ pub struct JumpTarget {
     pub y_pt: f64,
 }
 
-/// Consultas que dependem do World (T020) e dos serviços de prévia e linguagem.
+/// Consultas que dependem do World (T020) e dos serviços de prévia e linguagem (T035, T036).
+/// Recebem só caminhos já validados. Formatos de `Completion` e `Token` saem com T036.
 pub trait Engine: Send + Sync + 'static {
     fn complete(&self, path: &ProjectPath, offset: usize) -> Result<Vec<Value>, String>;
     fn semantic_tokens(&self, path: &ProjectPath) -> Result<Vec<Value>, String>;
@@ -47,36 +116,24 @@ pub trait Engine: Send + Sync + 'static {
     ) -> Result<Vec<JumpTarget>, String>;
 }
 
-/// Estado do núcleo gerenciado pelo Tauri.
-pub struct AppState {
-    #[allow(dead_code)]
-    engine: Arc<dyn Engine>,
-}
+/// Motor enquanto o World (T020) não existe.
+pub struct Unavailable;
 
-impl AppState {
-    pub fn new(engine: Arc<dyn Engine>) -> Self {
-        Self { engine }
+impl Engine for Unavailable {
+    fn complete(&self, _path: &ProjectPath, _offset: usize) -> Result<Vec<Value>, String> {
+        Err(NOT_IMPLEMENTED.into())
     }
 
-    pub fn open_project(&self, _root: &Path) -> std::io::Result<ProjectInfo> {
-        Ok(ProjectInfo::default())
+    fn semantic_tokens(&self, _path: &ProjectPath) -> Result<Vec<Value>, String> {
+        Err(NOT_IMPLEMENTED.into())
     }
 
-    pub fn open_file(&self, _path: &str) -> Result<OpenedFile, String> {
-        Err("not_implemented".into())
-    }
-
-    pub fn edit_file(
+    fn jump_from_cursor(
         &self,
-        _path: &str,
-        _version: u64,
-        _changes: &[Change],
-    ) -> Result<u64, String> {
-        Err("not_implemented".into())
-    }
-
-    pub fn choose_main_file(&self, _path: &str) -> Result<ProjectInfo, String> {
-        Err("not_implemented".into())
+        _path: &ProjectPath,
+        _offset: usize,
+    ) -> Result<Vec<JumpTarget>, String> {
+        Err(NOT_IMPLEMENTED.into())
     }
 }
 
@@ -104,14 +161,26 @@ pub struct OpenedFile {
     pub version: u64,
 }
 
-impl Default for AppState {
-    fn default() -> Self {
-        Self::new(Arc::new(Unavailable))
-    }
+/// Nó de `list_tree`; `path` relativo à raiz, com `/`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TreeNode {
+    pub name: String,
+    pub path: String,
+    pub kind: TreeKind,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub children: Option<Vec<TreeNode>>,
 }
 
-/// `{ from, to, insert }` de `edit_file`, em unidades UTF-16 do texto anterior à edição.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TreeKind {
+    File,
+    Dir,
+}
+
+/// `{ from, to, insert }` de `edit_file`, em unidades UTF-16 (as do CodeMirror) do texto
+/// anterior à edição; mudanças em ordem crescente e sem sobreposição.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Change {
     pub from: usize,
@@ -119,30 +188,423 @@ pub struct Change {
     pub insert: String,
 }
 
-/// Aplica as mudanças (esqueleto).
-pub fn apply_changes(_text: &str, _changes: &[Change]) -> Result<String, &'static str> {
-    Err("not_implemented")
+/// Aplica as mudanças de uma vez; qualquer intervalo inválido (fora do texto, invertido, fora de
+/// ordem, sobreposto ou no meio de um par substituto UTF-16) → `bad_range` sem aplicar nada.
+pub fn apply_changes(text: &str, changes: &[Change]) -> Result<String, &'static str> {
+    const BAD: &str = "bad_range";
+    let mut out = String::with_capacity(text.len());
+    // Cursor de conversão UTF-16 → byte, só avança (mudanças em ordem crescente).
+    let mut chars = text.char_indices().peekable();
+    let mut units = 0usize;
+    let mut to_byte = |target: usize| -> Result<usize, &'static str> {
+        while units < target {
+            let (_, c) = chars.next().ok_or(BAD)?;
+            units += c.len_utf16();
+        }
+        if units != target {
+            return Err(BAD);
+        }
+        Ok(chars.peek().map_or(text.len(), |&(i, _)| i))
+    };
+    let mut last_units = 0usize;
+    let mut last_byte = 0usize;
+    for change in changes {
+        if change.from > change.to || change.from < last_units {
+            return Err(BAD);
+        }
+        let from = to_byte(change.from)?;
+        let to = to_byte(change.to)?;
+        out.push_str(&text[last_byte..from]);
+        out.push_str(&change.insert);
+        last_units = change.to;
+        last_byte = to;
+    }
+    out.push_str(&text[last_byte..]);
+    Ok(out)
 }
 
-/// Motor enquanto o World (T020) não existe.
-pub struct Unavailable;
+/// Arquivo aberto no editor (overlay em memória). Gravação e `dirty` completos entram com T033.
+struct OpenFile {
+    text: String,
+    version: u64,
+}
 
-impl Engine for Unavailable {
-    fn complete(&self, _path: &ProjectPath, _offset: usize) -> Result<Vec<Value>, String> {
-        Err("not_implemented".into())
+struct OpenProject {
+    scope: Scope,
+    record: LoadedRecord,
+    files: HashMap<String, OpenFile>,
+}
+
+impl OpenProject {
+    fn info(&self) -> ProjectInfo {
+        let registered = match self.record.state {
+            RecordState::Valid => Some(self.record.record.compiler_typst().to_owned()),
+            RecordState::Missing | RecordState::Invalid(_) => None,
+        };
+        let mut warnings = Vec::new();
+        if let Some(reason) = self.record.warning() {
+            warnings.push(reason.code().to_owned());
+        }
+        if registered.as_deref().is_some_and(|v| v != EMBEDDED_TYPST) {
+            warnings.push("compiler_version_mismatch".to_owned());
+        }
+        ProjectInfo {
+            name: self
+                .scope
+                .root()
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            main_file: self.record.record.main_or_default().to_owned(),
+            compiler: CompilerVersions {
+                embedded: EMBEDDED_TYPST.to_owned(),
+                registered,
+            },
+            warnings,
+        }
     }
 
-    fn semantic_tokens(&self, _path: &ProjectPath) -> Result<Vec<Value>, String> {
-        Err("not_implemented".into())
+    fn tree(&self) -> Vec<TreeNode> {
+        let mut budget = TREE_MAX_NODES;
+        self.tree_dir(self.scope.root(), "", 0, &mut budget)
     }
 
-    fn jump_from_cursor(
+    /// Lista `dir` sem seguir link para pasta; link só aparece se aponta para arquivo comum
+    /// dentro da raiz. Ocultos (`.prelo`, `.git`) e especiais (FIFO, socket) ficam de fora.
+    fn tree_dir(
         &self,
-        _path: &ProjectPath,
-        _offset: usize,
-    ) -> Result<Vec<JumpTarget>, String> {
-        Err("not_implemented".into())
+        dir: &Path,
+        prefix: &str,
+        depth: usize,
+        budget: &mut usize,
+    ) -> Vec<TreeNode> {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        let mut nodes = Vec::new();
+        for entry in entries.flatten() {
+            if *budget == 0 {
+                break;
+            }
+            let Ok(name) = entry.file_name().into_string() else {
+                continue;
+            };
+            if name.starts_with('.') {
+                continue;
+            }
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            let path = if prefix.is_empty() {
+                name.clone()
+            } else {
+                format!("{prefix}/{name}")
+            };
+            let kind = if file_type.is_symlink() {
+                match self.scope.resolve(&path) {
+                    Ok(target) if target.is_file() => TreeKind::File,
+                    _ => continue,
+                }
+            } else if file_type.is_dir() {
+                TreeKind::Dir
+            } else if file_type.is_file() {
+                TreeKind::File
+            } else {
+                continue;
+            };
+            *budget -= 1;
+            let children = (kind == TreeKind::Dir).then(|| {
+                if depth + 1 >= TREE_MAX_DEPTH {
+                    Vec::new()
+                } else {
+                    self.tree_dir(&entry.path(), &path, depth + 1, budget)
+                }
+            });
+            nodes.push(TreeNode {
+                name,
+                path,
+                kind,
+                children,
+            });
+        }
+        nodes.sort_by(|a, b| {
+            (a.kind != TreeKind::Dir, &a.name).cmp(&(b.kind != TreeKind::Dir, &b.name))
+        });
+        nodes
     }
+}
+
+/// Estado do núcleo gerenciado pelo Tauri: projeto aberto, arquivos abertos e o motor.
+pub struct AppState {
+    project: Mutex<Option<OpenProject>>,
+    engine: Arc<dyn Engine>,
+}
+
+impl Default for AppState {
+    fn default() -> Self {
+        Self::new(Arc::new(Unavailable))
+    }
+}
+
+impl AppState {
+    pub fn new(engine: Arc<dyn Engine>) -> Self {
+        Self {
+            project: Mutex::new(None),
+            engine,
+        }
+    }
+
+    fn lock(&self) -> MutexGuard<'_, Option<OpenProject>> {
+        self.project.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Abre o projeto em `root` (canonicalizada uma vez) e lê o registro sem regravá-lo. Chamado
+    /// pelo diálogo nativo do núcleo (T032) e pelos testes; nunca exposto à interface.
+    pub fn open_project(&self, root: &Path) -> std::io::Result<ProjectInfo> {
+        let scope = Scope::new(root)?;
+        let record = record::load(scope.root(), EMBEDDED_TYPST);
+        let project = OpenProject {
+            scope,
+            record,
+            files: HashMap::new(),
+        };
+        let info = project.info();
+        *self.lock() = Some(project);
+        Ok(info)
+    }
+
+    /// Projeto aberto e o `path` validado.
+    fn with_path<T>(
+        &self,
+        requested: &str,
+        f: impl FnOnce(&mut OpenProject, ProjectPath) -> Result<T, String>,
+    ) -> Result<T, String> {
+        let mut guard = self.lock();
+        let project = guard.as_mut().ok_or(NO_PROJECT)?;
+        let path = validate_path(&project.scope, requested)?;
+        f(project, path)
+    }
+
+    /// Só valida (sem segurar o estado durante a consulta ao motor).
+    fn validated(&self, requested: &str) -> Result<ProjectPath, String> {
+        self.with_path(requested, |_, path| Ok(path))
+    }
+
+    pub fn list_tree(&self) -> Result<Vec<TreeNode>, String> {
+        let guard = self.lock();
+        let project = guard.as_ref().ok_or(NO_PROJECT)?;
+        Ok(project.tree())
+    }
+
+    pub fn open_file(&self, requested: &str) -> Result<OpenedFile, String> {
+        self.with_path(requested, |project, path| {
+            if let Some(file) = project.files.get(path.relative()) {
+                return Ok(OpenedFile {
+                    text: file.text.clone(),
+                    version: file.version,
+                });
+            }
+            let bytes = project
+                .scope
+                .read(path.relative())
+                .map_err(|r| refusal_code(&r))?;
+            let text = String::from_utf8(bytes).map_err(|_| "not_utf8")?;
+            project.files.insert(
+                path.relative().to_owned(),
+                OpenFile {
+                    text: text.clone(),
+                    version: 0,
+                },
+            );
+            Ok(OpenedFile { text, version: 0 })
+        })
+    }
+
+    pub fn edit_file(
+        &self,
+        requested: &str,
+        version: u64,
+        changes: &[Change],
+    ) -> Result<u64, String> {
+        self.with_path(requested, |project, path| {
+            let file = project.files.get_mut(path.relative()).ok_or(NOT_FOUND)?;
+            if file.version != version {
+                return Err("version_mismatch".into());
+            }
+            let text = apply_changes(&file.text, changes)?;
+            if text.len() as u64 > MAX_FILE_BYTES {
+                return Err("too_large".into());
+            }
+            file.text = text;
+            file.version += 1;
+            Ok(file.version)
+        })
+    }
+
+    pub fn choose_main_file(&self, requested: &str) -> Result<ProjectInfo, String> {
+        self.with_path(requested, |project, path| {
+            let is_typ = Path::new(path.relative())
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("typ"));
+            if !is_typ || !path.absolute().is_file() {
+                return Err("not_a_typ_file".into());
+            }
+            project
+                .record
+                .record
+                .set_main(path.relative())
+                .map_err(|_| OUTSIDE)?;
+            // Registro lido inválido não é regravado (data-model.md): a escolha vale em memória.
+            if project.record.may_rewrite() {
+                let root = project.scope.root().to_owned();
+                record::save(&root, &mut project.record).map_err(|_| "write_failed")?;
+            }
+            Ok(project.info())
+        })
+    }
+}
+
+// ---------------------------------------------------------------- comandos
+
+fn invalid() -> String {
+    INVALID_ARGUMENTS.into()
+}
+
+/// Argumentos como objeto JSON com campos exatos.
+fn args<T: DeserializeOwned>(request: &Request<'_>) -> Result<T, String> {
+    match request.body() {
+        InvokeBody::Json(value @ Value::Object(_)) => {
+            serde_json::from_value(value.clone()).map_err(|_| invalid())
+        }
+        _ => Err(invalid()),
+    }
+}
+
+/// Sem argumentos: só objeto vazio ou nulo.
+fn no_args(request: &Request<'_>) -> Result<(), String> {
+    match request.body() {
+        InvokeBody::Json(Value::Null) => Ok(()),
+        InvokeBody::Json(Value::Object(map)) if map.is_empty() => Ok(()),
+        _ => Err(invalid()),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PathArgs {
+    path: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OffsetArgs {
+    path: String,
+    offset: usize,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct EditArgs {
+    path: String,
+    version: u64,
+    changes: Vec<Change>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum Keep {
+    Mine,
+    Disk,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct KeepArgs {
+    path: String,
+    #[allow(dead_code)] // usado por T034
+    keep: Keep,
+}
+
+#[derive(Serialize)]
+pub struct EditResult {
+    version: u64,
+}
+
+#[tauri::command(async)]
+pub fn list_tree(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Vec<TreeNode>, String> {
+    no_args(&request)?;
+    state.list_tree()
+}
+
+#[tauri::command(async)]
+pub fn choose_main_file(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<ProjectInfo, String> {
+    let a: PathArgs = args(&request)?;
+    state.choose_main_file(&a.path)
+}
+
+#[tauri::command(async)]
+pub fn open_file(state: State<'_, AppState>, request: Request<'_>) -> Result<OpenedFile, String> {
+    let a: PathArgs = args(&request)?;
+    state.open_file(&a.path)
+}
+
+#[tauri::command(async)]
+pub fn edit_file(state: State<'_, AppState>, request: Request<'_>) -> Result<EditResult, String> {
+    let a: EditArgs = args(&request)?;
+    let version = state.edit_file(&a.path, a.version, &a.changes)?;
+    Ok(EditResult { version })
+}
+
+/// Gravação atômica entra com T033; aqui só a validação.
+#[tauri::command(async)]
+pub fn save_file(state: State<'_, AppState>, request: Request<'_>) -> Result<Value, String> {
+    let a: PathArgs = args(&request)?;
+    state.validated(&a.path)?;
+    Err(NOT_IMPLEMENTED.into())
+}
+
+/// Conflito com mudança externa entra com T034; aqui só a validação.
+#[tauri::command(async)]
+pub fn resolve_external_change(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Value, String> {
+    let a: KeepArgs = args(&request)?;
+    state.validated(&a.path)?;
+    Err(NOT_IMPLEMENTED.into())
+}
+
+#[tauri::command(async)]
+pub fn complete(state: State<'_, AppState>, request: Request<'_>) -> Result<Vec<Value>, String> {
+    let a: OffsetArgs = args(&request)?;
+    let path = state.validated(&a.path)?;
+    state.engine.complete(&path, a.offset)
+}
+
+#[tauri::command(async)]
+pub fn semantic_tokens(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Vec<Value>, String> {
+    let a: PathArgs = args(&request)?;
+    let path = state.validated(&a.path)?;
+    state.engine.semantic_tokens(&path)
+}
+
+#[tauri::command(async)]
+pub fn jump_from_cursor(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Vec<JumpTarget>, String> {
+    let a: OffsetArgs = args(&request)?;
+    let path = state.validated(&a.path)?;
+    state.engine.jump_from_cursor(&path, a.offset)
 }
 
 #[cfg(test)]
