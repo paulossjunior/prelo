@@ -7,6 +7,7 @@
 import { diagnosticCount } from "@codemirror/lint";
 import { invoke } from "@tauri-apps/api/core";
 import type { PreviewUpdate, ProjectInfo } from "./ipc";
+import { layoutProblems } from "./layout-check";
 import type { WorkspaceHandle } from "./workspace";
 
 /** Chamada a algo que não existe: o Typst acusa erro nesta linha. */
@@ -22,12 +23,16 @@ export interface ScenarioResult {
   diagnosticLine: number | null;
   editorMarked: boolean;
   compilerShown: string;
+  /** O que a conferência de layout achou no app real (vazio em jsdom, sem conferência). */
+  layoutProblems: string[];
   failure?: string;
 }
 
 export interface ScenarioOptions {
   /** Espera máxima por cada compilação. */
   timeoutMs?: number;
+  /** Mede o layout na webview real (src/layout-check.ts); ausente em jsdom. */
+  checkLayout?: () => string[];
 }
 
 function waitFor(
@@ -66,6 +71,7 @@ export async function runEditorScenario(
     diagnosticLine: null,
     editorMarked: false,
     compilerShown: "",
+    layoutProblems: [],
   };
   try {
     const first = waitFor(ws, "compilou ao abrir o projeto", (u) => u.ok && u.pages.length > 0, timeoutMs);
@@ -102,20 +108,41 @@ export async function runEditorScenario(
     if (d.range) r.diagnosticLine = view.state.doc.lineAt(Math.min(d.range.from, view.state.doc.length)).number;
     else if (typeof d.line === "number") r.diagnosticLine = d.line;
     r.editorMarked = diagnosticCount(view.state) > 0;
+
+    // Layout no app real: texto mais alto que o editor e uma linha mais larga que ele, para
+    // conferir gutter em coluna, rolagem vertical e quebra da linha longa.
+    if (opts.checkLayout) {
+      const filler = Array.from({ length: 160 }, (_, i) => `Linha de enchimento ${i + 1}.`).join("\n");
+      const longLine = "palavra ".repeat(60);
+      view.dispatch({
+        changes: { from: view.state.doc.length, insert: `\n${longLine}\n${filler}\n` },
+        userEvent: "input.type",
+      });
+      await nextFrame();
+      r.layoutProblems = opts.checkLayout();
+    }
   } catch (err) {
     r.failure = err instanceof Error ? err.message : String(err);
   }
   return r;
 }
 
+const nextFrame = () =>
+  new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+
 /** Roda o autoteste no app real e entrega o resultado ao núcleo. */
-export async function reportSelfTest(ws: WorkspaceHandle): Promise<void> {
+export async function reportSelfTest(
+  ws: WorkspaceHandle,
+  cspViolations: () => string[] = () => [],
+): Promise<void> {
   if (!import.meta.env.VITE_SELF_TEST) return;
   await ws.ready;
   // SC-002: versão e sistema visíveis em até 3 s desde o início da página.
   const elapsedMs = Math.round(performance.now());
   const rendered = ws.appInfoElement.textContent?.trim() ?? "";
-  const scenario = await runEditorScenario(ws, () => invoke<ProjectInfo>("self_test_open_project"));
+  const scenario = await runEditorScenario(ws, () => invoke<ProjectInfo>("self_test_open_project"), {
+    checkLayout: () => [...cspViolations(), ...layoutProblems(document)],
+  });
   await invoke("self_test_report", { rendered, elapsedMs, scenario });
 }
 

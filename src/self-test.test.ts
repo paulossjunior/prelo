@@ -106,3 +106,44 @@ describe("runEditorScenario", () => {
     expect(r.previewChanged).toBe(false);
   });
 });
+
+describe("conferência de layout no app real", () => {
+  const openWithFirstCompile = (core: ReturnType<typeof fakeCore>) => async () => {
+    setTimeout(
+      () =>
+        core.push({
+          compileId: 0, ok: true, changed: [0], diagnostics: [], durationMs: 5,
+          pages: [{ index: 0, hash: "h0", widthPt: 595, heightPt: 842 }],
+        }),
+      0,
+    );
+    return INFO;
+  };
+
+  it("mede o layout com texto mais alto que o editor e uma linha longa, e devolve os problemas", async () => {
+    const core = compilingCore();
+    const ws = mount(core);
+    await ws.ready;
+    let lines = 0;
+    let longest = 0;
+    const checkLayout = () => {
+      const doc = ws.editor()!.view.state.doc;
+      lines = doc.lines;
+      for (const l of doc.iterLines()) longest = Math.max(longest, l.length);
+      return ["números de linha não estão numa coluna à esquerda do código"];
+    };
+    const r = await runEditorScenario(ws, openWithFirstCompile(core), { timeoutMs: 2000, checkLayout });
+    expect(r.failure).toBeUndefined();
+    expect(lines).toBeGreaterThanOrEqual(150);
+    expect(longest).toBeGreaterThanOrEqual(400);
+    expect(r.layoutProblems).toEqual(["números de linha não estão numa coluna à esquerda do código"]);
+  });
+
+  it("sem conferência (jsdom) não inventa problemas", async () => {
+    const core = compilingCore();
+    const ws = mount(core);
+    await ws.ready;
+    const r = await runEditorScenario(ws, openWithFirstCompile(core), { timeoutMs: 2000 });
+    expect(r.layoutProblems).toEqual([]);
+  });
+});
