@@ -266,6 +266,25 @@ Ao delegar:
     anexando o veredito do `qa`. O merge exige o CI verde no macOS.
   - Para publicar uma versão, abra o PR `dev` → `main`. O merge exige o CI verde nos três
     sistemas. A tag `vX.Y.Z` na `main` dispara a release.
+- **Commits e PRs rastreáveis** ([docs/contribuir.md](../../../docs/contribuir.md)). O prompt
+  do agente que faz commit ou abre PR exige:
+  - **Commit:** assunto em inglês `<tipo>(<escopo>): <resumo>` (até 72 caracteres), corpo em
+    pt-BR explicando o porquê para um humano, e os trailers `Task: T0xx (#N)`,
+    `Story: USn (#N)` (omitido se não houver história), `Epic: #N` e `Co-Authored-By`.
+  - **PR:** corpo no [modelo](../../../.github/pull_request_template.md) (`gh pr create
+    --body-file`), com todas as seções. Os links de Épico, História e Tasks vêm da Hierarquia:
+    `gh issue view <task>` (linha `Parte de #N`), a mesma coisa na mãe, e
+    `gh api repos/{owner}/{repo}/issues/<mãe>/sub_issues` para conferir. Passe ao agente os
+    números que você já conhece.
+- **Antes do merge**, o coordenador confere no PR:
+  - [ ] Resumo para humanos presente, 2–4 frases, sem jargão sem explicação.
+  - [ ] Épico, História (ou "Fundação"/"Processo") e cada Task com link e título; os links
+    abrem a issue certa (`gh issue view N`).
+  - [ ] O que mudou, Como foi testado (vermelho → verde, verify), Decisões e Fora deste PR
+    preenchidos; nenhum placeholder (`#N`, `T0xx`, `...`) sobrou.
+  - [ ] `Closes #N` só com base `main`; outra base usa `Refs #N (fechar à mão...)`.
+  - [ ] Commits com corpo em pt-BR e trailers `Task`/`Story`/`Epic`
+    (`git log origin/dev..HEAD --format='%s%n%b'`).
 - Features: a issue-mãe (ex.: #1) descreve o objetivo; as tarefas `T0xx` do `tasks.md` viram
   issues filhas via `/speckit-github-taskstoissues`. Ao criá-las, aplique os mesmos labels
   `release:*` e `agente:*` da issue-mãe (a milestone semanal vem no **sprint**) e cite
