@@ -162,7 +162,11 @@ fn assinar_depois_de_compilar_recebe_a_previa_atual() {
             break u;
         }
     };
-    assert_eq!(update.changed, all_pages(&update), "quem assina recebe todas");
+    assert_eq!(
+        update.changed,
+        all_pages(&update),
+        "quem assina recebe todas"
+    );
 }
 
 #[test]
@@ -255,7 +259,10 @@ fn erro_gera_diagnostico_com_arquivo_e_intervalo_e_mantem_a_ultima_ok() {
 fn escolher_principal_grava_o_registro_e_compila_o_escolhido() {
     let project = TempProject::empty();
     project.write("a.typ", "Arquivo A\n");
-    project.write("b.typ", "#set page(width: 120pt, height: 60pt)\nArquivo B\n");
+    project.write(
+        "b.typ",
+        "#set page(width: 120pt, height: 60pt)\nArquivo B\n",
+    );
     let s = Session::open(project);
 
     // Sem `main.typ`, nada compila.
@@ -274,10 +281,11 @@ fn escolher_principal_grava_o_registro_e_compila_o_escolhido() {
     assert!((update.pages[0].width_pt - 120.0).abs() < 0.01);
 }
 
-// justificativa: o sinal "escolha o arquivo principal" ao abrir um projeto com vários `.typ`
-// e sem `main.typ` sai com o diálogo de abertura de projeto (T032, issue #97); este teste é a
-// parte de projeto de T024 e passa a valer quando T032 definir o aviso em `ProjectInfo`.
+// O sinal "escolha o arquivo principal" ao abrir um projeto com vários `.typ` e sem
+// `main.typ` sai com o diálogo de abertura de projeto (T032, issue #97); este teste é a parte
+// de projeto de T024 e passa a valer quando T032 definir o aviso em `ProjectInfo`.
 #[test]
+// justificativa: depende de T032 (#97), que define o aviso de principal ausente
 #[ignore = "T032 (#97): aviso de arquivo principal ausente"]
 fn varios_typ_sem_main_pedem_escolha() {
     let project = TempProject::empty();
@@ -367,7 +375,11 @@ fn comandos_de_previa_pelo_ipc() {
         );
     }
     assert_eq!(
-        invoke(&window, "subscribe_preview", json!({ "channel": "__CHANNEL__:7" })),
+        invoke(
+            &window,
+            "subscribe_preview",
+            json!({ "channel": "__CHANNEL__:7" })
+        ),
         Ok(Value::Null)
     );
 }

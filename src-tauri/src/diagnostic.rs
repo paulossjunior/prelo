@@ -1,7 +1,7 @@
 //! Diagnóstico entregue à interface (specs/003-editor-local/data-model.md, "Diagnostic").
 //!
-//! Nesta etapa só o tipo; quem produz cada `kind` (World, escopo de arquivo, plugins,
-//! pacotes, fontes, registro) entra com a tarefa correspondente.
+//! Quem produz cada `kind` (World, escopo de arquivo, plugins, pacotes, fontes, registro)
+//! entra com a tarefa correspondente. A forma no IPC está no `Serialize` abaixo.
 
 use std::ops::Range;
 
@@ -29,6 +29,8 @@ pub enum Kind {
 pub struct Diagnostic {
     pub severity: Severity,
     pub path: Option<String>,
+    /// Em unidades UTF-16 do texto do arquivo: as mesmas do editor (CodeMirror) e de
+    /// `edit_file`.
     pub range: Option<Range<usize>>,
     pub line: Option<u32>,
     pub message: String,
@@ -51,8 +53,51 @@ impl Diagnostic {
     }
 }
 
+/// Forma do diagnóstico no IPC (`src/ipc.ts`, `Diagnostic`): campos ausentes não aparecem.
+#[derive(serde::Serialize)]
+struct Wire<'a> {
+    severity: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    range: Option<WireRange>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    line: Option<u32>,
+    message: &'a str,
+    hints: &'a [String],
+    kind: &'static str,
+}
+
+#[derive(serde::Serialize)]
+struct WireRange {
+    from: usize,
+    to: usize,
+}
+
 impl serde::Serialize for Diagnostic {
-    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
-        todo!("T035")
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        Wire {
+            severity: match self.severity {
+                Severity::Error => "error",
+                Severity::Warning => "warning",
+            },
+            path: self.path.as_deref(),
+            range: self.range.as_ref().map(|r| WireRange {
+                from: r.start,
+                to: r.end,
+            }),
+            line: self.line,
+            message: &self.message,
+            hints: &self.hints,
+            kind: match self.kind {
+                Kind::Typst => "typst",
+                Kind::Access => "access",
+                Kind::Plugin => "plugin",
+                Kind::Package => "package",
+                Kind::Font => "font",
+                Kind::Project => "project",
+            },
+        }
+        .serialize(serializer)
     }
 }

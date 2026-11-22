@@ -6,11 +6,18 @@
 //! interface pede o SVG de cada página por `page_svg(index, hash)`; hash que não é o da página
 //! atual responde `stale_page`. Compilação com erro ou abandonada mantém as páginas da última
 //! `Ok` (FR-014) e só traz diagnósticos.
+//!
+//! [`PreviewHub`] liga a agenda à interface: guarda a prévia do projeto aberto, entrega cada
+//! evento ao assinante (o `tauri::ipc::Channel` de `subscribe_preview`) e descarta o que vier
+//! da agenda de um projeto já fechado.
 
-use std::sync::Arc;
+use std::sync::mpsc::Receiver;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::thread;
 
 use serde::Serialize;
 use typst_layout::{Page, PagedDocument};
+use typst_svg::SvgOptions;
 
 use super::scheduler::{Compilation, Status};
 use crate::diagnostic::Diagnostic;
@@ -40,9 +47,16 @@ pub struct PreviewUpdate {
     pub duration_ms: u64,
 }
 
-/// Hash de uma página, em hexadecimal: muda quando qualquer coisa desenhada nela muda.
-pub fn page_hash(_page: &Page) -> String {
-    todo!("T035")
+/// Hash de uma página, em hexadecimal: muda quando qualquer coisa desenhada nela muda. Os
+/// quadros do Typst guardam o próprio hash (`LazyHash`), então o custo é pequeno.
+pub fn page_hash(page: &Page) -> String {
+    format!("{:032x}", typst::utils::hash128(page))
+}
+
+/// SVG de uma página (`typst-svg`). Imagens vêm embutidas como `data:` URL; a interface mostra
+/// o SVG como `<img>`, nunca como marcação no DOM (research R4).
+pub fn render_svg(page: &Page) -> String {
+    typst_svg::svg(page, &SvgOptions::default())
 }
 
 /// Estado da prévia: o último documento `Ok` e as páginas dele.
@@ -50,18 +64,164 @@ pub fn page_hash(_page: &Page) -> String {
 pub struct Preview {
     document: Option<Arc<PagedDocument>>,
     pages: Vec<PageInfo>,
+    /// Último evento entregue, para quem assinar depois.
+    last: Option<PreviewUpdate>,
 }
 
 impl Preview {
     /// Aplica uma compilação entregue pela agenda e devolve o evento para a interface.
-    pub fn apply(&mut self, _compilation: Compilation<PagedDocument>) -> PreviewUpdate {
-        let _ = (&self.document, &self.pages, Status::Ok);
-        todo!("T035")
+    pub fn apply(&mut self, compilation: Compilation<PagedDocument>) -> PreviewUpdate {
+        let Compilation {
+            compile_id,
+            status,
+            output,
+            diagnostics,
+            duration_ms,
+        } = compilation;
+        let (ok, changed) = match output {
+            Some(doc) if status == Status::Ok => {
+                let pages: Vec<PageInfo> = doc
+                    .pages()
+                    .iter()
+                    .enumerate()
+                    .map(|(index, page)| PageInfo {
+                        index,
+                        hash: page_hash(page),
+                        width_pt: page.frame.width().to_pt(),
+                        height_pt: page.frame.height().to_pt(),
+                    })
+                    .collect();
+                let changed = pages
+                    .iter()
+                    .filter(|p| self.pages.get(p.index).is_none_or(|old| old.hash != p.hash))
+                    .map(|p| p.index)
+                    .collect();
+                self.pages = pages;
+                self.document = Some(Arc::new(doc));
+                (true, changed)
+            }
+            // `ComErros` e `Abandonada`: mantém as páginas da última `Ok` (FR-014).
+            _ => (false, Vec::new()),
+        };
+        let update = PreviewUpdate {
+            compile_id,
+            ok,
+            pages: self.pages.clone(),
+            changed,
+            diagnostics,
+            duration_ms,
+        };
+        self.last = Some(update.clone());
+        update
+    }
+
+    /// Último documento compilado com sucesso.
+    pub fn document(&self) -> Option<&Arc<PagedDocument>> {
+        self.document.as_ref()
+    }
+
+    /// Evento para quem assina depois de compilar: o último, com todas as páginas em `changed`.
+    pub fn replay(&self) -> Option<PreviewUpdate> {
+        self.last.clone().map(|mut update| {
+            update.changed = (0..update.pages.len()).collect();
+            update
+        })
+    }
+
+    /// Página `index`, se `hash` for o atual; senão `stale_page`. Clonar a página é barato
+    /// (os quadros são compartilhados), e o SVG pode ser gerado fora de qualquer trava.
+    pub fn page(&self, index: usize, hash: &str) -> Result<Page, &'static str> {
+        match (self.pages.get(index), &self.document) {
+            (Some(info), Some(doc)) if info.hash == hash => {
+                doc.pages().get(index).cloned().ok_or(STALE_PAGE)
+            }
+            _ => Err(STALE_PAGE),
+        }
     }
 
     /// SVG da página `index`, se `hash` for o atual; senão `stale_page`.
-    pub fn page_svg(&self, _index: usize, _hash: &str) -> Result<String, &'static str> {
-        todo!("T035")
+    pub fn page_svg(&self, index: usize, hash: &str) -> Result<String, &'static str> {
+        self.page(index, hash).map(|page| render_svg(&page))
+    }
+}
+
+/// Quem recebe cada [`PreviewUpdate`] (em produção, o canal de `subscribe_preview`).
+pub type Sink = Arc<dyn Fn(&PreviewUpdate) + Send + Sync>;
+
+#[derive(Default)]
+struct HubState {
+    /// Muda a cada projeto aberto; entrega de geração velha é descartada.
+    generation: u64,
+    preview: Preview,
+    sink: Option<Sink>,
+}
+
+/// Prévia do projeto aberto e o assinante dela.
+#[derive(Default)]
+pub struct PreviewHub {
+    state: Mutex<HubState>,
+}
+
+impl PreviewHub {
+    fn lock(&self) -> MutexGuard<'_, HubState> {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Troca o assinante. Se já houver prévia, ele a recebe logo, com todas as páginas. A
+    /// entrega acontece sob a trava, para nunca chegar fora de ordem.
+    pub fn subscribe(&self, sink: Sink) {
+        let mut state = self.lock();
+        if let Some(update) = state.preview.replay() {
+            sink(&update);
+        }
+        state.sink = Some(sink);
+    }
+
+    /// Começa a prévia de um projeto novo e devolve a geração dele.
+    pub fn reset(&self) -> u64 {
+        let mut state = self.lock();
+        state.generation += 1;
+        state.preview = Preview::default();
+        state.generation
+    }
+
+    /// Aplica a compilação da geração `generation` e entrega o evento ao assinante.
+    pub fn deliver(&self, generation: u64, compilation: Compilation<PagedDocument>) {
+        let mut state = self.lock();
+        if state.generation != generation {
+            return;
+        }
+        let update = state.preview.apply(compilation);
+        if let Some(sink) = &state.sink {
+            sink(&update);
+        }
+    }
+
+    /// Página atual `index` com o hash `hash` (ver [`Preview::page`]).
+    pub fn page(&self, index: usize, hash: &str) -> Result<Page, &'static str> {
+        self.lock().preview.page(index, hash)
+    }
+
+    /// Último documento compilado com sucesso (saltos e estrutura, fases seguintes).
+    pub fn document(&self) -> Option<Arc<PagedDocument>> {
+        self.lock().preview.document().cloned()
+    }
+
+    /// Thread que leva as compilações da agenda à prévia. Termina quando a agenda é largada.
+    pub fn spawn_pump(
+        self: &Arc<Self>,
+        generation: u64,
+        compilations: Receiver<Compilation<PagedDocument>>,
+    ) {
+        let hub = Arc::clone(self);
+        thread::Builder::new()
+            .name(format!("prelo-preview-{generation}"))
+            .spawn(move || {
+                for compilation in compilations {
+                    hub.deliver(generation, compilation);
+                }
+            })
+            .expect("falha ao criar a thread da prévia");
     }
 }
 
@@ -73,16 +233,29 @@ mod tests {
 
     /// Três páginas pequenas; `b` é o texto da segunda.
     fn three_pages(b: &str) -> String {
-        format!(
-            "#set page(width: 100pt, height: 80pt)\nA\n#pagebreak()\n{b}\n#pagebreak()\nC\n"
-        )
+        format!("#set page(width: 100pt, height: 80pt)\nA\n#pagebreak()\n{b}\n#pagebreak()\nC\n")
     }
 
+    thread_local! {
+        /// Um World por teste (cada teste roda na sua thread), como no editor: o hash de uma
+        /// página é estável entre compilações do mesmo World. Worlds diferentes (pastas
+        /// diferentes) dão hashes diferentes, porque os quadros guardam a origem no código.
+        static WORLD: std::cell::RefCell<Option<(tempfile::TempDir, ProjectWorld)>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
+    /// Compila `text` como `main.typ` (texto não salvo) no World do teste.
     fn compile(text: &str) -> PagedDocument {
-        let dir = tempfile::tempdir().expect("pasta temporária");
-        std::fs::write(dir.path().join("main.typ"), text).unwrap();
-        let mut world = ProjectWorld::open(dir.path(), "main.typ").expect("World");
-        let outcome = world.compile();
+        let outcome = WORLD.with_borrow_mut(|slot| {
+            let (_, world) = slot.get_or_insert_with(|| {
+                let dir = tempfile::tempdir().expect("pasta temporária");
+                std::fs::write(dir.path().join("main.typ"), "").unwrap();
+                let world = ProjectWorld::open(dir.path(), "main.typ").expect("World");
+                (dir, world)
+            });
+            world.set_open_file("main.typ", text).expect("overlay");
+            world.compile()
+        });
         assert!(outcome.diagnostics.is_empty(), "{:?}", outcome.diagnostics);
         outcome.output.expect("compilou")
     }
@@ -173,10 +346,7 @@ mod tests {
         ));
         assert_eq!(more.changed, vec![3]);
         assert_eq!(more.pages.len(), 4);
-        let fewer = preview.apply(ok(
-            5,
-            compile("#set page(width: 100pt, height: 80pt)\nA\n"),
-        ));
+        let fewer = preview.apply(ok(5, compile("#set page(width: 100pt, height: 80pt)\nA\n")));
         assert_eq!(fewer.pages.len(), 1);
         assert!(fewer.changed.is_empty(), "{:?}", fewer.changed);
     }
@@ -262,7 +432,14 @@ mod tests {
         keys.sort();
         assert_eq!(
             keys,
-            ["changed", "compileId", "diagnostics", "durationMs", "ok", "pages"]
+            [
+                "changed",
+                "compileId",
+                "diagnostics",
+                "durationMs",
+                "ok",
+                "pages"
+            ]
         );
         let page = &json["pages"][0];
         let mut page_keys: Vec<_> = page.as_object().unwrap().keys().cloned().collect();
