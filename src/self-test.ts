@@ -9,7 +9,7 @@
 import { diagnosticCount } from "@codemirror/lint";
 import { invoke } from "@tauri-apps/api/core";
 import type { PreviewUpdate, ProjectInfo } from "./ipc";
-import { layoutProblems, previewZoomProblems } from "./layout-check";
+import { layoutProblems, paneLayoutProblems, previewZoomProblems } from "./layout-check";
 import type { WorkspaceHandle } from "./workspace";
 
 /** Chamada a algo que não existe: o Typst acusa erro nesta linha. */
@@ -201,7 +201,7 @@ export async function reportSelfTest(
   const elapsedMs = Math.round(performance.now());
   const rendered = ws.appInfoElement.textContent?.trim() ?? "";
   const scenario = await runEditorScenario(ws, () => invoke<ProjectInfo>("self_test_open_project"), {
-    checkLayout: () => [...cspViolations(), ...layoutProblems(document), ...previewZoomProblems(document)],
+    checkLayout: () => [...cspViolations(), ...layoutProblems(document), ...previewZoomProblems(document), ...paneLayoutProblems(document)],
     writeExternal: (text) => invoke("self_test_write_external", { text }),
   });
   await invoke("self_test_report", { rendered, elapsedMs, scenario });

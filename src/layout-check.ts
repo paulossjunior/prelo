@@ -135,3 +135,64 @@ export function previewZoomProblems(doc: Document = document): string[] {
   else for (let i = 0; i < clicks; i++) minus.click();
   return problems;
 }
+
+type Pane = "tree" | "editor" | "preview";
+const PANE_NAME: Record<Pane, string> = { tree: "árvore", editor: "editor", preview: "prévia" };
+const COLLAPSE: Record<Pane, string> = {
+  tree: "Recolher árvore de arquivos",
+  editor: "Recolher editor",
+  preview: "Recolher prévia",
+};
+/** Painel que precisa continuar ocupando o espaço e rolando quando o outro é recolhido. */
+const REMAINS: Record<Pane, { col: string; scroller: string }> = {
+  tree: { col: ".ws-col-editor", scroller: ".cm-scroller" },
+  editor: { col: ".ws-col-preview", scroller: ".pv-pages" },
+  preview: { col: ".ws-col-editor", scroller: ".cm-scroller" },
+};
+
+/**
+ * Painéis ajustáveis no app real (T093; FR-013b): recolhe cada painel pelo próprio botão,
+ * confere o trilho (visível, fino), o painel que sobra (largura, rolagem própria, dentro da
+ * área) e a janela (não rola), expande de novo e devolve o arranjo de antes.
+ */
+export function paneLayoutProblems(doc: Document = document): string[] {
+  const q = <T extends HTMLElement = HTMLElement>(sel: string) => doc.querySelector<T>(sel);
+  const collapse = (p: Pane) => q<HTMLButtonElement>(`button[aria-label="${COLLAPSE[p]}"]`);
+  const rail = (p: Pane) => q<HTMLButtonElement>(`.ws-rail-${p}`);
+  const col = (p: Pane) => q(`.ws-col-${p}`);
+  const body = q(".ws-body");
+  const panes: Pane[] = ["tree", "editor", "preview"];
+  if (!body || panes.some((p) => !collapse(p) || !rail(p) || !col(p))) {
+    return ["botões de recolher ou trilhos dos painéis ausentes (.ws-col-*, .ws-rail-*)"];
+  }
+  const closedBefore = panes.filter((p) => col(p)!.hidden);
+  for (const p of closedBefore) rail(p)!.click();
+
+  const problems: string[] = [];
+  const page = doc.scrollingElement ?? doc.documentElement;
+  for (const p of ["preview", "editor", "tree"] as const) {
+    const name = PANE_NAME[p];
+    collapse(p)!.click();
+    if (!col(p)!.hidden) problems.push(`o botão de recolher a ${name} não a recolheu`);
+    const r = rail(p)!;
+    const rw = r.getBoundingClientRect().width;
+    if (r.hidden || rw <= 0 || rw > 40) problems.push(`trilho da ${name} recolhida com ${rw} px (esperado de 1 a 40 px)`);
+    const rest = q(REMAINS[p].col);
+    const scroller = rest?.querySelector<HTMLElement>(REMAINS[p].scroller);
+    const rr = rest?.getBoundingClientRect();
+    if (!rest || !rr || rr.width <= 0) {
+      problems.push(`com a ${name} recolhida, ${REMAINS[p].col} sumiu`);
+    } else if (rr.right > body.getBoundingClientRect().right + TOL) {
+      problems.push(`com a ${name} recolhida, ${REMAINS[p].col} passa da área de trabalho`);
+    }
+    if (scroller && !scrolls(scroller)) problems.push(`com a ${name} recolhida, ${REMAINS[p].scroller} não rola no próprio painel`);
+    if (page.scrollWidth > page.clientWidth + TOL || page.scrollHeight > page.clientHeight + TOL) {
+      problems.push(`com a ${name} recolhida, a janela rola (${page.scrollWidth}×${page.scrollHeight})`);
+    }
+    r.click();
+    if (col(p)!.hidden || col(p)!.getBoundingClientRect().width <= 0) problems.push(`o trilho da ${name} não a reabriu`);
+  }
+
+  for (const p of closedBefore) collapse(p)!.click();
+  return problems;
+}

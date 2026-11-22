@@ -12,6 +12,7 @@ import { mountAppInfo, type Invoke } from "./app-info";
 import { mountEditor, type EditorHandle } from "./editor/editor";
 import { mountExport } from "./export";
 import { errorMessage, toIpcError, type Ipc, type IpcError, type PreviewUpdate, type ProjectInfo } from "./ipc";
+import { mountPanes, type PanesHandle } from "./panes";
 import { mountPreview, type BlobUrls, type PreviewHandle } from "./preview/preview";
 import { conflictResolver, watchExternalChanges } from "./project/prompts";
 import { mountTree, type TreeHandle } from "./project/tree";
@@ -84,7 +85,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   const aboutBtn = button("Sobre");
   // "Exportar PDF" (US5): a ação principal da barra; o resto em src/export.ts.
   const exporter = mountExport({ ipc, onError: (err) => showError(err) });
-  top.append(projectEl, el("div", "ws-spacer"), openBtn, saveBtn, aboutBtn, exporter.button);
+  const topSpacer = el("div", "ws-spacer");
+  top.append(projectEl, topSpacer, openBtn, saveBtn, aboutBtn, exporter.button);
 
   const message = el("div", "ws-message");
   message.setAttribute("role", "status");
@@ -92,12 +94,24 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   const banner = el("div", "ws-banner");
   banner.hidden = true;
 
+  // Cada painel numa coluna com cabeçalho e botão de recolher (FR-013b); a prévia usa a própria
+  // barra como cabeçalho.
   const body = el("div", "ws-body");
+  const treeCol = el("div", "ws-col ws-col-tree");
+  const treeHead = el("div", "ws-pane-h");
+  treeHead.append(el("h4", undefined, "Arquivos"));
   const side = el("aside", "ws-side");
-  side.append(el("h4", undefined, "Arquivos"));
+  treeCol.append(treeHead, side);
+  const editorCol = el("div", "ws-col ws-col-editor");
+  const editorHead = el("div", "ws-pane-h");
+  const editorPath = el("span", "ws-pane-path");
+  editorHead.append(el("span", "ws-pane-title", "Editor"), editorPath);
   const editorBox = el("div", "ws-editor");
+  editorCol.append(editorHead, editorBox);
+  const previewCol = el("div", "ws-col ws-col-preview");
   const previewBox = el("div", "ws-preview");
-  body.append(side, editorBox, previewBox);
+  previewCol.append(previewBox);
+  body.append(treeCol, editorCol, previewCol);
 
   const status = el("footer", "ws-status");
   const compileEl = el("span", "ws-compile", "Sem compilação");
@@ -115,7 +129,23 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   // ---------------------------------------------------------------- estado
   let info: ProjectInfo | null = null;
   let editor: EditorHandle | null = null;
-  let preview: PreviewHandle = mountPreview(previewBox, { ipc, urls: opts.previewUrls });
+  const panes: PanesHandle = mountPanes({
+    body,
+    tree: treeCol,
+    editor: editorCol,
+    preview: previewCol,
+    treeHeader: treeHead,
+    editorHeader: editorHead,
+    key: null,
+    // Editor que volta a aparecer ou muda de largura mede de novo as linhas.
+    onChange: () => editor?.view.requestMeasure(),
+  });
+  topSpacer.after(panes.modeControl);
+  function attachPreview(p: PreviewHandle): PreviewHandle {
+    p.bar.append(panes.previewButton);
+    return p;
+  }
+  let preview: PreviewHandle = attachPreview(mountPreview(previewBox, { ipc, urls: opts.previewUrls }));
   let last: PreviewUpdate | null = null;
   let opening = 0;
   const observers = new Set<(u: PreviewUpdate) => void>();
@@ -262,7 +292,9 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     preview.destroy();
     // O zoom da prévia é lembrado por projeto (FR-013a); `ProjectInfo` não traz o caminho da
     // raiz, então a chave é o nome da pasta.
-    preview = mountPreview(previewBox, { ipc, urls: opts.previewUrls, zoomKey: next.name });
+    preview = attachPreview(mountPreview(previewBox, { ipc, urls: opts.previewUrls, zoomKey: next.name }));
+    // O arranjo dos painéis também é lembrado por projeto (FR-013b).
+    panes.setKey(next.name);
     compileEl.textContent = "Compilando…";
     compileEl.classList.remove("is-ok", "is-err");
     saveEl.textContent = "";
@@ -367,6 +399,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     saveEl.textContent = "Sem alterações";
     saveBtn.disabled = false;
     tree.setCurrent(path);
+    editorPath.textContent = path;
     if (last) handle.setDiagnostics(last.diagnostics);
     refreshChooseMain();
   }
@@ -413,6 +446,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
       editor?.destroy();
       editor = null;
       preview.destroy();
+      panes.destroy();
       tree.destroy();
       app.remove();
     },
