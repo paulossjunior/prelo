@@ -74,7 +74,18 @@ vêm da última prévia `Ok`.
 
 ## Permissões da janela
 
-Iguais às de 001 mais a permissão de chamar os comandos acima. Nenhuma permissão de `fs`,
+Iguais às de 001 mais a permissão de chamar os comandos acima e, para receber os eventos do
+núcleo, exatamente `core:event:allow-listen` e `core:event:allow-unlisten` (sem `emit`, sem
+outra permissão `core:`). Nenhuma permissão de `fs`,
 `dialog`, `http`, `shell` ou `opener` na webview. CSP:
 `default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' blob: prelo-asset: http://prelo-asset.localhost; style-src 'self'`.
 O teste de configuração de segurança é atualizado para essa lista exata.
+
+## Autoteste e e2e (só build de teste, feature `self-test`)
+
+| Comando | Argumentos | Efeito |
+|---|---|---|
+| `self_test_open_project` | — | Copia `src-tauri/tests/fixtures/artigo-basico` para uma pasta temporária, abre a cópia como projeto e devolve `ProjectInfo` (sem diálogo nativo). |
+| `self_test_report` | `{ rendered, elapsedMs, scenario }` | Além da conferência de 001, confere o roteiro do editor (`scenario = { projectOpened, previewChanged, errorLine, diagnosticLine, editorMarked, compilerShown, failure? }`: a prévia mudou, o erro escrito na linha `errorLine` veio com diagnóstico nessa linha e marcado no editor, a versão embutida aparece) e que não há `typst` no PATH (SC-006). Encerra com 0 ou 1. |
+
+A interface abre a fixture sozinha com `VITE_SELF_TEST` (autoteste) ou `VITE_E2E` (WebDriver).

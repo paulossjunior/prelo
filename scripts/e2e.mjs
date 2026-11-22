@@ -8,8 +8,8 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 
 // Comandos fixos, sem entrada externa interpolada.
-function step(cmd) {
-  const r = spawnSync(cmd, { cwd: root, stdio: "inherit", shell: true });
+function step(cmd, env = process.env) {
+  const r = spawnSync(cmd, { cwd: root, stdio: "inherit", shell: true, env });
   return r.status ?? 1;
 }
 
@@ -18,7 +18,12 @@ const codes = [step("node scripts/self-test.mjs")];
 if (process.platform === "darwin") {
   console.log("e2e: WebDriver não disponível no macOS; coberto pelo autoteste");
 } else {
-  const built = step("npx --no-install tauri build --debug --no-bundle");
+  // T031: build de depuração com `self_test_open_project` (feature self-test) e a interface
+  // em modo e2e (VITE_E2E), que abre a fixture sem o diálogo nativo. Nunca em release.
+  const built = step("npx --no-install tauri build --debug --no-bundle --features self-test", {
+    ...process.env,
+    VITE_E2E: "1",
+  });
   codes.push(built);
   if (process.platform === "win32") {
     // Processos do WebView2 que sobraram do autoteste prendem a pasta de dados do app.

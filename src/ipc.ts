@@ -129,6 +129,8 @@ export const ERROR_MESSAGES = {
     "O registro do projeto (.prelo/project.json) é inválido; usando os padrões.",
   main_file_missing:
     "O arquivo principal do projeto não foi encontrado. Escolha um .typ como arquivo principal.",
+  external_change_conflict:
+    "O arquivo mudou fora do Prelo e há alterações suas não salvas; escolha qual versão manter.",
   compiler_version_mismatch:
     "O projeto foi registrado com outra versão do Typst. Atualize a versão do projeto para compilar.",
   compile_errors: "O documento tem erros; corrija-os antes de exportar o PDF.",

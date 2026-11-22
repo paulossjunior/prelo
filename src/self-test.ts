@@ -1,12 +1,127 @@
-// Autoteste ponta a ponta (T012/T020): só roda em build com VITE_SELF_TEST definido.
-// Reporta ao núcleo o texto renderizado e o tempo desde o início da página; o núcleo decide
-// e encerra o app (contracts/ipc.md, self_test_report).
+// Autoteste ponta a ponta (T012/T020 e T031): só roda em build com VITE_SELF_TEST definido.
+// Além da versão do app (001), percorre US1 no app real: abre a fixture `artigo-basico`
+// (cópia temporária feita pelo núcleo), edita, espera a prévia mudar, introduz um erro e
+// espera o diagnóstico marcado no editor. Reporta ao núcleo o que observou; o núcleo confere,
+// inclusive que não há `typst` no PATH (SC-006), e encerra o app
+// (contracts/ipc.md, `self_test_report`).
+import { diagnosticCount } from "@codemirror/lint";
 import { invoke } from "@tauri-apps/api/core";
+import type { PreviewUpdate, ProjectInfo } from "./ipc";
+import type { WorkspaceHandle } from "./workspace";
 
-export async function reportSelfTest(root: HTMLElement): Promise<void> {
-  if (!import.meta.env.VITE_SELF_TEST) return;
-  await invoke("self_test_report", {
-    rendered: root.textContent?.trim() ?? "",
-    elapsedMs: Math.round(performance.now()),
+/** Chamada a algo que não existe: o Typst acusa erro nesta linha. */
+export const ERROR_SNIPPET = "#funcao-inexistente-do-autoteste()";
+const NEW_TEXT = "Parágrafo novo escrito pelo autoteste do Prelo.";
+
+export interface ScenarioResult {
+  projectOpened: boolean;
+  previewChanged: boolean;
+  /** Linha (1-based) onde o erro foi escrito. */
+  errorLine: number;
+  /** Linha do diagnóstico de erro do arquivo principal, se veio. */
+  diagnosticLine: number | null;
+  editorMarked: boolean;
+  compilerShown: string;
+  failure?: string;
+}
+
+export interface ScenarioOptions {
+  /** Espera máxima por cada compilação. */
+  timeoutMs?: number;
+}
+
+function waitFor(
+  ws: WorkspaceHandle,
+  what: string,
+  pred: (u: PreviewUpdate) => boolean,
+  timeoutMs: number,
+): Promise<PreviewUpdate> {
+  return new Promise((resolve, reject) => {
+    const stop = ws.onPreviewUpdate((u) => {
+      if (!pred(u)) return;
+      clearTimeout(timer);
+      stop();
+      resolve(u);
+    });
+    const timer = setTimeout(() => {
+      stop();
+      reject(new Error(`a prévia não ${what} em ${timeoutMs} ms`));
+    }, timeoutMs);
   });
+}
+
+const hashes = (u: PreviewUpdate) => u.pages.map((p) => p.hash).join(",");
+
+/** Percorre US1 sobre a área de trabalho montada; nunca lança: falha vai em `failure`. */
+export async function runEditorScenario(
+  ws: WorkspaceHandle,
+  open: () => Promise<ProjectInfo>,
+  opts: ScenarioOptions = {},
+): Promise<ScenarioResult> {
+  const timeoutMs = opts.timeoutMs ?? 15_000;
+  const r: ScenarioResult = {
+    projectOpened: false,
+    previewChanged: false,
+    errorLine: 0,
+    diagnosticLine: null,
+    editorMarked: false,
+    compilerShown: "",
+  };
+  try {
+    const first = waitFor(ws, "compilou ao abrir o projeto", (u) => u.ok && u.pages.length > 0, timeoutMs);
+    const info = await open();
+    await ws.showProject(info);
+    const editor = ws.editor();
+    r.projectOpened = editor?.path === info.mainFile;
+    r.compilerShown = ws.compilerLabel();
+    if (!editor) throw new Error("o arquivo principal não abriu no editor");
+    const before = hashes(await first);
+
+    // Cenário 2: digitar muda a prévia sem ação adicional.
+    const changed = waitFor(ws, "mudou depois da edição", (u) => u.ok && hashes(u) !== before, timeoutMs);
+    const view = editor.view;
+    view.dispatch({
+      changes: { from: view.state.doc.length, insert: `\n\n${NEW_TEXT}\n` },
+      userEvent: "input.type",
+    });
+    await changed;
+    r.previewChanged = true;
+
+    // Cenário 4: erro marcado no editor, na linha certa.
+    const failed = waitFor(
+      ws,
+      "acusou o erro introduzido",
+      (u) => !u.ok && u.diagnostics.some((d) => d.severity === "error" && d.path === info.mainFile),
+      timeoutMs,
+    );
+    const at = view.state.doc.length;
+    view.dispatch({ changes: { from: at, insert: `\n${ERROR_SNIPPET}\n` }, userEvent: "input.type" });
+    r.errorLine = view.state.doc.lineAt(at + 1).number;
+    const u = await failed;
+    const d = u.diagnostics.find((x) => x.severity === "error" && x.path === info.mainFile)!;
+    if (d.range) r.diagnosticLine = view.state.doc.lineAt(Math.min(d.range.from, view.state.doc.length)).number;
+    else if (typeof d.line === "number") r.diagnosticLine = d.line;
+    r.editorMarked = diagnosticCount(view.state) > 0;
+  } catch (err) {
+    r.failure = err instanceof Error ? err.message : String(err);
+  }
+  return r;
+}
+
+/** Roda o autoteste no app real e entrega o resultado ao núcleo. */
+export async function reportSelfTest(ws: WorkspaceHandle): Promise<void> {
+  if (!import.meta.env.VITE_SELF_TEST) return;
+  await ws.ready;
+  // SC-002: versão e sistema visíveis em até 3 s desde o início da página.
+  const elapsedMs = Math.round(performance.now());
+  const rendered = ws.appInfoElement.textContent?.trim() ?? "";
+  const scenario = await runEditorScenario(ws, () => invoke<ProjectInfo>("self_test_open_project"));
+  await invoke("self_test_report", { rendered, elapsedMs, scenario });
+}
+
+/** Build de e2e (WebDriver): abre a fixture logo ao iniciar, sem o diálogo nativo. */
+export async function openE2eFixture(ws: WorkspaceHandle): Promise<void> {
+  if (!import.meta.env.VITE_E2E) return;
+  await ws.ready;
+  await ws.showProject(await invoke<ProjectInfo>("self_test_open_project"));
 }

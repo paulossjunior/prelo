@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { pathWithoutTypst } from "../scripts/no-typst-path.mjs";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const exe = process.platform === "win32" ? "prelo.exe" : "prelo";
@@ -25,7 +26,7 @@ let driver: ChildProcess | undefined;
 
 export const config: WebdriverIO.Config = {
   runner: "local",
-  specs: ["./app.e2e.ts"],
+  specs: ["./app.e2e.ts", "./editor.e2e.ts"],
   maxInstances: 1,
   hostname: "127.0.0.1",
   port: 4444,
@@ -44,7 +45,9 @@ export const config: WebdriverIO.Config = {
     const edge = process.env.EDGEWEBDRIVER;
     const native = process.env.PRELO_NATIVE_DRIVER ?? (edge ? join(edge, "msedgedriver.exe") : undefined);
     const args = process.platform === "win32" && native ? ["--native-driver", native] : [];
-    driver = spawn(driverBin, args, { stdio: [null, process.stdout, process.stderr] });
+    // SC-006 (T031): o app, aberto pelo tauri-driver, herda um PATH sem `typst`.
+    const env = { ...process.env, PATH: pathWithoutTypst(process.env.PATH) };
+    driver = spawn(driverBin, args, { env, stdio: [null, process.stdout, process.stderr] });
   },
   afterSession: () => {
     driver?.kill();

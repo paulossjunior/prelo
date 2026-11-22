@@ -257,6 +257,26 @@ describe("autocompletar (complete)", () => {
     expect(result?.options[1]).toMatchObject({ apply: "let " });
   });
 
+  it("depois de `.` substitui só o identificador após o último ponto (PR #179)", async () => {
+    const core = fakeCore({ complete: () => [{ label: "abs", kind: "function" }] });
+    const source = completionSource({ ipc: core.ipc, path: "main.typ", flush: async () => {} });
+    const doc = "#calc.ab";
+    const result = await source(ctx(doc, doc.length));
+    // `from` aponta para `ab`, não para `calc.ab`: escolher `abs` deixa `#calc.abs`.
+    expect(result?.from).toBe("#calc.".length);
+    const re = result?.validFor as RegExp;
+    expect(re.test("ab")).toBe(true);
+    expect(re.test("calc.ab")).toBe(false);
+  });
+
+  it("logo após o ponto (palavra vazia) também pergunta ao núcleo e insere na posição", async () => {
+    const core = fakeCore({ complete: () => [{ label: "abs", kind: "function" }] });
+    const source = completionSource({ ipc: core.ipc, path: "main.typ", flush: async () => {} });
+    const result = await source(ctx("#calc.", 6));
+    expect(core.calls("complete")).toHaveLength(1);
+    expect(result?.from).toBe(6);
+  });
+
   it("not_implemented (antes de T036) não quebra e para de perguntar", async () => {
     const core = fakeCore();
     const source = completionSource({ ipc: core.ipc, path: "main.typ", flush: async () => {} });

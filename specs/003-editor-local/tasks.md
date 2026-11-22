@@ -97,7 +97,7 @@ prévia mudar, introduzir erro e ver o diagnóstico na linha certa; ver a versã
 - [X] T028 [P] [US1] Testes de mudança externa em `src-tauri/src/fs/watch.rs` (módulo `tests`) para `OpenFile.lastSavedHash`: própria gravação ignorada; mudança externa sem alteração local recarrega e recompila; com alteração local emite `external_change_conflict` e nada é descartado até `resolve_external_change` (FR-008)
 - [X] T029 [P] [US1] Testes do serviço de linguagem em `src-tauri/tests/lang_service.rs` (D-17): autocompletar de função, variável e rótulo pelo `typst-ide`, incluindo texto ainda não salvo (mesmo World da prévia, FR-011); *hover* de função; *tokens* de realce gerados por `typst-syntax` (`LinkedNode` + `highlight`) para markup, código e matemática (FR-006)
 - [X] T030 [P] [US1] Testes de interface em `src/editor/editor.test.ts`, `src/editor/diagnostics.test.ts`, `src/preview/preview.test.ts`, `src/project/tree.test.ts`: mudanças enviadas como `{from,to,insert}` com versão; ⌘S/Ctrl+S chama `save_file`; diagnósticos marcados no intervalo; páginas como `<img>` com blob URL (nunca SVG no DOM); virtualização (visíveis ± 2); faixa de erro; árvore abre `.typ`, `.bib`, `.yml`
-- [ ] T031 [US1] Teste ponta a ponta em `e2e/editor.e2e.ts` e no autoteste (`src/self-test.ts`, `src-tauri/src/self_test.rs`): com `typst` fora do PATH, abrir `fixtures/artigo-basico/`, editar, ver a prévia mudar e um diagnóstico aparecer (SC-006)
+- [X] T031 [US1] Teste ponta a ponta em `e2e/editor.e2e.ts` e no autoteste (`src/self-test.ts`, `src-tauri/src/self_test.rs`): com `typst` fora do PATH, abrir `fixtures/artigo-basico/`, editar, ver a prévia mudar e um diagnóstico aparecer (SC-006)
 
 ### Implementação para User Story 1
 
@@ -108,7 +108,7 @@ prévia mudar, introduzir erro e ver o diagnóstico na linha certa; ver a versã
 - [X] T036 [US1] Implementar `src-tauri/src/lang_service.rs` sobre `typst-ide` (`autocomplete`, `tooltip`) e `typst-syntax` (realce), sem `tinymist-query` (D-17), com os comandos `complete` e `semantic_tokens`, até T029 passar
 - [X] T037 [P] [US1] Implementar `src/editor/editor.ts`, `src/editor/highlight.ts`, `src/editor/completion.ts`, `src/editor/diagnostics.ts` até a parte de editor de T030 passar
 - [X] T038 [P] [US1] Implementar `src/preview/preview.ts` e `src/project/tree.ts` até a parte de prévia e árvore de T030 passar
-- [ ] T039 [US1] Implementar `src/about.ts` (versão embutida e registrada, aviso de diferença, licenças das fontes e avisos de atribuição do `typst-assets`, D-15, D-16) e o diálogo de conflito externo em `src/project/prompts.ts`; montar o layout em `src/main.ts` até T031 passar
+- [X] T039 [US1] Implementar `src/about.ts` (versão embutida e registrada, aviso de diferença, licenças das fontes e avisos de atribuição do `typst-assets`, D-15, D-16) e o diálogo de conflito externo em `src/project/prompts.ts`; montar o layout em `src/main.ts` até T031 passar
 
 **Checkpoint**: US1 funciona sozinha; QA valida.
 
