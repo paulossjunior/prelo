@@ -110,7 +110,7 @@ describe("árvore do projeto", () => {
   });
 });
 
-// Criar arquivo e pasta pela árvore (T085; FR-034, FR-035, cenário 9 de US1). O nome é
+// Criar arquivo e pasta pela árvore (T085; FR-034, FR-035, cenário 10 de US1). O nome é
 // digitado num campo da própria árvore: `window.prompt` é bloqueado no app (plugin de diálogo).
 describe("criar arquivo e pasta", () => {
   function action(parent: HTMLElement, name: "new-file" | "new-dir") {

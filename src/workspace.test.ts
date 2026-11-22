@@ -395,3 +395,72 @@ describe("mudança externa recarregada sem alteração local (FR-008)", () => {
     expect(core.calls("open_file")).toHaveLength(opened);
   });
 });
+
+// ---------------------------------------------------------------- painéis (T092; FR-013b)
+
+describe("painéis ajustáveis", () => {
+  afterEach(() => {
+    try {
+      localStorage.clear();
+    } catch {
+      // sem armazenamento no ambiente: nada a limpar
+    }
+  });
+  const byLabel = (root: ParentNode, label: string) => root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
+  it("cada painel tem o seu botão de recolher; o da prévia fica na barra da prévia", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    expect(root.querySelector(".ws-col-tree .ws-pane-h button[aria-label='Recolher árvore de arquivos']")).not.toBeNull();
+    expect(root.querySelector(".ws-col-editor .ws-pane-h button[aria-label='Recolher editor']")).not.toBeNull();
+    expect(root.querySelector(".pvbar button[aria-label='Recolher prévia']")).not.toBeNull();
+    expect(root.querySelector(".ws-top [aria-label='Painéis visíveis']")).not.toBeNull();
+  });
+
+  it("ao abrir projeto (prévia montada de novo) o botão da prévia continua na barra dela", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    expect(root.querySelector(".pvbar button[aria-label='Recolher prévia']")).not.toBeNull();
+    expect(root.querySelectorAll("button[aria-label='Recolher prévia']")).toHaveLength(1);
+  });
+
+  it("só a prévia: o editor vira trilho e volta com o mesmo texto", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    byLabel(root, "Recolher editor")!.click();
+    expect(root.querySelector<HTMLElement>(".ws-col-editor")!.hidden).toBe(true);
+    expect(byLabel(root, "Expandir editor")!.hidden).toBe(false);
+    byLabel(root, "Expandir editor")!.click();
+    expect(ws.editor()?.view.state.doc.toString()).toBe(FILES["main.typ"]);
+  });
+
+  it("⌘2 com o foco no editor mostra só a prévia (o editor não usa esse atalho)", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    const content = ws.editor()!.view.contentDOM;
+    const ev = new KeyboardEvent("keydown", { key: "2", metaKey: true, bubbles: true, cancelable: true });
+    content.dispatchEvent(ev);
+    expect(root.querySelector<HTMLElement>(".ws-col-editor")!.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>(".ws-col-preview")!.hidden).toBe(false);
+  });
+
+  it("o arranjo fica lembrado pelo projeto", async () => {
+    const a = setup();
+    await a.ws.ready;
+    button(a.root, /Abrir projeto/)!.click();
+    await settle();
+    byLabel(a.root, "Recolher árvore de arquivos")!.click();
+    const b = setup();
+    await b.ws.ready;
+    expect(b.root.querySelector<HTMLElement>(".ws-col-tree")!.hidden).toBe(false);
+    button(b.root, /Abrir projeto/)!.click();
+    await settle();
+    expect(b.root.querySelector<HTMLElement>(".ws-col-tree")!.hidden).toBe(true);
+  });
+});

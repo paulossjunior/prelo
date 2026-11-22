@@ -6,6 +6,7 @@
 //! cancelamento) e a próxima edição compila numa thread nova com um World novo. Resultado de
 //! compilação mais antiga que a última entregue é descartado (FR-015).
 
+use std::panic::{self, AssertUnwindSafe};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread;
@@ -63,6 +64,20 @@ pub fn timeout_diagnostic(limit: Duration) -> Diagnostic {
     let mut diag = Diagnostic::error(Kind::Typst, format!("compilação excedeu {limit}"));
     diag.hints
         .push("a prévia volta a compilar na próxima edição".to_owned());
+    diag
+}
+
+/// Diagnóstico de compilação interrompida por erro interno (pânico) do compilador.
+pub fn panic_diagnostic() -> Diagnostic {
+    let mut diag = Diagnostic::error(
+        Kind::Typst,
+        "erro interno do compilador ao processar o projeto",
+    );
+    diag.hints.push(
+        "a prévia volta a compilar na próxima edição; se o erro se repetir, desfaça a última \
+         alteração"
+            .to_owned(),
+    );
     diag
 }
 
@@ -225,8 +240,20 @@ fn work<C: Compiler>(shared: &Shared<C>, mut compiler: C, generation: u64) {
         shared.watch.notify_all();
 
         let started = Instant::now();
-        let outcome = compiler.compile(input);
+        // Pânico do compilador com entrada malformada (FR-024) vira diagnóstico na hora, sem
+        // esperar o vigia. O World pode ter ficado incoerente: a próxima edição usa um novo.
+        let result = panic::catch_unwind(AssertUnwindSafe(|| compiler.compile(input)));
         let duration_ms = millis(started.elapsed());
+        let (outcome, broken) = match result {
+            Ok(outcome) => (outcome, false),
+            Err(_) => (
+                Outcome {
+                    output: None,
+                    diagnostics: vec![panic_diagnostic()],
+                },
+                true,
+            ),
+        };
 
         let mut state = shared.lock();
         if state.generation != generation {
@@ -248,6 +275,9 @@ fn work<C: Compiler>(shared: &Shared<C>, mut compiler: C, generation: u64) {
         });
         drop(state);
         shared.watch.notify_all();
+        if broken {
+            compiler = (shared.new_compiler)();
+        }
     }
 }
 
@@ -355,6 +385,9 @@ mod tests {
         thread: ThreadId,
     }
 
+    /// Edição que faz o compilador falso entrar em pânico.
+    const PANIC: &str = "pânico";
+
     /// World falso: avisa quando começa a compilar e guarda qual instância compilou.
     struct FakeWorld {
         id: usize,
@@ -370,6 +403,9 @@ mod tests {
             let _ = self.started.lock().unwrap().send((input.tag, thread));
             if let Some(gate) = &input.gate {
                 gate.wait();
+            }
+            if input.tag == PANIC {
+                panic!("pânico falso do compilador");
             }
             if input.fail {
                 return Outcome {
@@ -605,6 +641,31 @@ mod tests {
         h.wait_started("antigo");
         assert_eq!(h.next().status, Status::Abandonada);
         gate.open();
+        h.assert_quiet();
+    }
+
+    /// Pânico do compilador (erro interno do Typst com entrada malformada) vira diagnóstico na
+    /// hora, sem esperar o limite de tempo, e a próxima edição compila num World novo.
+    #[test]
+    fn compiler_panic_becomes_a_diagnostic_and_the_next_edit_compiles() {
+        let h = Harness::new(WAIT);
+        let started = Instant::now();
+        let id = h.scheduler.submit(quick(PANIC));
+        let c = h.next();
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "esperou o limite"
+        );
+        assert_eq!((c.compile_id, c.status), (id, Status::ComErros));
+        let diag = &c.diagnostics[0];
+        assert_eq!(diag.kind, Kind::Typst);
+        assert_eq!(diag.severity, Severity::Error);
+        assert!(diag.message.contains("erro interno"), "{diag:?}");
+
+        let id = h.scheduler.submit(quick("depois"));
+        let c = h.next();
+        assert_eq!((c.compile_id, c.status), (id, Status::Ok));
+        assert_eq!(c.output.expect("saída").world, 1, "World não foi refeito");
         h.assert_quiet();
     }
 }

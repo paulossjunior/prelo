@@ -120,7 +120,7 @@ button.pt-item:hover { background: var(--accent-soft); }
   padding: 8px 18px; color: var(--muted); font: 12px/1.5 var(--f-body);
   border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums;
 }
-.pv-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-label { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seg { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); flex: none; }
 .seg button { font: inherit; font-size: 12px; border: 0; background: transparent; color: var(--muted); padding: 5px 11px; cursor: pointer; }
 .seg button + button, .seg button + span, .seg span + button { border-left: 1px solid var(--line); }
@@ -187,12 +187,12 @@ body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
 .ws-message[hidden], .ws-banner[hidden] { display: none; }
 /* Colunas do protótipo (200px | 1,25fr | 1fr), sem o painel de revisão, que é da fase 4. */
 .ws-body { display: grid; grid-template-columns: 200px minmax(0, 1.25fr) minmax(0, 1fr); min-height: 0; }
-.ws-side { border-right: 1px solid var(--line); padding: 10px; overflow: auto; background: var(--surface-2); }
-.ws-side h4 {
+.ws-side { padding: 10px; overflow: auto; background: var(--surface-2); min-height: 0; }
+.ws-col-tree h4 {
   font-family: var(--f-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--muted); margin: 6px 4px;
 }
-.ws-editor { min-height: 0; overflow: hidden; border-right: 1px solid var(--line); background: var(--code-bg); }
+.ws-editor { min-height: 0; overflow: hidden; background: var(--code-bg); }
 .ws-editor .cm-editor { height: 100%; }
 .ws-preview { min-height: 0; overflow: hidden; }
 .ws-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); }
@@ -240,3 +240,52 @@ body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
 }
 .ws-modal details { margin: 4px 0; }
 .ws-modal summary { cursor: pointer; }
+
+/* ---------- painéis ajustáveis (T093; FR-013b) ---------- */
+/* Cada coluna: cabeçalho com o botão de recolher + conteúdo. As colunas do grid vêm de
+   src/panes.ts (padrão do protótipo: 200px | 1,25fr | 1fr), com divisórias e trilhos. */
+.ws-col { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.ws-col-tree { background: var(--surface-2); }
+.ws-col-preview { grid-template-rows: minmax(0, 1fr); }
+.ws-col[hidden], .ws-rail[hidden], .ws-split[hidden] { display: none; }
+.ws-pane-h {
+  display: flex; align-items: center; gap: 6px; min-height: 37px; box-sizing: border-box;
+  padding: 4px 8px 4px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2);
+  color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden;
+}
+.ws-pane-h h4 { margin: 0; }
+.ws-pane-title { color: var(--ink); font-weight: 600; }
+.ws-pane-path { overflow: hidden; text-overflow: ellipsis; font-family: var(--f-mono); font-size: 11px; }
+.ws-pane-h .ws-collapse { margin-left: auto; }
+/* Botão de recolher: secundário, sem fundo, cor apagada (linguagem do protótipo). */
+.ws-collapse {
+  flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+  font: 600 14px/1 var(--f-body); color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-radius: 6px; cursor: pointer;
+}
+.ws-collapse:hover:not(:disabled) { color: var(--ink); border-color: var(--line); background: var(--surface); }
+.ws-collapse:disabled { opacity: 0.35; cursor: not-allowed; }
+.ws-collapse:focus-visible, .ws-rail:focus-visible, .ws-split:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+/* Trilho do painel recolhido: um clique reabre. */
+.ws-rail {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0;
+  padding: 8px 0; margin: 0; border: 0; background: var(--surface-2); color: var(--muted);
+  font: 12px/1 var(--f-body); cursor: pointer;
+}
+.ws-rail:hover { color: var(--ink); background: var(--accent-soft); }
+.ws-rail-icon { font-weight: 600; font-size: 14px; }
+.ws-rail-label { writing-mode: vertical-rl; letter-spacing: 0.04em; }
+.ws-rail-tree { border-right: 1px solid var(--line); }
+.ws-rail-editor { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.ws-rail-preview { border-left: 1px solid var(--line); }
+/* Divisória: fio de 1 px no meio de uma faixa de 6 px que se arrasta. */
+.ws-split {
+  min-width: 0; cursor: col-resize; touch-action: none; background:
+    linear-gradient(to right, transparent 2.5px, var(--line) 2.5px, var(--line) 3.5px, transparent 3.5px);
+}
+.ws-split:hover, .ws-body.is-resizing .ws-split { background-color: var(--accent-soft); }
+.ws-body.is-resizing { cursor: col-resize; user-select: none; }
+.ws-panes { display: flex; align-items: center; gap: 8px; }
+.ws-tree-toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); }

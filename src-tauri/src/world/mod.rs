@@ -214,6 +214,7 @@ where
             Some(lines.byte_to_utf16(r.start)?..lines.byte_to_utf16(r.end)?)
         });
 
+        let utf8_literal = (diag.message == INVALID_UTF8).then(|| literal.clone());
         let refusal = self
             .access
             .refusal_for_message(&diag.message)
@@ -238,7 +239,7 @@ where
                 diag.hints.iter().map(|h| h.v.to_string()).collect(),
             ),
         };
-        Diagnostic {
+        let mut converted = Diagnostic {
             severity: match diag.severity {
                 TypstSeverity::Error => Severity::Error,
                 TypstSeverity::Warning => Severity::Warning,
@@ -249,9 +250,46 @@ where
             message,
             hints,
             kind,
+        };
+        if let Some(literal) = utf8_literal {
+            self.locate_invalid_utf8(&mut converted, literal.as_deref());
         }
+        converted
+    }
+
+    /// Arquivo que não é UTF-8 (FR-024): o Typst não diz qual nem onde. Quem falhou é o
+    /// arquivo do literal no ponto do erro (`#include "cap.typ"`) ou, sem posição, o
+    /// principal. Relê pela regra de escopo, acha a linha do primeiro byte inválido e a cita
+    /// numa dica; sem posição, o diagnóstico passa a apontar o principal nessa linha.
+    fn locate_invalid_utf8(&self, diag: &mut Diagnostic, literal: Option<&str>) {
+        let (current, requested) = match (literal, diag.path.as_deref()) {
+            (Some(literal), Some(path)) => (path.to_owned(), literal.to_owned()),
+            (_, None) => (String::new(), self.main.0.clone()),
+            (None, Some(_)) => return,
+        };
+        let Ok(bytes) = self.access.scope().read_from(&current, &requested) else {
+            return;
+        };
+        let Err(error) = std::str::from_utf8(&bytes) else {
+            return;
+        };
+        let newlines = bytes[..error.valid_up_to()]
+            .iter()
+            .filter(|&&b| b == b'\n')
+            .count();
+        let line = u32::try_from(newlines).unwrap_or(u32::MAX - 1) + 1;
+        if diag.path.is_none() {
+            diag.path = Some(requested.clone());
+            diag.line = Some(line);
+        }
+        diag.hints.push(format!(
+            "o arquivo `{requested}` não está em UTF-8: primeiro byte inválido na linha {line}"
+        ));
     }
 }
+
+/// Mensagem do Typst para arquivo que não é UTF-8 (`FileError::InvalidUtf8`).
+const INVALID_UTF8: &str = "file is not valid UTF-8";
 
 /// Biblioteca padrão do Typst com os padrões de fonte do Prelo.
 fn library() -> Arc<LazyHash<Library>> {

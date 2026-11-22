@@ -1,7 +1,8 @@
 // Testes da conferência de layout do autoteste (T037/T039). O jsdom não faz layout: as medidas
 // são fixadas à mão, reproduzindo o app real com e sem o tema base do CodeMirror.
 import { afterEach, describe, expect, it } from "vitest";
-import { layoutProblems, previewZoomProblems, watchCspViolations } from "./layout-check";
+import { layoutProblems, paneLayoutProblems, previewZoomProblems, watchCspViolations } from "./layout-check";
+import { mountPanes } from "./panes";
 import { mountPreview } from "./preview/preview";
 import { fakeCore } from "./testing/fake-core";
 
@@ -183,5 +184,93 @@ describe("previewZoomProblems", () => {
   it("recusa prévia sem a barra de zoom", () => {
     document.body.innerHTML = `<div class="pv"><div class="pv-pages"></div></div>`;
     expect(previewZoomProblems(document)[0]).toMatch(/barra de zoom/);
+  });
+});
+
+// ---------------------------------------------------------------- painéis (T092; FR-013b)
+
+describe("paneLayoutProblems", () => {
+  /**
+   * Painéis de verdade (mountPanes) com medidas simuladas: o painel escondido mede zero, o
+   * trilho 28 px, e o painel que sobra ocupa o resto da largura da área.
+   */
+  function panesDom(opts: { railWidth?: number; windowScrolls?: boolean; overflow?: string } = {}) {
+    document.body.innerHTML = "";
+    const body = document.createElement("div");
+    body.className = "ws-body";
+    const col = (cls: string, inner: string) => {
+      const c = document.createElement("div");
+      c.className = cls;
+      const h = document.createElement("div");
+      h.className = "ws-pane-h";
+      const box = document.createElement("div");
+      box.className = inner;
+      box.style.overflowY = opts.overflow ?? "auto";
+      c.append(h, box);
+      return { c, h, box };
+    };
+    const tree = col("ws-col-tree", "ws-side");
+    const editor = col("ws-col-editor", "cm-scroller");
+    const preview = col("ws-col-preview", "pv-pages");
+    body.append(tree.c, editor.c, preview.c);
+    document.body.append(body);
+    const panes = mountPanes({
+      body,
+      tree: tree.c,
+      editor: editor.c,
+      preview: preview.c,
+      treeHeader: tree.h,
+      editorHeader: editor.h,
+      storage: null,
+      key: null,
+    });
+    preview.h.append(panes.previewButton);
+    const width = (el: HTMLElement): number => {
+      if (el.hidden || el.closest("[hidden]")) return 0;
+      if (el.classList.contains("ws-rail")) return opts.railWidth ?? 28;
+      const l = panes.layout();
+      const open = (l.editor ? 1 : 0) + (l.preview ? 1 : 0);
+      if (el.matches(".ws-col-tree, .ws-side")) return l.treeWidth;
+      return (1000 - (l.tree ? l.treeWidth : 28) - (open === 2 ? 0 : 28)) / open;
+    };
+    for (const el of document.querySelectorAll<HTMLElement>(".ws-body *, .ws-body")) {
+      el.getBoundingClientRect = () => {
+        const w = el.classList.contains("ws-body") ? 1000 : width(el);
+        return { left: 0, top: 40, width: w, height: w > 0 ? 600 : 0, right: w, bottom: w > 0 ? 640 : 40, x: 0, y: 40 } as DOMRect;
+      };
+    }
+    scrollable(document.documentElement, {
+      scrollHeight: 700,
+      clientHeight: 700,
+      scrollWidth: opts.windowScrolls ? 1400 : 1000,
+      clientWidth: 1000,
+    });
+    return panes;
+  }
+
+  it("aceita recolher e expandir cada painel, e devolve o arranjo de antes", () => {
+    const panes = panesDom();
+    expect(paneLayoutProblems(document)).toEqual([]);
+    expect(panes.layout()).toMatchObject({ tree: true, editor: true, preview: true });
+    panes.destroy();
+  });
+
+  it("recusa trilho largo demais e janela que rola depois de recolher", () => {
+    const panes = panesDom({ railWidth: 120, windowScrolls: true });
+    const p = paneLayoutProblems(document);
+    expect(p.some((x) => x.includes("trilho"))).toBe(true);
+    expect(p.some((x) => x.includes("janela rola"))).toBe(true);
+    panes.destroy();
+  });
+
+  it("recusa painel que sobrou sem rolagem própria", () => {
+    const panes = panesDom({ overflow: "visible" });
+    expect(paneLayoutProblems(document).some((x) => x.includes("não rola"))).toBe(true);
+    panes.destroy();
+  });
+
+  it("recusa área sem os botões de recolher", () => {
+    document.body.innerHTML = `<div class="ws-body"></div>`;
+    expect(paneLayoutProblems(document)[0]).toMatch(/botões de recolher/);
   });
 });
