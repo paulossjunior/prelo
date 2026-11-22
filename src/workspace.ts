@@ -12,7 +12,7 @@ import { mountAppInfo, type Invoke } from "./app-info";
 import { mountEditor, type EditorHandle } from "./editor/editor";
 import { errorMessage, toIpcError, type Ipc, type IpcError, type PreviewUpdate, type ProjectInfo } from "./ipc";
 import { mountPreview, type BlobUrls, type PreviewHandle } from "./preview/preview";
-import { watchExternalChanges } from "./project/prompts";
+import { conflictResolver, watchExternalChanges } from "./project/prompts";
 import { mountTree, type TreeHandle } from "./project/tree";
 import "./workspace.css";
 
@@ -21,6 +21,8 @@ export const MAIN_FILE_MISSING = "main_file_missing";
 
 /** Códigos de recusa de edição que pedem recarregar o arquivo do núcleo. */
 const RELOAD_CODES = new Set(["version_mismatch", "bad_range"]);
+/** `save_file` recusado porque o arquivo mudou fora e há alterações locais (PR #181). */
+const CONFLICT = "external_change_conflict";
 const USER_EVENTS = ["input", "delete", "undo", "redo", "move"];
 
 export interface WorkspaceOptions {
@@ -131,6 +133,14 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     editorBox.replaceChildren(p);
   }
   setEmptyEditor("Nenhum projeto aberto.");
+
+  const conflictOpts = {
+    ipc,
+    parent: app,
+    editorFor: (p: string) => (editor?.path === p ? editor : null),
+    onError: (err: IpcError) => showError(err),
+  };
+  const resolveConflict = conflictResolver(conflictOpts);
 
   const tree: TreeHandle = mountTree(side, { ipc, onOpen: (path) => void openFile(path) });
 
@@ -306,6 +316,10 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
       version: opened.version,
       tokenDelayMs: opts.tokenDelayMs,
       onError: (err) => {
+        if (err.code === CONFLICT) {
+          void resolveConflict(path);
+          return;
+        }
         showError(err);
         if (RELOAD_CODES.has(err.code)) void reload(path);
       },
@@ -344,12 +358,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
       showError(toIpcError(err));
     }
     // Sem permissão de eventos na webview, escutar falha: o resto da área segue funcionando.
-    watchExternalChanges({
-      ipc,
-      parent: app,
-      editorFor: (p) => (editor?.path === p ? editor : null),
-      onError: showError,
-    }).then(
+    watchExternalChanges(conflictOpts, resolveConflict).then(
       (stop) => stops.push(stop),
       (err: unknown) => console.warn("conflito externo: sem escuta de eventos", err),
     );

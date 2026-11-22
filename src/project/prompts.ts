@@ -67,10 +67,13 @@ export interface ConflictOptions {
   onError?: (err: IpcError) => void;
 }
 
-/** Escuta `external_change_conflict`; devolve a função que para de escutar. */
-export function watchExternalChanges(opts: ConflictOptions): Promise<() => void> {
+/**
+ * Pergunta e resolve o conflito de `path`: um só diálogo por arquivo de cada vez. Usado pelo
+ * evento e quando `save_file` responde `external_change_conflict`.
+ */
+export function conflictResolver(opts: ConflictOptions): (path: string) => Promise<void> {
   const pending = new Set<string>();
-  return opts.ipc.onExternalChangeConflict(async ({ path }) => {
+  return async (path: string) => {
     if (typeof path !== "string" || pending.has(path)) return;
     pending.add(path);
     try {
@@ -85,5 +88,13 @@ export function watchExternalChanges(opts: ConflictOptions): Promise<() => void>
     } finally {
       pending.delete(path);
     }
-  });
+  };
+}
+
+/** Escuta `external_change_conflict`; devolve a função que para de escutar. */
+export function watchExternalChanges(
+  opts: ConflictOptions,
+  resolve: (path: string) => Promise<void> = conflictResolver(opts),
+): Promise<() => void> {
+  return opts.ipc.onExternalChangeConflict(({ path }) => void resolve(path));
 }
