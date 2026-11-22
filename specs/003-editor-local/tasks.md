@@ -109,6 +109,7 @@ prévia mudar, introduzir erro e ver o diagnóstico na linha certa; ver a versã
 - [X] T037 [P] [US1] Implementar `src/editor/editor.ts`, `src/editor/highlight.ts`, `src/editor/completion.ts`, `src/editor/diagnostics.ts` até a parte de editor de T030 passar
 - [X] T038 [P] [US1] Implementar `src/preview/preview.ts` e `src/project/tree.ts` até a parte de prévia e árvore de T030 passar
 - [X] T039 [US1] Implementar `src/about.ts` (versão embutida e registrada, aviso de diferença, licenças das fontes e avisos de atribuição do `typst-assets`, D-15, D-16) e o diálogo de conflito externo em `src/project/prompts.ts`; montar o layout em `src/main.ts` até T031 passar
+- [X] T084 [US1] Mudança externa sem alteração local chega ao editor (FR-008; bug visto no app real, #189): o núcleo emite `external_change_reloaded { path, version }` depois de recarregar (`src-tauri/src/lib.rs`, `src-tauri/src/fs/watch.rs`); `src/ipc.ts` expõe `onExternalChangeReloaded`; `src/workspace.ts` busca o texto com `open_file` e recarrega o editor aberto com esse caminho (`src/editor/editor.ts` `reload` troca só o trecho que mudou, fora do histórico); testes em `src-tauri/src/lib.rs` (evento só no recarregamento limpo; com alteração local, só `external_change_conflict`), `src/workspace.test.ts`, `src/editor/editor.test.ts` e no autoteste (`self_test_write_external`)
 
 **Checkpoint**: US1 funciona sozinha; QA valida.
 

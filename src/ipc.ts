@@ -101,6 +101,15 @@ export interface ExternalChangeConflict {
   path: string;
 }
 
+/**
+ * O núcleo recarregou do disco um arquivo aberto sem alteração local (FR-008). Só o caminho e
+ * a versão nova: o texto vem de `open_file`, a fonte única do estado do arquivo.
+ */
+export interface ExternalChangeReloaded {
+  path: string;
+  version: number;
+}
+
 export interface CopyIntoProjectOffer {
   requested: string;
 }
@@ -219,6 +228,7 @@ export interface Ipc {
   decidePlugin(sha256: string, approve: boolean): Promise<unknown>;
   redownloadPackage(spec: string): Promise<unknown>;
   onExternalChangeConflict(handler: (e: ExternalChangeConflict) => void): Promise<() => void>;
+  onExternalChangeReloaded(handler: (e: ExternalChangeReloaded) => void): Promise<() => void>;
   onCopyIntoProjectOffer(handler: (e: CopyIntoProjectOffer) => void): Promise<() => void>;
   onPluginApprovalNeeded(handler: (e: PluginApprovalNeeded) => void): Promise<() => void>;
 }
@@ -264,6 +274,7 @@ export function createIpc(transport: Transport): Ipc {
     decidePlugin: (sha256, approve) => call("decide_plugin", { sha256, approve }),
     redownloadPackage: (spec) => call("redownload_package", { spec }),
     onExternalChangeConflict: on<ExternalChangeConflict>("external_change_conflict"),
+    onExternalChangeReloaded: on<ExternalChangeReloaded>("external_change_reloaded"),
     onCopyIntoProjectOffer: on<CopyIntoProjectOffer>("copy_into_project_offer"),
     onPluginApprovalNeeded: on<PluginApprovalNeeded>("plugin_approval_needed"),
   };
