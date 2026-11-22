@@ -51,6 +51,33 @@ O diagnóstico cita sempre o caminho **pedido** no `.typ`, nunca o caminho real 
 Toda sugestão de caminho passa pelos passos 2–4 antes de ir para a interface; sugestão
 recusada some da lista. Links simbólicos para fora não são listados.
 
+## Criação de arquivo e pasta (FR-034, FR-035)
+
+`create_file` e `create_dir` (contracts/ipc.md) são as únicas gravações de item novo pedidas
+pela interface. Nesta ordem:
+
+1. Caminho absoluto (`/`, `\`, `C:`) → `path_outside_project`.
+2. Separa pasta-mãe e último componente. Último componente vazio, `.` ou `..` →
+   `invalid_name`. Qualquer componente normal (mãe ou último) que começa com `.` →
+   `invalid_name` (itens ocultos, `.prelo/`, `.git/`).
+3. Nome do último componente: sem `\0` nem caractere de controle, sem `\ : * ? " < > |`, sem
+   espaço ou ponto no fim, não é nome reservado do Windows (`CON`, `PRN`, `AUX`, `NUL`,
+   `COM1`–`COM9`, `LPT1`–`LPT9`, com ou sem extensão, em qualquer caixa), até 255 bytes →
+   senão `invalid_name`.
+4. Pasta-mãe pelos passos 2–4 de "Passos" (`..` além da raiz ou link para fora →
+   `path_outside_project`; inexistente → `not_found`); não é pasta → `not_found`.
+5. Abre a pasta-mãe (`O_DIRECTORY | O_NOFOLLOW` em Unix) e confere no descritor que o
+   caminho real continua sob a raiz → senão `path_outside_project`.
+6. Último componente já existe (`symlink_metadata`, sem seguir link): link que resolve fora da
+   raiz → `path_outside_project`; qualquer outro → `already_exists`.
+7. Cria relativo ao descritor da mãe: `openat(O_CREAT | O_EXCL | O_NOFOLLOW)` ou `mkdirat`
+   (Unix). `EEXIST` → `already_exists`; outra falha → `write_failed`. No Windows, cria pelo
+   caminho com `create_new` e confere o caminho real do criado; se ficou fora da raiz, apaga
+   e responde `path_outside_project`.
+
+O evento do observador para o item criado não gera conflito: arquivo não aberto é ignorado e,
+aberto depois, o conteúdo do disco é o mesmo que o núcleo leu (watch.rs).
+
 ## Fontes
 
 O resolvedor de fontes lê `fonts/**/*.{ttf,otf,ttc,otc}` do projeto por esta mesma função.

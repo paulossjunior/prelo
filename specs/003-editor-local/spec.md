@@ -55,6 +55,12 @@ diagnóstico na linha certa e que a versão do compilador aparece no app.
 7. **Given** alterações feitas no editor, **When** a pessoa salva, fecha o app ou o app
    encerra de forma inesperada, **Then** o texto editado está no disco ao reabrir o projeto,
    exceto no máximo os últimos segundos de digitação no caso de encerramento inesperado.
+8. **Given** o projeto aberto, **When** a pessoa cria um arquivo ou uma pasta pela árvore
+   ("Novo arquivo" / "Nova pasta", digitando o nome na própria árvore), **Then** o item
+   aparece vazio na pasta escolhida, sem sobrescrever nada que exista; um `.typ`, `.bib` ou
+   `.yml` novo abre no editor; nome inválido, nome que já existe ou caminho fora do projeto é
+   recusado com mensagem em português e nada é criado (FR-034, FR-035; emenda de
+   2026-11-22).
 
 ---
 
@@ -266,6 +272,22 @@ comando.
   memória até a pessoa escolher onde salvar.
 - **Disco cheio ou sem permissão de escrita ao salvar ou exportar**: o app avisa, não perde o
   texto do editor e não deixa arquivo parcialmente gravado no lugar do original.
+- **Criar arquivo ou pasta com nome que já existe** (inclusive como link simbólico, mesmo
+  quebrado): recusado com `already_exists`; o existente nunca é sobrescrito nem truncado
+  (FR-034).
+- **Criar com nome inválido** (vazio, `.`/`..`, terminado em barra, com `\0` ou caractere de
+  controle, com `\ : * ? " < > |`, terminado em espaço ou ponto, nome reservado do Windows
+  como `CON` ou `nul.typ`, acima de 255 bytes): recusado com `invalid_name` em todos os
+  sistemas, para o projeto continuar abrindo nos computadores de todos os coautores (FR-035).
+- **Criar com nome que começa com `.`** (como `.env`, ou dentro de `.prelo/` ou `.git/`):
+  recusado com `invalid_name`. **Decisão**: a árvore esconde itens ocultos, então criar um
+  item que a pessoa não veria seria confuso; `.prelo/` e `.git/` são do app e do git (gravar
+  em `.git/hooks` seria execução de código). Pode ser revisto quando houver git (FR-035).
+- **Criar com `..` além da raiz, caminho absoluto ou pasta-mãe que é link para fora**:
+  recusado com `path_outside_project`, sem criar nada fora do projeto; `..` que continua
+  dentro da raiz é aceito (FR-035).
+- **Criar dentro de pasta que não existe**: recusado com `not_found`; pastas intermediárias
+  não são criadas (FR-034).
 
 ## Clarifications
 
@@ -302,6 +324,19 @@ comando.
 - **FR-005**: O app MUST mostrar a estrutura de seções (outline) do artigo e levar editor e
   prévia até a seção escolhida. A contagem de pendências de revisão por seção fica para a
   fase de revisão (RF-04).
+- **FR-034**: A pessoa MUST poder criar, pela árvore de arquivos, um arquivo vazio ou uma
+  pasta vazia numa pasta existente do projeto, digitando o nome num campo da própria árvore
+  (Enter cria, Esc cancela). Criar MUST NOT sobrescrever nem truncar nada que exista (criação
+  exclusiva, `O_EXCL`); o item novo aparece na árvore e um arquivo que o editor abre (FR-004)
+  abre no editor. Emenda de 2026-11-22, pedido do dono ("permita o usuário criar arquivos e
+  pastas"); renomear, mover e apagar ficam fora desta emenda (RF-04).
+- **FR-035**: Criar arquivo ou pasta MUST seguir a regra de escopo (RF-08,
+  [file-access.md](contracts/file-access.md#criação-de-arquivo-e-pasta-fr-034-fr-035)):
+  caminho relativo à raiz; absoluto, `..` além da raiz ou pasta-mãe que resolve fora da raiz
+  (inclusive por link) → `path_outside_project`; o último componente MUST NOT ser seguido se
+  for link; a pasta-mãe é conferida no descritor aberto, de modo que trocar um link entre a
+  conferência e a criação não cria nada fora da raiz. Nomes MUST seguir as regras de "Edge
+  Cases" (`invalid_name`), inclusive a recusa de nomes ocultos (começados por `.`).
 
 **Edição**
 
@@ -487,7 +522,7 @@ comando.
   PDF em até 5 minutos no primeiro uso, sem consultar documentação.
 - **SC-009**: Nenhum trabalho salvo é perdido em testes de encerramento forçado do app; no
   máximo os últimos 2 s de digitação não salvos (Princípio III).
-- **SC-010**: Cada requisito funcional de comportamento (FR-001 a FR-029) tem ao menos um teste
+- **SC-010**: Cada requisito funcional de comportamento (FR-001 a FR-029, FR-034 e FR-035) tem ao menos um teste
   automatizado que falhou antes da implementação (Princípio VI).
 
 ## Assumptions

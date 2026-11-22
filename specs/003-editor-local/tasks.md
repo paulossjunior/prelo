@@ -98,6 +98,8 @@ prévia mudar, introduzir erro e ver o diagnóstico na linha certa; ver a versã
 - [X] T029 [P] [US1] Testes do serviço de linguagem em `src-tauri/tests/lang_service.rs` (D-17): autocompletar de função, variável e rótulo pelo `typst-ide`, incluindo texto ainda não salvo (mesmo World da prévia, FR-011); *hover* de função; *tokens* de realce gerados por `typst-syntax` (`LinkedNode` + `highlight`) para markup, código e matemática (FR-006)
 - [X] T030 [P] [US1] Testes de interface em `src/editor/editor.test.ts`, `src/editor/diagnostics.test.ts`, `src/preview/preview.test.ts`, `src/project/tree.test.ts`: mudanças enviadas como `{from,to,insert}` com versão; ⌘S/Ctrl+S chama `save_file`; diagnósticos marcados no intervalo; páginas como `<img>` com blob URL (nunca SVG no DOM); virtualização (visíveis ± 2); faixa de erro; árvore abre `.typ`, `.bib`, `.yml`
 - [X] T031 [US1] Teste ponta a ponta em `e2e/editor.e2e.ts` e no autoteste (`src/self-test.ts`, `src-tauri/src/self_test.rs`): com `typst` fora do PATH, abrir `fixtures/artigo-basico/`, editar, ver a prévia mudar e um diagnóstico aparecer (SC-006)
+- [ ] T084 [P] [US1] Testes de criação de arquivo e pasta no núcleo (emenda de 2026-11-22; FR-034, FR-035, cenário 8 de US1): em `src-tauri/src/fs/create.rs` (módulo `tests`) — arquivo vazio e pasta criados na raiz e em subpasta existente, `..` dentro da raiz aceito, nome existente (arquivo, pasta, link, link quebrado) → `already_exists` sem truncar, nomes inválidos (vazio, `.`, `..`, terminado em `/`, `\0`, controle, `\ : * ? " < > |`, espaço/ponto no fim, `CON`/`nul.typ`, > 255 bytes, oculto `.x` e dentro de `.prelo/`) → `invalid_name`, mãe inexistente ou arquivo → `not_found`, mãe que é link para fora → `path_outside_project` sem criar nada fora; em `src-tauri/src/commands.rs` (módulo `tests`) — o novo arquivo aparece em `list_tree`, abre vazio por `open_file` e o aviso do observador para ele é `Ignored` (sem `external_change_conflict`); em `src-tauri/tests/security_ipc.rs` — `create_file` e `create_dir` entram em `path_commands` (absoluto, `..` além da raiz e link para fora → `path_outside_project`; malformados recusados; sem projeto → `no_project`)
+- [ ] T085 [P] [US1] Testes de interface da criação (FR-034, cenário 8 de US1) em `src/project/tree.test.ts` e `src/ipc.test.ts`: botões "Novo arquivo" e "Nova pasta" na árvore abrem um campo de nome na própria página (sem `window.prompt`), Enter chama `create_file`/`create_dir` com o caminho na pasta escolhida, Esc cancela sem chamar o núcleo, recusa do núcleo vira mensagem em português no campo, a árvore se atualiza e um `.typ` novo abre no editor; wrappers `createFile`/`createDir` e mensagens de `already_exists`/`invalid_name`
 
 ### Implementação para User Story 1
 
@@ -109,6 +111,8 @@ prévia mudar, introduzir erro e ver o diagnóstico na linha certa; ver a versã
 - [X] T037 [P] [US1] Implementar `src/editor/editor.ts`, `src/editor/highlight.ts`, `src/editor/completion.ts`, `src/editor/diagnostics.ts` até a parte de editor de T030 passar
 - [X] T038 [P] [US1] Implementar `src/preview/preview.ts` e `src/project/tree.ts` até a parte de prévia e árvore de T030 passar
 - [X] T039 [US1] Implementar `src/about.ts` (versão embutida e registrada, aviso de diferença, licenças das fontes e avisos de atribuição do `typst-assets`, D-15, D-16) e o diálogo de conflito externo em `src/project/prompts.ts`; montar o layout em `src/main.ts` até T031 passar
+- [ ] T086 [US1] Implementar `src-tauri/src/fs/create.rs` (regras de [file-access.md](contracts/file-access.md#criação-de-arquivo-e-pasta-fr-034-fr-035): mãe pela regra de escopo e conferida no descritor, `openat`/`mkdirat` com `O_EXCL`/`O_NOFOLLOW`, nunca sobrescreve) e os comandos `create_file` e `create_dir` em `src-tauri/src/commands.rs` e `src-tauri/src/lib.rs`, até T084 passar
+- [ ] T087 [US1] Implementar em `src/project/tree.ts` e `src/ipc.ts` os botões "Novo arquivo"/"Nova pasta", o campo de nome na árvore e as mensagens de erro, até T085 passar
 
 **Checkpoint**: US1 funciona sozinha; QA valida.
 
@@ -277,7 +281,7 @@ arquivos.
 
 - Setup: T004, T005, T009, T010 juntos.
 - Foundational: T011–T016 juntos (arquivos diferentes); T023 em paralelo com T017–T022.
-- US1: T024–T030 juntos; T037 e T038 juntos.
+- US1: T024–T030 juntos; T037 e T038 juntos; T084 e T085 juntos, depois T086 e T087.
 - US2: T040–T044 e T082 juntos.
 - US3: T050–T055 juntos.
 - US4, US5 e US6 podem andar em paralelo depois de US1.
