@@ -10,9 +10,12 @@
 use std::fs::File;
 use std::io;
 use std::path::Path;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
+
+use super::scope::MAX_FILE_BYTES;
 
 /// Ociosidade depois da última edição que dispara o salvamento automático (FR-007, SC-009).
 pub const AUTOSAVE_DELAY: Duration = Duration::from_secs(2);
@@ -84,8 +87,15 @@ pub struct OpenFile {
 impl OpenFile {
     /// Arquivo lido do disco, limpo e na versão 0. Bytes que não são UTF-8 → `not_utf8`.
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, &'static str> {
-        let _ = (bytes, NOT_UTF8);
-        todo!()
+        let last_saved_hash = sha256(&bytes);
+        let text = String::from_utf8(bytes).map_err(|_| NOT_UTF8)?;
+        Ok(Self {
+            text,
+            version: 0,
+            dirty: false,
+            last_saved_hash,
+            idle_since: Instant::now(),
+        })
     }
 
     pub fn text(&self) -> &str {
@@ -111,20 +121,29 @@ impl OpenFile {
     /// `version_mismatch`, intervalo inválido → `bad_range`, texto acima do limite →
     /// `too_large`; em todos os erros nada muda.
     pub fn edit(&mut self, version: u64, changes: &[Change]) -> Result<u64, &'static str> {
-        let _ = (version, changes, VERSION_MISMATCH, TOO_LARGE);
-        todo!()
+        if version != self.version {
+            return Err(VERSION_MISMATCH);
+        }
+        let text = apply_changes(&self.text, changes)?;
+        if text.len() as u64 > MAX_FILE_BYTES {
+            return Err(TOO_LARGE);
+        }
+        self.text = text;
+        self.version += 1;
+        self.dirty = true;
+        self.idle_since = Instant::now();
+        Ok(self.version)
     }
 
     /// Hora de salvar sozinho: sujo e ocioso há pelo menos [`AUTOSAVE_DELAY`] em `now`.
     pub fn autosave_due(&self, now: Instant) -> bool {
-        let _ = now;
-        todo!()
+        self.dirty && now.saturating_duration_since(self.idle_since) >= AUTOSAVE_DELAY
     }
 
     /// Grava o texto em `path` de forma atômica. Limpo → nada a gravar. Falha → `write_failed`,
     /// texto e `dirty` mantidos.
     pub fn save(&mut self, path: &Path) -> Result<(), &'static str> {
-        self.save_with(path, |file, bytes| io::Write::write_all(file, bytes))
+        self.save_with(path, io::Write::write_all)
     }
 
     /// Como [`save`](Self::save), com quem preenche o temporário (os testes simulam falha).
@@ -133,8 +152,22 @@ impl OpenFile {
         path: &Path,
         fill: impl FnOnce(&mut File, &[u8]) -> io::Result<()>,
     ) -> Result<(), &'static str> {
-        let _ = (path, fill, WRITE_FAILED);
-        todo!()
+        if !self.dirty {
+            return Ok(());
+        }
+        let bytes = self.text.as_bytes();
+        match write_atomic_with(path, |file| fill(file, bytes)) {
+            Ok(()) => {
+                self.last_saved_hash = sha256(bytes);
+                self.dirty = false;
+                Ok(())
+            }
+            Err(_) => {
+                // Continua sujo; o salvamento automático espera outra pausa antes de tentar.
+                self.idle_since = Instant::now();
+                Err(WRITE_FAILED)
+            }
+        }
     }
 }
 
@@ -148,21 +181,66 @@ fn write_atomic_with(
     path: &Path,
     fill: impl FnOnce(&mut File) -> io::Result<()>,
 ) -> io::Result<()> {
-    let _ = (path, fill);
-    todo!()
+    let dir = match path.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => dir,
+        _ => Path::new("."),
+    };
+    // Oculto (começa com `.`): a árvore do projeto não mostra o temporário.
+    let mut temp = tempfile::Builder::new()
+        .prefix(".prelo-save-")
+        .suffix(".tmp")
+        .tempfile_in(dir)?;
+    fill(temp.as_file_mut())?;
+    // O temporário nasce com 0600; o arquivo gravado mantém as permissões do original.
+    if let Ok(meta) = std::fs::metadata(path) {
+        temp.as_file().set_permissions(meta.permissions())?;
+    }
+    temp.as_file().sync_all()?;
+    temp.persist(path).map_err(|e| e.error)?;
+    // O `rename` só é durável depois do `fsync` da pasta (Unix; no Windows não se abre pasta).
+    #[cfg(unix)]
+    if let Ok(d) = File::open(dir) {
+        let _ = d.sync_all();
+    }
+    Ok(())
+}
+
+fn sha256(bytes: &[u8]) -> [u8; 32] {
+    Sha256::digest(bytes).into()
 }
 
 /// `SystemTime` em RFC 3339, UTC, com milissegundos (`savedAt` do contrato).
 pub fn format_utc(time: SystemTime) -> String {
-    let _ = time;
-    todo!()
+    let since = time.duration_since(UNIX_EPOCH).unwrap_or_default();
+    let secs = since.as_secs();
+    let (days, rem) = (secs / 86_400, secs % 86_400);
+    let (year, month, day) = civil_from_days(days as i64);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}.{:03}Z",
+        rem / 3600,
+        rem % 3600 / 60,
+        rem % 60,
+        since.subsec_millis()
+    )
+}
+
+/// Dias desde 1970-01-01 → (ano, mês, dia) no calendário gregoriano (algoritmo de H. Hinnant).
+fn civil_from_days(days: i64) -> (i64, u32, u32) {
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = (doy - (153 * mp + 2) / 5 + 1) as u32;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 } as u32;
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    (year, month, day)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sha2::{Digest, Sha256};
-    use std::time::UNIX_EPOCH;
 
     fn change(from: usize, to: usize, insert: &str) -> Change {
         Change {
@@ -173,7 +251,7 @@ mod tests {
     }
 
     fn sha(bytes: &[u8]) -> [u8; 32] {
-        Sha256::digest(bytes).into()
+        sha256(bytes)
     }
 
     /// Pasta com `main.typ` = "= Título\n" e o arquivo aberto a partir do disco.

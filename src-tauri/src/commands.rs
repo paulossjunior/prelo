@@ -25,8 +25,7 @@ use tauri::ipc::{InvokeBody, Request};
 use tauri::State;
 
 pub use crate::fs::save::{apply_changes, Change};
-#[allow(unused_imports)] // AUTOSAVE_DELAY citado na documentação
-use crate::fs::save::{format_utc, OpenFile, AUTOSAVE_DELAY};
+use crate::fs::save::{format_utc, OpenFile};
 use crate::fs::scope::{Refusal, Scope};
 use crate::project::record::{self, LoadedRecord, RecordState};
 
@@ -391,22 +390,54 @@ impl AppState {
     /// Grava o arquivo aberto (⌘S) de forma atômica e devolve `savedAt`. Falha →
     /// `write_failed`, com o texto ainda em memória e o arquivo sujo.
     pub fn save_file(&self, requested: &str) -> Result<String, String> {
-        let _ = requested;
-        todo!()
+        self.with_path(requested, |project, path| {
+            let file = project.files.get_mut(path.relative()).ok_or(NOT_FOUND)?;
+            file.save(path.absolute())?;
+            Ok(format_utc(SystemTime::now()))
+        })
     }
 
-    /// Salvamento automático: grava os arquivos sujos e ociosos há [`AUTOSAVE_DELAY`] em `now`.
+    /// Salvamento automático: grava os arquivos sujos e ociosos há
+    /// [`AUTOSAVE_DELAY`](crate::fs::save::AUTOSAVE_DELAY) em `now`.
     /// Devolve os caminhos que falharam (continuam sujos e são tentados de novo mais tarde).
     pub fn autosave(&self, now: Instant) -> Vec<String> {
-        let _ = now;
-        todo!()
+        self.save_where(|file| file.autosave_due(now))
     }
 
     /// Último Salvar antes de fechar (Princípio III): grava todo arquivo sujo. Devolve se a
     /// janela pode fechar: sim se tudo foi gravado; se algo falhou, recusa o primeiro pedido
     /// (o texto continua em memória) e aceita o seguinte, para a pessoa nunca ficar presa.
     pub fn flush_for_close(&self) -> bool {
-        todo!()
+        if self.save_where(OpenFile::is_dirty).is_empty() {
+            self.close_refused.store(false, Ordering::SeqCst);
+            return true;
+        }
+        self.close_refused.swap(true, Ordering::SeqCst)
+    }
+
+    /// Grava os arquivos abertos que satisfazem `which`; devolve os que falharam. Cada caminho é
+    /// validado de novo antes de gravar (uma pasta trocada por link desde a abertura não leva a
+    /// gravação para fora da raiz). O estado fica travado durante a gravação, de modo que
+    /// gravações do mesmo arquivo nunca se cruzam.
+    fn save_where(&self, which: impl Fn(&OpenFile) -> bool) -> Vec<String> {
+        let mut guard = self.lock();
+        let Some(project) = guard.as_mut() else {
+            return Vec::new();
+        };
+        let mut failed = Vec::new();
+        for (relative, file) in project.files.iter_mut() {
+            if !which(file) {
+                continue;
+            }
+            let saved = validate_path(&project.scope, relative)
+                .map_err(|_| "write_failed")
+                .and_then(|path| file.save(path.absolute()));
+            if saved.is_err() {
+                failed.push(relative.clone());
+            }
+        }
+        failed.sort();
+        failed
     }
 
     pub fn choose_main_file(&self, requested: &str) -> Result<ProjectInfo, String> {
@@ -583,6 +614,7 @@ pub fn jump_from_cursor(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::fs::save::AUTOSAVE_DELAY;
     use tempfile::TempDir;
 
     fn change(from: usize, to: usize, insert: &str) -> Change {
