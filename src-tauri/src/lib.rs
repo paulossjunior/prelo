@@ -14,7 +14,7 @@ compile_error!("a feature `self-test` só é permitida em build de depuração")
 mod webview_args;
 pub mod world;
 
-use tauri::{Builder, Manager, Runtime};
+use tauri::{Builder, Emitter, Manager, Runtime};
 
 /// Registra os comandos IPC do contrato (specs/001-app-skeleton/contracts/ipc.md e
 /// specs/003-editor-local/contracts/ipc.md) com o estado padrão do núcleo.
@@ -105,6 +105,28 @@ fn spawn_autosave<R: Runtime>(app: tauri::AppHandle<R>) {
         .expect("thread de salvamento automático");
 }
 
+/// Mudanças externas (FR-008): processa os caminhos avisados pelo observador e emite
+/// `external_change_conflict` quando há alteração local pendente.
+fn spawn_disk_changes<R: Runtime>(app: tauri::AppHandle<R>) {
+    let Some(changes) = app.state::<commands::AppState>().take_disk_changes() else {
+        return;
+    };
+    std::thread::Builder::new()
+        .name("prelo-disk-changes".into())
+        .spawn(move || {
+            for path in changes {
+                let state = app.state::<commands::AppState>();
+                if state.handle_disk_change(&path) == commands::DiskChange::Conflict {
+                    let payload = serde_json::json!({ "path": path });
+                    if let Err(e) = app.emit(fs::watch::CONFLICT, payload) {
+                        eprintln!("prelo: aviso de mudança externa não entregue: {e}");
+                    }
+                }
+            }
+        })
+        .expect("thread de mudanças externas");
+}
+
 /// Último Salvar antes de fechar (Princípio III). `false` → manter a janela/o app aberto.
 fn may_close<R: Runtime>(app: &tauri::AppHandle<R>) -> bool {
     let ok = app.state::<commands::AppState>().flush_for_close();
@@ -127,6 +149,7 @@ pub fn run() {
         })
         .setup(|app| {
             spawn_autosave(app.handle().clone());
+            spawn_disk_changes(app.handle().clone());
             let config = app
                 .config()
                 .app
