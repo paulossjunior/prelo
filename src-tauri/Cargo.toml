@@ -43,6 +43,14 @@ notify = "8"
 dirs = "6"
 tauri-plugin-dialog = "2"
 
+# Regra de escopo de arquivo (fs/scope.rs, research R11): abertura com O_NONBLOCK/O_NOFOLLOW e
+# caminho real do descritor (F_GETPATH no macOS; GetFinalPathNameByHandleW no Windows).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
 [dev-dependencies]
 tauri = { version = "2.12", features = ["test"] }
 tempfile = "3.27"
