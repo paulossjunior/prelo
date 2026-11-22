@@ -80,9 +80,12 @@ export function mountEditor(parent: HTMLElement, opts: EditorOptions): EditorHan
     clearTimeout(tokenTimer);
     tokenTimer = setTimeout(() => {
       if (destroyed) return;
-      void refreshTokens(view, ipc, path).then((r) => {
-        if (r === "unavailable") tokensAvailable = false;
-      });
+      // Os tokens valem para o texto que o núcleo tem: envia o que falta antes de pedir.
+      void flush()
+        .then(() => (destroyed ? "discarded" : refreshTokens(view, ipc, path)))
+        .then((r) => {
+          if (r === "unavailable") tokensAvailable = false;
+        });
     }, tokenDelay);
   }
 

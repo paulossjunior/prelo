@@ -192,6 +192,22 @@ describe("realce (semantic_tokens)", () => {
     expect(editor.view.state.doc.toString()).toContain("#let");
   });
 
+  it("pede os tokens só depois de o núcleo receber as edições pendentes", async () => {
+    const gate = deferred<{ version: number }>();
+    const { core, editor } = setup("abc", {
+      edit_file: () => gate.promise,
+      semantic_tokens: () => [],
+    });
+    editor.view.dispatch({ changes: { from: 0, insert: "x" } });
+    await settle();
+    expect(core.calls("semantic_tokens")).toHaveLength(0);
+    gate.resolve({ version: 2 });
+    await settle();
+    const order = core.calls().map((c) => c.cmd);
+    expect(order[0]).toBe("edit_file");
+    expect(order).toContain("semantic_tokens");
+  });
+
   it("sem serviço de linguagem (not_implemented) o editor segue sem realce e sem erro", async () => {
     const { parent, onError } = setup("= Título");
     await settle();
