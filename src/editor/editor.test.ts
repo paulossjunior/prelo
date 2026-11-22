@@ -2,6 +2,7 @@
 // (`edit_file` com `{from,to,insert}` em UTF-16 sobre o texto anterior, em ordem crescente e
 // sem sobreposição; `save_file`; `complete`; `semantic_tokens`).
 import { CompletionContext } from "@codemirror/autocomplete";
+import { undo } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { IpcError } from "../ipc";
@@ -139,6 +140,34 @@ describe("envio de mudanças (edit_file)", () => {
     await editor.flush();
     expect(editor.view.state.doc.toString()).toBe("texto do disco");
     expect(editor.version()).toBe(7);
+    expect(core.calls("edit_file")).toHaveLength(0);
+  });
+
+  it("reload mantém o cursor onde estava quando o texto muda depois dele", async () => {
+    const { editor } = setup("linha 1\nlinha 2\nlinha 3");
+    const at = editor.view.state.doc.line(2).from + 3;
+    editor.view.dispatch({ selection: { anchor: at } });
+    editor.reload("linha 1\nlinha 2\nlinha 3\nlinha 4 do disco\n", 5);
+    expect(editor.view.state.selection.main.head).toBe(at);
+  });
+
+  it("reload acompanha o cursor quando o texto muda antes dele", async () => {
+    const { editor } = setup("linha 1\nlinha 2\nlinha 3");
+    const at = editor.view.state.doc.line(2).from + 3;
+    editor.view.dispatch({ selection: { anchor: at } });
+    editor.reload("nova\nlinha 1\nlinha 2\nlinha 3", 5);
+    const head = editor.view.state.selection.main.head;
+    const line = editor.view.state.doc.lineAt(head);
+    expect(line.text).toBe("linha 2");
+    expect(head - line.from).toBe(3);
+  });
+
+  it("desfazer depois do reload não volta ao texto antigo nem envia edição", async () => {
+    const { core, editor } = setup("abc");
+    editor.reload("abc do disco", 5);
+    undo(editor.view);
+    await editor.flush();
+    expect(editor.view.state.doc.toString()).toBe("abc do disco");
     expect(core.calls("edit_file")).toHaveLength(0);
   });
 });

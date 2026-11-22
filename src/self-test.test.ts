@@ -20,8 +20,12 @@ const INFO: ProjectInfo = {
   warnings: [],
 };
 
-/** Núcleo falso que "compila" a cada edição: texto com o erro → diagnóstico na linha dele. */
-function compilingCore(opts: { compiles?: boolean } = {}) {
+/**
+ * Núcleo falso que "compila" a cada edição: texto com o erro → diagnóstico na linha dele.
+ * `writeDisk` imita outro programa gravando o arquivo sem alteração local: o núcleo recarrega,
+ * muda a versão, recompila e (com `notifies`) emite `external_change_reloaded`.
+ */
+function compilingCore(opts: { compiles?: boolean; notifies?: boolean } = {}) {
   let text = "= Introdução\n\nOlá.";
   let version = 1;
   let compileId = 0;
@@ -31,30 +35,40 @@ function compilingCore(opts: { compiles?: boolean } = {}) {
     list_tree: () => [{ name: "main.typ", path: "main.typ", kind: "file" }],
     open_file: () => ({ text, version }),
     page_svg: () => "<svg/>",
+    save_file: () => ({ savedAt: "2026-11-22T10:00:00Z" }),
     edit_file: (a) => {
       for (const c of [...(a.changes as Change[])].reverse()) {
         text = text.slice(0, c.from) + c.insert + text.slice(c.to);
       }
-      const at = text.indexOf(ERROR_SNIPPET);
-      setTimeout(() => {
-        if (opts.compiles === false) return;
-        compileId++;
-        if (at >= 0) {
-          core.push({
-            compileId, ok: false, pages: [], changed: [], durationMs: 3,
-            diagnostics: [{ severity: "error", path: "main.typ", range: { from: at + 1, to: at + 5 }, message: "unknown variable", hints: [], kind: "typst" }],
-          });
-        } else {
-          core.push({
-            compileId, ok: true, changed: [0], diagnostics: [], durationMs: 3,
-            pages: [{ index: 0, hash: `h${compileId}`, widthPt: 595, heightPt: 842 }],
-          });
-        }
-      }, 0);
+      compile();
       return { version: ++version };
     },
   });
-  return core;
+  function compile() {
+    const at = text.indexOf(ERROR_SNIPPET);
+    setTimeout(() => {
+      if (opts.compiles === false) return;
+      compileId++;
+      if (at >= 0) {
+        core.push({
+          compileId, ok: false, pages: [], changed: [], durationMs: 3,
+          diagnostics: [{ severity: "error", path: "main.typ", range: { from: at + 1, to: at + 5 }, message: "unknown variable", hints: [], kind: "typst" }],
+        });
+      } else {
+        core.push({
+          compileId, ok: true, changed: [0], diagnostics: [], durationMs: 3,
+          pages: [{ index: 0, hash: `h${compileId}`, widthPt: 595, heightPt: 842 }],
+        });
+      }
+    }, 0);
+  }
+  function writeDisk(next: string) {
+    text = next;
+    version++;
+    if (opts.notifies !== false) core.emit("external_change_reloaded", { path: "main.typ", version });
+    compile();
+  }
+  return Object.assign(core, { writeDisk });
 }
 
 function mount(core: ReturnType<typeof fakeCore>) {
@@ -104,6 +118,52 @@ describe("runEditorScenario", () => {
     const r = await runEditorScenario(ws, async () => INFO, { timeoutMs: 50 });
     expect(r.failure).toMatch(/prévia/);
     expect(r.previewChanged).toBe(false);
+  });
+});
+
+describe("mudança externa sem alteração local (FR-008, T084)", () => {
+  const openWithFirstCompile = (core: ReturnType<typeof fakeCore>) => async () => {
+    setTimeout(
+      () =>
+        core.push({
+          compileId: 0, ok: true, changed: [0], diagnostics: [], durationMs: 5,
+          pages: [{ index: 0, hash: "h0", widthPt: 595, heightPt: 842 }],
+        }),
+      0,
+    );
+    return INFO;
+  };
+
+  it("grava o arquivo aberto por fora: o editor mostra o disco e o diagnóstico na linha certa", async () => {
+    const core = compilingCore();
+    const ws = mount(core);
+    await ws.ready;
+    const written: string[] = [];
+    const r = await runEditorScenario(ws, openWithFirstCompile(core), {
+      timeoutMs: 2000,
+      writeExternal: async (next) => {
+        written.push(next);
+        core.writeDisk(next);
+      },
+    });
+    expect(r.failure).toBeUndefined();
+    expect(core.calls("save_file").length).toBeGreaterThan(0);
+    expect(written).toHaveLength(1);
+    expect(r.externalReloaded).toBe(true);
+    expect(r.externalErrorLine).toBeGreaterThan(100);
+    expect(r.externalDiagnosticLine).toBe(r.externalErrorLine);
+  });
+
+  it("sem o aviso do núcleo o editor fica velho: falha com motivo", async () => {
+    const core = compilingCore({ notifies: false });
+    const ws = mount(core);
+    await ws.ready;
+    const r = await runEditorScenario(ws, openWithFirstCompile(core), {
+      timeoutMs: 300,
+      writeExternal: async (next) => core.writeDisk(next),
+    });
+    expect(r.externalReloaded).toBe(false);
+    expect(r.failure).toMatch(/disco/);
   });
 });
 

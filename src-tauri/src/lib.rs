@@ -57,8 +57,8 @@ pub fn configure_with_state<R: Runtime>(
         ])
 }
 
-/// Variante de teste: acrescenta `self_test_report` e `self_test_open_project` (nunca em
-/// release).
+/// Variante de teste: acrescenta `self_test_report`, `self_test_open_project` e
+/// `self_test_write_external` (nunca em release).
 #[cfg(feature = "self-test")]
 pub fn configure_with_state<R: Runtime>(
     builder: Builder<R>,
@@ -90,7 +90,8 @@ pub fn configure_with_state<R: Runtime>(
             commands::page_svg,
             compile::export::export_pdf_dialog,
             self_test::self_test_report,
-            self_test::self_test_open_project
+            self_test::self_test_open_project,
+            self_test::self_test_write_external
         ])
         .manage(self_test::FixtureCopy::default())
 }
@@ -114,8 +115,8 @@ fn spawn_autosave<R: Runtime>(app: tauri::AppHandle<R>) {
         .expect("thread de salvamento automático");
 }
 
-/// Mudanças externas (FR-008): processa os caminhos avisados pelo observador e emite
-/// `external_change_conflict` quando há alteração local pendente.
+/// Mudanças externas (FR-008): processa os caminhos avisados pelo observador e avisa a
+/// interface ([`notify_disk_change`]).
 fn spawn_disk_changes<R: Runtime>(app: tauri::AppHandle<R>) {
     let Some(changes) = app.state::<commands::AppState>().take_disk_changes() else {
         return;
@@ -124,16 +125,36 @@ fn spawn_disk_changes<R: Runtime>(app: tauri::AppHandle<R>) {
         .name("prelo-disk-changes".into())
         .spawn(move || {
             for path in changes {
-                let state = app.state::<commands::AppState>();
-                if state.handle_disk_change(&path) == commands::DiskChange::Conflict {
-                    let payload = serde_json::json!({ "path": path });
-                    if let Err(e) = app.emit(fs::watch::CONFLICT, payload) {
-                        eprintln!("prelo: aviso de mudança externa não entregue: {e}");
-                    }
-                }
+                notify_disk_change(&app, &path);
             }
         })
         .expect("thread de mudanças externas");
+}
+
+/// Relê `path` depois de um aviso do observador e emite o evento do contrato
+/// (specs/003-editor-local/contracts/ipc.md): `external_change_conflict { path }` com alteração
+/// local pendente; `external_change_reloaded { path, version }` quando o núcleo recarregou o
+/// texto do disco sem alteração local (a interface busca o texto com `open_file`).
+fn notify_disk_change<R: Runtime>(app: &tauri::AppHandle<R>, path: &str) {
+    let state = app.state::<commands::AppState>();
+    let (event, payload) = match state.handle_disk_change(path) {
+        commands::DiskChange::Conflict => {
+            (fs::watch::CONFLICT, serde_json::json!({ "path": path }))
+        }
+        commands::DiskChange::Reloaded => {
+            let Some(version) = state.file_version(path) else {
+                return;
+            };
+            (
+                fs::watch::RELOADED,
+                serde_json::json!({ "path": path, "version": version }),
+            )
+        }
+        commands::DiskChange::Ignored => return,
+    };
+    if let Err(e) = app.emit(event, payload) {
+        eprintln!("prelo: aviso de mudança externa não entregue: {e}");
+    }
 }
 
 /// Último Salvar antes de fechar (Princípio III). `false` → manter a janela/o app aberto.
@@ -182,4 +203,106 @@ pub fn run() {
                 }
             }
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    use tauri::test::{mock_builder, mock_context, noop_assets, MockRuntime};
+    use tauri::Listener;
+
+    /// App de teste com a fixture mínima aberta e `main.typ` aberto no editor.
+    fn app() -> (
+        tauri::App<MockRuntime>,
+        tempfile::TempDir,
+        std::path::PathBuf,
+    ) {
+        let app = configure(mock_builder())
+            .build(mock_context(noop_assets()))
+            .expect("app de teste não montou");
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("main.typ"), "= Título\n").unwrap();
+        let state = app.state::<commands::AppState>();
+        state.open_project(dir.path()).unwrap();
+        state.open_file("main.typ").unwrap();
+        let main = std::fs::canonicalize(dir.path()).unwrap().join("main.typ");
+        (app, dir, main)
+    }
+
+    /// Eventos `name` emitidos pelo núcleo, com o conteúdo em JSON.
+    fn events(app: &tauri::App<MockRuntime>, name: &str) -> mpsc::Receiver<serde_json::Value> {
+        let (tx, rx) = mpsc::channel();
+        app.listen_any(name, move |e| {
+            let _ = tx.send(serde_json::from_str(e.payload()).unwrap());
+        });
+        rx
+    }
+
+    const WAIT: Duration = Duration::from_secs(5);
+    const NONE: Duration = Duration::from_millis(200);
+
+    #[test]
+    fn mudanca_externa_sem_alteracao_local_avisa_a_interface_com_a_versao_nova() {
+        let (app, _dir, main) = app();
+        let reloaded = events(&app, fs::watch::RELOADED);
+        let conflict = events(&app, fs::watch::CONFLICT);
+        std::fs::write(&main, "= Outro\n\nTexto novo.\n").unwrap();
+        notify_disk_change(app.handle(), "main.typ");
+        assert_eq!(
+            reloaded
+                .recv_timeout(WAIT)
+                .expect("external_change_reloaded não veio"),
+            serde_json::json!({ "path": "main.typ", "version": 1 })
+        );
+        assert!(
+            conflict.recv_timeout(NONE).is_err(),
+            "sem alteração local não há conflito"
+        );
+        let opened = app
+            .state::<commands::AppState>()
+            .open_file("main.typ")
+            .unwrap();
+        assert_eq!(opened.text, "= Outro\n\nTexto novo.\n");
+    }
+
+    #[test]
+    fn mudanca_externa_com_alteracao_local_so_avisa_o_conflito() {
+        let (app, _dir, main) = app();
+        let reloaded = events(&app, fs::watch::RELOADED);
+        let conflict = events(&app, fs::watch::CONFLICT);
+        let change = commands::Change {
+            from: 0,
+            to: 0,
+            insert: "minha ".into(),
+        };
+        app.state::<commands::AppState>()
+            .edit_file("main.typ", 0, &[change])
+            .unwrap();
+        std::fs::write(&main, "deles\n").unwrap();
+        notify_disk_change(app.handle(), "main.typ");
+        assert_eq!(
+            conflict
+                .recv_timeout(WAIT)
+                .expect("external_change_conflict não veio"),
+            serde_json::json!({ "path": "main.typ" })
+        );
+        assert!(
+            reloaded.recv_timeout(NONE).is_err(),
+            "conflito não recarrega"
+        );
+    }
+
+    #[test]
+    fn evento_sem_mudanca_de_conteudo_nao_avisa_nada() {
+        let (app, _dir, _main) = app();
+        let reloaded = events(&app, fs::watch::RELOADED);
+        let conflict = events(&app, fs::watch::CONFLICT);
+        // O disco continua igual ao que o núcleo leu (ex.: a própria gravação).
+        notify_disk_change(app.handle(), "main.typ");
+        notify_disk_change(app.handle(), "outro.typ");
+        assert!(reloaded.recv_timeout(NONE).is_err());
+        assert!(conflict.recv_timeout(NONE).is_err());
+    }
 }

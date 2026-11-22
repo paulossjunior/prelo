@@ -222,6 +222,7 @@ describe("prévia e eventos", () => {
 
   it.each([
     ["onExternalChangeConflict", "external_change_conflict", { path: "main.typ" }],
+    ["onExternalChangeReloaded", "external_change_reloaded", { path: "main.typ", version: 3 }],
     ["onCopyIntoProjectOffer", "copy_into_project_offer", { requested: "../fig.png" }],
     [
       "onPluginApprovalNeeded",
