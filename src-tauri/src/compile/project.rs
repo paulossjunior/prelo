@@ -46,22 +46,21 @@ impl ProjectCompiler {
     }
 }
 
-impl Compiler for ProjectCompiler {
-    type Input = CompileInput;
-    type Output = PagedDocument;
+impl ProjectCompiler {
+    /// Raiz do projeto deste World.
+    pub fn root(&self) -> &std::path::Path {
+        &self.root
+    }
 
-    fn compile(&mut self, input: CompileInput) -> Outcome<PagedDocument> {
+    /// Leva o World ao estado de `input` (arquivo principal e textos abertos) sem compilar.
+    /// A compilação e o serviço de linguagem (T036) partem daqui, então veem o mesmo texto.
+    pub fn sync(&mut self, input: CompileInput) -> Result<&mut ProjectWorld, Diagnostic> {
         if input.main != self.main {
             *self = Self::new(self.root.clone(), &input.main);
         }
         let world = match &mut self.world {
             Ok(world) => world,
-            Err(diag) => {
-                return Outcome {
-                    output: None,
-                    diagnostics: vec![diag.clone()],
-                }
-            }
+            Err(diag) => return Err(diag.clone()),
         };
         let wanted: HashMap<String, Arc<str>> = input.files.into_iter().collect();
         self.applied.retain(|path, _| {
@@ -81,6 +80,21 @@ impl Compiler for ProjectCompiler {
                 self.applied.insert(path, text);
             }
         }
-        world.compile()
+        Ok(world)
+    }
+}
+
+impl Compiler for ProjectCompiler {
+    type Input = CompileInput;
+    type Output = PagedDocument;
+
+    fn compile(&mut self, input: CompileInput) -> Outcome<PagedDocument> {
+        match self.sync(input) {
+            Ok(world) => world.compile(),
+            Err(diag) => Outcome {
+                output: None,
+                diagnostics: vec![diag],
+            },
+        }
     }
 }

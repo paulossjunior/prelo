@@ -13,7 +13,8 @@ mod support;
 
 use std::sync::{Arc, Mutex};
 
-use prelo_lib::commands::{AppState, Engine, JumpTarget, ProjectPath};
+use prelo_lib::commands::{AppState, Engine, EngineContext, JumpTarget, ProjectPath};
+use prelo_lib::lang_service::{Completion, Token};
 use serde_json::{json, Value};
 use support::{Outside, TempProject, SECRET};
 use tauri::ipc::{CallbackFn, InvokeBody};
@@ -43,18 +44,34 @@ impl FakeEngine {
 }
 
 impl Engine for FakeEngine {
-    fn complete(&self, path: &ProjectPath, _offset: usize) -> Result<Vec<Value>, String> {
+    fn complete(
+        &self,
+        _ctx: &EngineContext,
+        path: &ProjectPath,
+        _offset: usize,
+    ) -> Result<Vec<Completion>, String> {
         self.record("complete", path);
-        Ok(vec![json!({ "label": "falso" })])
+        Ok(vec![Completion {
+            label: "falso".into(),
+            kind: None,
+            detail: None,
+            info: None,
+            apply: None,
+        }])
     }
 
-    fn semantic_tokens(&self, path: &ProjectPath) -> Result<Vec<Value>, String> {
+    fn semantic_tokens(
+        &self,
+        _ctx: &EngineContext,
+        path: &ProjectPath,
+    ) -> Result<Vec<Token>, String> {
         self.record("semantic_tokens", path);
         Ok(Vec::new())
     }
 
     fn jump_from_cursor(
         &self,
+        _ctx: &EngineContext,
         path: &ProjectPath,
         _offset: usize,
     ) -> Result<Vec<JumpTarget>, String> {
