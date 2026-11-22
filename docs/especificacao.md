@@ -10,7 +10,7 @@ Este documento é a visão geral. O detalhe está em:
 |---|---|
 | [requisitos.md](requisitos.md) | Papéis, requisitos funcionais (RF) e não funcionais (RNF), regras de revisão e de sincronização, fluxos, PDF de diferenças |
 | [arquitetura.md](arquitetura.md) | Componentes, arquivos do repositório, conexão sem servidor, modelo de revisão, sincronização, acesso a arquivos pelo compilador, riscos técnicos |
-| [adrs.md](adrs.md) | Decisões de arquitetura D-01 a D-14, com contexto, alternativas e consequências |
+| [adrs.md](adrs.md) | Índice das decisões de arquitetura D-01 a D-14; cada decisão, com contexto, alternativas e consequências, num arquivo em [adrs/](adrs/) |
 
 O nome vem da prensa tipográfica. Um texto "no prelo" é um texto prestes a ser publicado, que é a fase que a ferramenta atende.
 
