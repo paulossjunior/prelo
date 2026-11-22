@@ -1,0 +1,88 @@
+/* Área de trabalho do editor local (T037/T038): árvore, editor e prévia.
+   Tokens e linguagem visual de prototype/index.html (claro/escuro). O layout de quatro painéis
+   é montado em src/main.ts (T039). Só folha de estilo própria: a CSP é `style-src 'self'`. */
+:root {
+  --bg: #f3f5f6; --surface: #ffffff; --surface-2: #eaeef0; --line: #d5dcdf; --fg: #172126;
+  --muted: #5b6a71; --accent: #0d6a73; --accent-soft: #d9eef0; --ink: #0b2a33;
+  --err: #b4332b; --err-bg: #f8dfdc; --warn: #9a6a00; --warn-bg: #fbedc6;
+  --paper: #ffffff; --code-bg: #fbfcfc;
+  --tok-fn: #7a3fb0; --tok-lbl: #a0521b; --tok-ref: #0d6a73; --tok-h: #0b2a33; --tok-cmt: #6b787e;
+  --tok-kw: #0d6a73; --tok-str: #1f7a3d; --tok-num: #a0521b; --tok-math: #2266cc;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1517; --surface: #162024; --surface-2: #1d292e; --line: #2c3b41; --fg: #e3eaec;
+    --muted: #93a3a9; --accent: #4cc1c9; --accent-soft: #16383c; --ink: #e3eaec;
+    --err: #ff8a80; --err-bg: #3d1e1b; --warn: #f0c35a; --warn-bg: #3a2f12;
+    --paper: #f6f4ef; --code-bg: #121b1f;
+    --tok-fn: #c79bff; --tok-lbl: #f0a46a; --tok-ref: #4cc1c9; --tok-h: #ffffff; --tok-cmt: #7f9097;
+    --tok-kw: #4cc1c9; --tok-str: #6fd38f; --tok-num: #f0a46a; --tok-math: #6aa5ff;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1517; --surface: #162024; --surface-2: #1d292e; --line: #2c3b41; --fg: #e3eaec;
+  --muted: #93a3a9; --accent: #4cc1c9; --accent-soft: #16383c; --ink: #e3eaec;
+  --err: #ff8a80; --err-bg: #3d1e1b; --warn: #f0c35a; --warn-bg: #3a2f12;
+  --paper: #f6f4ef; --code-bg: #121b1f;
+  --tok-fn: #c79bff; --tok-lbl: #f0a46a; --tok-ref: #4cc1c9; --tok-h: #ffffff; --tok-cmt: #7f9097;
+  --tok-kw: #4cc1c9; --tok-str: #6fd38f; --tok-num: #f0a46a; --tok-math: #6aa5ff;
+  color-scheme: dark;
+}
+
+/* ---------- árvore ---------- */
+.pt { font: 13px/1.5 var(--f-body); color: var(--fg); }
+.pt ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.pt ul ul { padding-left: 12px; }
+.pt-item {
+  display: block; width: 100%; text-align: left; font: inherit; color: inherit;
+  background: transparent; border: 0; border-radius: 5px; padding: 3px 6px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+button.pt-item { cursor: pointer; }
+button.pt-item:hover { background: var(--accent-soft); }
+.pt-item[aria-current="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.pt-dir { color: var(--muted); }
+.pt-dir::before { content: "▾ "; }
+.pt-dir[aria-expanded="false"]::before { content: "▸ "; }
+.pt-other { color: var(--muted); cursor: default; }
+.pt-error { color: var(--err); padding: 6px; }
+.pt :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* ---------- editor ---------- */
+.prelo-editor { height: 100%; background: var(--code-bg); color: var(--fg); font-size: 12.5px; }
+.prelo-editor .cm-scroller { font-family: var(--f-mono); line-height: 1.7; }
+.prelo-editor .cm-gutters { background: var(--code-bg); color: var(--muted); border-right: 1px solid var(--line); }
+.prelo-editor .cm-activeLine { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.prelo-editor .cm-activeLineGutter { background: var(--accent-soft); }
+.prelo-editor .cm-cursor { border-left-color: var(--fg); }
+.prelo-editor.cm-focused { outline: 2px solid var(--accent); outline-offset: -2px; }
+.prelo-editor .cm-lintRange-error { background: var(--err-bg); text-decoration: underline wavy var(--err); }
+.prelo-editor .cm-lintRange-warning { background: var(--warn-bg); text-decoration: underline wavy var(--warn); }
+.tok-heading { color: var(--tok-h); font-weight: 600; }
+.tok-function, .tok-func { color: var(--tok-fn); }
+.tok-label { color: var(--tok-lbl); }
+.tok-ref, .tok-reference { color: var(--tok-ref); }
+.tok-comment { color: var(--tok-cmt); font-style: italic; }
+.tok-keyword { color: var(--tok-kw); font-weight: 500; }
+.tok-string { color: var(--tok-str); }
+.tok-number { color: var(--tok-num); }
+.tok-math, .tok-math-delimiter { color: var(--tok-math); }
+.tok-strong { font-weight: 600; }
+.tok-emph { font-style: italic; }
+
+/* ---------- prévia ---------- */
+.pv { height: 100%; display: grid; grid-template-rows: auto 1fr; min-height: 0; background: var(--surface-2); }
+.pv-error {
+  font: 12.5px/1.5 var(--f-body); padding: 6px 12px; color: var(--err); background: var(--err-bg);
+  border-bottom: 1px solid color-mix(in srgb, var(--err) 35%, var(--line));
+}
+.pv-error[hidden] { display: none; }
+.pv-pages { overflow: auto; padding: 18px; display: grid; align-content: start; justify-items: center; gap: 14px; }
+.pv-page {
+  width: 100%; max-width: 640px; background: var(--paper);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+}
+.pv-page img { display: block; width: 100%; height: 100%; user-select: none; }
