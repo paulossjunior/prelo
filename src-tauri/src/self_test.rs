@@ -1,6 +1,6 @@
 //! Autoteste ponta a ponta (T012, T031). Só existe com a feature `self-test`; nunca em release.
 //! Contratos: specs/001-app-skeleton/contracts/ipc.md e specs/003-editor-local/contracts/ipc.md,
-//! `self_test_report` e `self_test_open_project`.
+//! `self_test_report`, `self_test_open_project` e `self_test_write_external`.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -32,6 +32,15 @@ pub struct Scenario {
     /// Problemas de layout e violações da CSP medidos na webview real (src/layout-check.ts).
     #[serde(default)]
     pub layout_problems: Vec<String>,
+    /// Mudança externa sem alteração local (FR-008, T084): o editor passou a mostrar o texto
+    /// gravado no disco por "outro programa" (`self_test_write_external`).
+    #[serde(default)]
+    pub external_reloaded: bool,
+    /// Linha (1-based) do erro no texto externo e linha do diagnóstico no editor recarregado.
+    #[serde(default)]
+    pub external_error_line: u32,
+    #[serde(default)]
+    pub external_diagnostic_line: Option<u32>,
 }
 
 /// Cópia temporária da fixture: o roteiro edita e o salvamento automático grava nela, nunca
@@ -59,6 +68,23 @@ pub fn self_test_open_project(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(dir);
     Ok(info)
+}
+
+/// Grava `text` no `main.typ` da cópia temporária da fixture como outro programa faria
+/// (temporário oculto + `rename`), para o roteiro conferir a mudança externa (FR-008, T084).
+/// Só escreve dentro da cópia aberta por [`self_test_open_project`].
+#[tauri::command(async)]
+pub fn self_test_write_external(copy: State<'_, FixtureCopy>, text: String) -> Result<(), String> {
+    let guard = copy
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let dir = guard.as_ref().ok_or("nenhuma fixture aberta")?;
+    let root = dir.path().join("artigo-basico");
+    let tmp = root.join(".prelo-self-test-external.tmp");
+    std::fs::write(&tmp, text).map_err(|e| format!("gravar a mudança externa: {e}"))?;
+    std::fs::rename(&tmp, root.join("main.typ"))
+        .map_err(|e| format!("gravar a mudança externa: {e}"))
 }
 
 /// Copia `src` (arquivos e pastas) para `dest`.
@@ -163,6 +189,19 @@ fn check(
     if !scenario.editor_marked {
         return Err("o editor não marcou o erro".into());
     }
+    // FR-008 (T084): o arquivo aberto mudou no disco sem alteração local → o editor mostra o
+    // texto novo e o diagnóstico cai numa linha que o editor tem.
+    if !scenario.external_reloaded {
+        return Err("mudança externa sem alteração local não chegou ao editor".into());
+    }
+    if scenario.external_error_line == 0
+        || scenario.external_diagnostic_line != Some(scenario.external_error_line)
+    {
+        return Err(format!(
+            "mudança externa: erro na linha {} do disco, diagnóstico na linha {:?} do editor",
+            scenario.external_error_line, scenario.external_diagnostic_line
+        ));
+    }
     if !scenario.compiler_shown.contains(EMBEDDED_TYPST) {
         return Err(format!(
             "versão do compilador não aparece no app: {:?}",
@@ -203,7 +242,18 @@ mod tests {
             compiler_shown: format!("Typst {}", crate::commands::EMBEDDED_TYPST),
             failure: None,
             layout_problems: Vec::new(),
+            external_reloaded: true,
+            external_error_line: 131,
+            external_diagnostic_line: Some(131),
         }
+    }
+
+    #[test]
+    fn mudanca_externa_que_nao_chegou_ao_editor_e_recusada_com_a_descricao() {
+        let mut s = ok_scenario();
+        s.external_reloaded = false;
+        let err = check(&expected(), V, 10, &s, None).unwrap_err();
+        assert!(err.contains("mudança externa"), "{err}");
     }
 
     #[test]
@@ -255,6 +305,13 @@ mod tests {
             Box::new(|s| s.compiler_shown = "Typst 0.0.0".into()),
             Box::new(|s| s.failure = Some("prévia não chegou".into())),
             Box::new(|s| s.layout_problems = vec!["números de linha não estão numa coluna".into()]),
+            Box::new(|s| s.external_reloaded = false),
+            Box::new(|s| s.external_diagnostic_line = None),
+            Box::new(|s| s.external_diagnostic_line = Some(16)),
+            Box::new(|s| {
+                s.external_error_line = 0;
+                s.external_diagnostic_line = Some(0);
+            }),
         ];
         for change in cases {
             let mut s = ok_scenario();

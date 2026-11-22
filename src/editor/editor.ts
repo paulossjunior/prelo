@@ -9,7 +9,7 @@ import { closeBrackets, closeBracketsKeymap, completionKeymap } from "@codemirro
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { lintKeymap } from "@codemirror/lint";
 import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
-import { Annotation, EditorState, type Extension } from "@codemirror/state";
+import { Annotation, EditorState, Transaction, type Extension } from "@codemirror/state";
 import {
   drawSelection,
   EditorView,
@@ -50,7 +50,11 @@ export interface EditorHandle {
   save(): Promise<boolean>;
   /** Mostra os diagnósticos deste arquivo (vindos de `PreviewUpdate.diagnostics`). */
   setDiagnostics(diags: Diagnostic[]): void;
-  /** Troca o texto sem enviar edição (ex.: `resolve_external_change`). */
+  /**
+   * Troca o texto sem enviar edição (ex.: `resolve_external_change`, mudança externa). Aplica
+   * só o trecho que mudou, para o cursor e a rolagem ficarem o mais perto possível de onde
+   * estavam; fica fora do histórico (desfazer não volta ao texto antigo).
+   */
   reload(text: string, version: number): void;
   destroy(): void;
 }
@@ -59,6 +63,20 @@ export interface EditorHandle {
 const fromCore = Annotation.define<boolean>();
 
 const isTypst = (path: string) => /\.typ$/i.test(path);
+
+/** Menor troca que leva `old` a `next`: prefixo e sufixo comuns ficam intactos. */
+export function minimalChange(old: string, next: string): Change {
+  const max = Math.min(old.length, next.length);
+  let from = 0;
+  while (from < max && old.charCodeAt(from) === next.charCodeAt(from)) from++;
+  let endOld = old.length;
+  let endNew = next.length;
+  while (endOld > from && endNew > from && old.charCodeAt(endOld - 1) === next.charCodeAt(endNew - 1)) {
+    endOld--;
+    endNew--;
+  }
+  return { from, to: endOld, insert: next.slice(from, endNew) };
+}
 
 export function mountEditor(parent: HTMLElement, opts: EditorOptions): EditorHandle {
   const { ipc, path } = opts;
@@ -196,8 +214,8 @@ export function mountEditor(parent: HTMLElement, opts: EditorOptions): EditorHan
     reload(text, newVersion) {
       generation++;
       view.dispatch({
-        changes: { from: 0, to: view.state.doc.length, insert: text },
-        annotations: fromCore.of(true),
+        changes: minimalChange(view.state.doc.toString(), text),
+        annotations: [fromCore.of(true), Transaction.addToHistory.of(false)],
       });
       version = newVersion;
       desynced = false;

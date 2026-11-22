@@ -59,6 +59,10 @@ pub fn render_svg(page: &Page) -> String {
     typst_svg::svg(page, &SvgOptions::default())
 }
 
+/// Última compilação, para exportar: `compileId` e documento se foi `Ok`, senão os
+/// diagnósticos dela.
+pub type LastCompilation = Result<(u64, Arc<PagedDocument>), Vec<Diagnostic>>;
+
 /// Estado da prévia: o último documento `Ok` e as páginas dele.
 #[derive(Default)]
 pub struct Preview {
@@ -118,6 +122,17 @@ impl Preview {
     /// Último documento compilado com sucesso.
     pub fn document(&self) -> Option<&Arc<PagedDocument>> {
         self.document.as_ref()
+    }
+
+    /// O que a exportação usa (FR-011, FR-029): a última compilação, se foi `Ok`, com o
+    /// `compileId` e o documento dela; senão os diagnósticos da última compilação. Sem nenhuma
+    /// compilação entregue ainda, `None`.
+    pub fn export_source(&self) -> Option<LastCompilation> {
+        let last = self.last.as_ref()?;
+        Some(match (&self.document, last.ok) {
+            (Some(doc), true) => Ok((last.compile_id, Arc::clone(doc))),
+            _ => Err(last.diagnostics.clone()),
+        })
     }
 
     /// Evento para quem assina depois de compilar: o último, com todas as páginas em `changed`.
@@ -205,6 +220,11 @@ impl PreviewHub {
     /// Último documento compilado com sucesso (saltos e estrutura, fases seguintes).
     pub fn document(&self) -> Option<Arc<PagedDocument>> {
         self.lock().preview.document().cloned()
+    }
+
+    /// Ver [`Preview::export_source`].
+    pub fn export_source(&self) -> Option<LastCompilation> {
+        self.lock().preview.export_source()
     }
 
     /// Thread que leva as compilações da agenda à prévia. Termina quando a agenda é largada.

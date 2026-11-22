@@ -61,16 +61,31 @@ vêm da última prévia `Ok`.
 |---|---|---|---|
 | `export_pdf_dialog` | — | `{ path }` ou `null` | `compile_errors` (com `Diagnostic[]`), `compiler_version_mismatch`, `write_failed` |
 
+`compile_errors` chega como `{ code: "compile_errors", diagnostics: Diagnostic[] }` (os da última
+compilação); os outros erros, como código em texto. O núcleo recusa antes de mostrar o diálogo
+de salvar. O PDF sai do documento da última `PreviewUpdate` com `ok: true` (mesmo `compileId`),
+sem recompilar, e é gravado de forma atômica.
+
 ## Arquivo externo, plugins e pacotes
 
 | Evento / comando | Conteúdo |
 |---|---|
 | evento `external_change_conflict` | `{ path }` |
+| evento `external_change_reloaded` | `{ path, version }` |
 | evento `copy_into_project_offer` | `{ requested }` (D-13; só caminho pedido) |
 | `copy_into_project` | `{ requested, source }` — `source` escolhido em diálogo nativo do núcleo |
 | evento `plugin_approval_needed` | `{ path, origin: "project" \| "package", package?: string, sizeBytes, sha256 }` |
 | `decide_plugin` | `{ sha256, approve: boolean }` → recompila |
 | `redownload_package` | `{ spec }` → recompila; erros `network_unavailable`, `package_rejected` |
+
+Mudança externa (FR-008): com alteração local pendente o núcleo emite
+`external_change_conflict` e espera `resolve_external_change`; sem alteração local recarrega o
+texto do disco (versão nova), recompila e emite `external_change_reloaded` com a versão nova.
+A interface busca o texto com `open_file` e o troca no editor aberto com esse `path`, sem
+diálogo e sem enviar edição; evento de arquivo que não está no editor, ou com versão que o
+editor já tem, é ignorado. O evento não leva o texto: arquivos vão até 256 MB, eventos são
+difundidos a toda a webview, e `open_file` já é a fonte única do estado do arquivo (vários
+avisos seguidos resultam numa só leitura do texto mais novo).
 
 ## Permissões da janela
 
@@ -92,6 +107,7 @@ autoteste falha se a webview real registrar violação da CSP ou layout quebrado
 | Comando | Argumentos | Efeito |
 |---|---|---|
 | `self_test_open_project` | — | Copia `src-tauri/tests/fixtures/artigo-basico` para uma pasta temporária, abre a cópia como projeto e devolve `ProjectInfo` (sem diálogo nativo). |
-| `self_test_report` | `{ rendered, elapsedMs, scenario }` | Além da conferência de 001, confere o roteiro do editor (`scenario = { projectOpened, previewChanged, errorLine, diagnosticLine, editorMarked, compilerShown, failure? }`: a prévia mudou, o erro escrito na linha `errorLine` veio com diagnóstico nessa linha e marcado no editor, a versão embutida aparece) e que não há `typst` no PATH (SC-006). Encerra com 0 ou 1. |
+| `self_test_write_external` | `{ text }` | Grava `text` no `main.typ` da cópia temporária da fixture como outro programa faria (temporário oculto + `rename`); nunca escreve fora da cópia. |
+| `self_test_report` | `{ rendered, elapsedMs, scenario }` | Além da conferência de 001, confere o roteiro do editor (`scenario = { projectOpened, previewChanged, errorLine, diagnosticLine, editorMarked, compilerShown, externalReloaded, externalErrorLine, externalDiagnosticLine, layoutProblems, failure? }`: a prévia mudou, o erro escrito na linha `errorLine` veio com diagnóstico nessa linha e marcado no editor, o arquivo gravado por fora sem alteração local apareceu no editor com o diagnóstico na linha `externalErrorLine`, a versão embutida aparece) e que não há `typst` no PATH (SC-006). Encerra com 0 ou 1. |
 
 A interface abre a fixture sozinha com `VITE_SELF_TEST` (autoteste) ou `VITE_E2E` (WebDriver).

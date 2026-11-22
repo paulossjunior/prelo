@@ -10,7 +10,8 @@
 //! que o sistema entrega os eventos.
 //!
 //! - conteúdo igual ao último lido ou gravado pelo núcleo → ignorado;
-//! - sem alteração local pendente → recarrega (versão nova) e recompila;
+//! - sem alteração local pendente → recarrega (versão nova), recompila e avisa a interface com
+//!   o evento `external_change_reloaded { path, version }` (o editor busca o texto novo);
 //! - com alteração local pendente → conflito: evento `external_change_conflict`, nada é gravado
 //!   por cima do disco nem descartado até `resolve_external_change` (manter a minha / usar a do
 //!   disco).
@@ -24,6 +25,8 @@ use super::scope::MAX_FILE_BYTES;
 
 /// Código de erro de gravar um arquivo com conflito pendente (e nome do evento do contrato).
 pub const CONFLICT: &str = "external_change_conflict";
+/// Evento do contrato: o arquivo aberto foi recarregado do disco sem alteração local.
+pub const RELOADED: &str = "external_change_reloaded";
 const NOT_UTF8: &str = "not_utf8";
 const TOO_LARGE: &str = "too_large";
 
