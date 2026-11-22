@@ -40,7 +40,9 @@ pub fn configure_with_state<R: Runtime>(
             commands::resolve_external_change,
             commands::complete,
             commands::semantic_tokens,
-            commands::jump_from_cursor
+            commands::jump_from_cursor,
+            commands::subscribe_preview,
+            commands::page_svg
         ])
 }
 
@@ -63,6 +65,8 @@ pub fn configure_with_state<R: Runtime>(
             commands::complete,
             commands::semantic_tokens,
             commands::jump_from_cursor,
+            commands::subscribe_preview,
+            commands::page_svg,
             self_test::self_test_report
         ])
 }

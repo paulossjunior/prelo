@@ -208,6 +208,11 @@ where
             .as_ref()
             .zip(range.as_ref())
             .and_then(|(s, r)| string_literal(s.root(), r));
+        // Bytes → unidades UTF-16, as do editor e de `edit_file`.
+        let range = source.as_ref().zip(range).and_then(|(s, r)| {
+            let lines = s.lines();
+            Some(lines.byte_to_utf16(r.start)?..lines.byte_to_utf16(r.end)?)
+        });
 
         let refusal = self
             .access
