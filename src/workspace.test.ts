@@ -338,3 +338,60 @@ describe("conflito externo", () => {
     expect(ws.editor()!.view.state.doc.toString()).toBe("meu texto");
   });
 });
+
+describe("mudança externa recarregada sem alteração local (FR-008)", () => {
+  it("o evento do arquivo aberto traz o texto do disco ao editor, sem diálogo", async () => {
+    let disk = { text: FILES["main.typ"]!, version: 1 };
+    const { core, root, ws } = setup({ open_file: () => disk });
+    await ws.ready;
+    await ws.showProject(INFO);
+    const status = root.querySelector(".ws-status")!.textContent;
+    const trees = core.calls("list_tree").length;
+    disk = { text: "= Do disco\n\n" + "linha\n".repeat(136), version: 2 };
+    core.emit("external_change_reloaded", { path: "main.typ", version: 2 });
+    await settle();
+    const editor = ws.editor()!;
+    expect(editor.view.state.doc.toString()).toBe(disk.text);
+    expect(editor.view.state.doc.lines).toBe(139);
+    expect(editor.version()).toBe(2);
+    expect(root.querySelector("[role=alertdialog]")).toBeNull();
+    expect(root.querySelector(".ws-status")!.textContent).toBe(status);
+    expect(core.calls("list_tree")).toHaveLength(trees);
+    expect(core.calls("edit_file")).toHaveLength(0);
+  });
+
+  it("a próxima edição vai com a versão nova", async () => {
+    let disk = { text: "abc", version: 1 };
+    const { core, ws } = setup({ open_file: () => disk, edit_file: (a) => ({ version: (a.version as number) + 1 }) });
+    await ws.ready;
+    await ws.showProject(INFO);
+    disk = { text: "abc do disco", version: 4 };
+    core.emit("external_change_reloaded", { path: "main.typ", version: 4 });
+    await settle();
+    const view = ws.editor()!.view;
+    view.dispatch({ changes: { from: view.state.doc.length, insert: "!" }, userEvent: "input.type" });
+    await ws.editor()!.flush();
+    expect(core.calls("edit_file").at(-1)?.args).toMatchObject({ path: "main.typ", version: 4 });
+  });
+
+  it("evento de outro arquivo não mexe no editor aberto", async () => {
+    const { core, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    const opened = core.calls("open_file").length;
+    core.emit("external_change_reloaded", { path: "capitulos/metodo.typ", version: 2 });
+    await settle();
+    expect(core.calls("open_file")).toHaveLength(opened);
+    expect(ws.editor()!.view.state.doc.toString()).toBe(FILES["main.typ"]);
+  });
+
+  it("evento com versão que o editor já tem não busca de novo", async () => {
+    const { core, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    const opened = core.calls("open_file").length;
+    core.emit("external_change_reloaded", { path: "main.typ", version: 1 });
+    await settle();
+    expect(core.calls("open_file")).toHaveLength(opened);
+  });
+});

@@ -511,6 +511,19 @@ impl AppState {
         outcome
     }
 
+    /// Versão atual de `relative` se estiver aberto (o evento `external_change_reloaded` leva
+    /// essa versão; `None` sem projeto, fora da raiz ou não aberto).
+    pub fn file_version(&self, relative: &str) -> Option<u64> {
+        self.with_path(relative, |project, path| {
+            project
+                .files
+                .get(path.relative())
+                .map(OpenFile::version)
+                .ok_or_else(|| NOT_FOUND.to_owned())
+        })
+        .ok()
+    }
+
     /// Escolha da pessoa diante de uma mudança externa: `Mine` mantém o texto em memória (e
     /// volta a gravá-lo); `Disk` relê o disco e troca o texto, numa versão nova.
     pub fn resolve_external_change(
