@@ -11,6 +11,7 @@ import {
   denyAllowList,
   embeddedDataViolations,
   exceptionIds,
+  FONT_DIRS,
   fontLicenseViolations,
   licenseViolations,
   parseEmbeddedData,
@@ -226,6 +227,21 @@ describe("licenças de arquivos embutidos (D-15, D-16)", () => {
     const files = readdirSync(`${root}/src-tauri/fonts`);
     const entries = parseFontLicenses(read("src-tauri/fonts/licenses.toml"));
     expect(files.some((f) => f.endsWith(".otf"))).toBe(true);
+    expect(fontLicenseViolations(files, entries, parseAllowlist(read("security/licenses-allow.txt")))).toEqual([]);
+  });
+
+  it("fontes web (.woff2, .woff) também são conferidas", () => {
+    expect(fontLicenseViolations(["a.woff2", "b.woff", "fonts.css"], [], allow)).toHaveLength(2);
+  });
+
+  it("a auditoria confere as fontes do compilador e as da interface", () => {
+    expect(FONT_DIRS).toEqual(["src-tauri/fonts", "src/fonts"]);
+  });
+
+  it("as fontes da interface em src/fonts/ passam na verificação", () => {
+    const files = readdirSync(`${root}/src/fonts`);
+    const entries = parseFontLicenses(read("src/fonts/licenses.toml"));
+    expect(files.some((f) => f.endsWith(".woff2"))).toBe(true);
     expect(fontLicenseViolations(files, entries, parseAllowlist(read("security/licenses-allow.txt")))).toEqual([]);
   });
 
