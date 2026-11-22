@@ -23,6 +23,9 @@ typst = "=0.15.1"
 typst-svg = "=0.15.1"
 typst-pdf = "=0.15.1"
 typst-ide = "=0.15.1"
+# `PagedDocument` (saída de `typst::compile`) mora no `typst-layout`; já vinha na árvore pelo
+# `typst`, mesma versão e licença (Apache-2.0).
+typst-layout = "=0.15.1"
 # Sem as features `system`, `fonts`, `http-registry`: leitura de disco, fontes e pacotes
 # passam só pelo núcleo do Prelo (RF-08, D-15, research R7).
 tinymist-world = { version = "=0.15.0", default-features = false }

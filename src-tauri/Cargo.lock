@@ -3777,6 +3777,7 @@ dependencies = [
  "tinymist-world",
  "typst",
  "typst-ide",
+ "typst-layout",
  "typst-pdf",
  "typst-svg",
  "ureq",
