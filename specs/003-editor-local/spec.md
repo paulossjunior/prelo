@@ -61,6 +61,14 @@ diagnóstico na linha certa e que a versão do compilador aparece no app.
    a porcentagem aparece na barra, o trecho que estava sob o centro da prévia (ou sob o
    ponteiro) continua no lugar, e "Ajustar à largura" (ou ⌘/Ctrl + `0`) volta ao padrão; ao
    reabrir o projeto, o zoom escolhido volta (FR-013a; emenda de 2026-11-22).
+9. **Given** o projeto aberto, **When** a pessoa recolhe a árvore, o editor ou a prévia pelo
+   botão do próprio painel (ou escolhe "Editor", "Ambos" ou "Prévia" na barra de cima, ou usa
+   ⌘/Ctrl + 1, 2, 3 e ⌘/Ctrl + `\`), **Then** o painel vira um trilho fino com o nome e um
+   botão de expandir, os outros ocupam o espaço, e ao reabrir o painel volta na mesma posição de
+   rolagem; **When** ela arrasta (ou move pelo teclado) a divisória entre árvore e editor ou
+   entre editor e prévia, **Then** as larguras mudam sem deixar painel menor que o mínimo, e o
+   clique duplo na divisória volta ao padrão; ao reabrir o projeto, o arranjo escolhido volta
+   (FR-013b; emenda de 2026-11-22).
 
 ---
 
@@ -277,6 +285,12 @@ comando.
   as teclas seguem para o editor (nenhum atalho do editor é tomado).
 - **Armazenamento local indisponível** (modo privado, cota cheia, acesso negado): o zoom
   funciona na sessão e só não é lembrado; a prévia não quebra.
+- **Recolher o último painel de conteúdo** (FR-013b): editor e prévia não ficam os dois
+  recolhidos; o botão de recolher do único que sobrou fica desativado, e o atalho ou modo que
+  levaria a isso não faz nada.
+- **Janela estreita com painéis largos**: as larguras guardadas valem como preferência; editor e
+  prévia nunca ficam abaixo do mínimo, e a janela não rola na horizontal (a área de trabalho
+  continua com largura mínima de 720 px).
 - **Disco cheio ou sem permissão de escrita ao salvar ou exportar**: o app avisa, não perde o
   texto do editor e não deixa arquivo parcialmente gravado no lugar do original.
 
@@ -356,6 +370,20 @@ comando.
   desse armazenamento MUST NOT quebrar a prévia. Os controles MUST ter nome acessível e a
   porcentagem MUST ser anunciada a leitores de tela. Só interface: o núcleo e o contrato IPC
   não mudam (RF-02).
+- **FR-013b**: A pessoa MUST poder ajustar as áreas da área de trabalho (emenda de 2026-11-22,
+  pedido do dono: "permitir ajustar as áreas do editor e da visualização do PDF… deixando apenas
+  uma visível" e "um botão para encolher ou abrir as áreas"). Cada painel (árvore, editor,
+  prévia) MUST ter no próprio cabeçalho um botão visível de recolher; o painel recolhido MUST
+  virar um trilho fino na sua borda, com o nome do painel e um botão de expandir, de modo que um
+  clique o reabre. Editor e prévia MUST NOT ficar os dois recolhidos. As divisórias entre árvore
+  e editor e entre editor e prévia MUST ser arrastáveis e ajustáveis pelo teclado (separador
+  focável com valor atual e setas), MUST respeitar larguras mínimas, e o clique duplo MUST
+  voltar ao padrão do protótipo (200 px | 1,25fr | 1fr). A barra de cima MUST ter o controle
+  "Editor · Ambos · Prévia" e o de mostrar ou esconder a árvore; ⌘/Ctrl + 1, 2 e 3 e ⌘/Ctrl +
+  `\` fazem o mesmo, sem tomar atalhos do editor. Painel que volta MUST manter a posição de
+  rolagem, e a prévia MUST continuar pedindo as páginas visíveis (FR-013). O arranjo MUST ser
+  lembrado por projeto, nos dados locais da interface, e falha desse armazenamento MUST NOT
+  quebrar a área de trabalho. Só interface: o núcleo e o contrato IPC não mudam (RF-02, RF-04).
 - **FR-014**: Quando o texto não compila, a prévia MUST manter a última versão bem-sucedida e
   indicar que há erro (RF-02).
 - **FR-015**: Uma compilação lenta, que não termina ou que excede o limite de tempo MUST NOT
