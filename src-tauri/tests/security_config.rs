@@ -115,7 +115,16 @@ fn capabilities_valem_so_para_a_janela_principal() {
 /// Permissões que a janela pode receber: só as necessárias para chamar os comandos do contrato
 /// (contracts/ipc.md: "falha em qualquer permissão fora desta lista"; plan.md: "nenhuma permissão
 /// de janela além do IPC do contrato"). Comandos do app não exigem permissão `core:*`.
-const ALLOWED_PERMISSIONS: &[&str] = &["allow-get-app-info", "allow-self-test-report"];
+/// 003 acrescenta só escutar e deixar de escutar eventos do núcleo (`external_change_conflict`,
+/// `copy_into_project_offer`, `plugin_approval_needed`; contracts/ipc.md). Nada de `emit`:
+/// a webview não fala com outras janelas nem forja eventos.
+const EVENT_PERMISSIONS: &[&str] = &["core:event:allow-listen", "core:event:allow-unlisten"];
+const ALLOWED_PERMISSIONS: &[&str] = &[
+    "allow-get-app-info",
+    "allow-self-test-report",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+];
 
 /// Fontes que a CSP pode citar. Qualquer origem de rede além do IPC do Tauri abriria canal para
 /// fora do app (STRIDE: divulgação) e anularia `default-src 'self'`.
@@ -257,4 +266,27 @@ fn self_test_nao_compila_em_release() {
         lib.contains(guard),
         "src/lib.rs precisa barrar `--features self-test` em release com compile_error!"
     );
+}
+
+#[test]
+fn capability_escuta_eventos_do_nucleo_e_nada_mais_de_core() {
+    let cap = read_json(&manifest_dir().join("capabilities/default.json"));
+    let perms: Vec<&str> = cap["permissions"]
+        .as_array()
+        .expect("permissions ausente")
+        .iter()
+        .filter_map(|p| p.as_str().or_else(|| p["identifier"].as_str()))
+        .collect();
+    for needed in EVENT_PERMISSIONS {
+        assert!(
+            perms.contains(needed),
+            "falta {needed}: sem ela a webview não recebe external_change_conflict"
+        );
+    }
+    for perm in perms.iter().filter(|p| p.starts_with("core:")) {
+        assert!(
+            EVENT_PERMISSIONS.contains(perm),
+            "permissão core além de escutar eventos: {perm}"
+        );
+    }
 }

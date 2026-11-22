@@ -319,4 +319,22 @@ describe("conflito externo", () => {
     await settle();
     expect(ws.editor()!.view.state.doc.toString()).toBe("do disco");
   });
+
+  it("⌘S durante um conflito (save_file → external_change_conflict) abre o mesmo diálogo", async () => {
+    const { core, root, ws } = setup({
+      save_file: () => {
+        throw "external_change_conflict";
+      },
+      resolve_external_change: () => ({ text: "meu texto", version: 4 }),
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    button(root, /Salvar/)!.click();
+    await settle();
+    expect(root.querySelector("[role=alertdialog]")).not.toBeNull();
+    button(root, /minha/)!.click();
+    await settle();
+    expect(core.calls("resolve_external_change")[0]?.args).toEqual({ path: "main.typ", keep: "mine" });
+    expect(ws.editor()!.view.state.doc.toString()).toBe("meu texto");
+  });
 });
