@@ -111,6 +111,7 @@ prévia mudar, introduzir erro e ver o diagnóstico na linha certa; ver a versã
 - [X] T038 [P] [US1] Implementar `src/preview/preview.ts` e `src/project/tree.ts` até a parte de prévia e árvore de T030 passar
 - [X] T039 [US1] Implementar `src/about.ts` (versão embutida e registrada, aviso de diferença, licenças das fontes e avisos de atribuição do `typst-assets`, D-15, D-16) e o diálogo de conflito externo em `src/project/prompts.ts`; montar o layout em `src/main.ts` até T031 passar
 - [ ] T091 [US1] Implementar o zoom da prévia em `src/preview/zoom.ts` e `src/preview/preview.ts` (largura das páginas pelo nível, âncora de leitura, sem novo pedido de SVG), barra no estilo de `prototype/index.html` (`.pvbar` + `.seg`) em `src/workspace.css`, chave do projeto passada por `src/workspace.ts`, até T090 passar (FR-013a)
+- [X] T084 [US1] Mudança externa sem alteração local chega ao editor (FR-008; bug visto no app real, #189): o núcleo emite `external_change_reloaded { path, version }` depois de recarregar (`src-tauri/src/lib.rs`, `src-tauri/src/fs/watch.rs`); `src/ipc.ts` expõe `onExternalChangeReloaded`; `src/workspace.ts` busca o texto com `open_file` e recarrega o editor aberto com esse caminho (`src/editor/editor.ts` `reload` troca só o trecho que mudou, fora do histórico); testes em `src-tauri/src/lib.rs` (evento só no recarregamento limpo; com alteração local, só `external_change_conflict`), `src/workspace.test.ts`, `src/editor/editor.test.ts` e no autoteste (`self_test_write_external`)
 
 **Checkpoint**: US1 funciona sozinha; QA valida.
 
@@ -209,14 +210,14 @@ com o `typst` CLI; tentar exportar com erro.
 
 ### Testes para User Story 5
 
-- [ ] T065 [P] [US5] Testes em `src-tauri/tests/compile_export.rs`: PDF com o mesmo número de páginas e tamanhos da prévia e gerado do mesmo `compileId` da última prévia `Ok` (FR-011); com erro de compilação → `compile_errors` com a lista; falha de gravação não deixa arquivo parcial (FR-028, FR-029)
-- [ ] T066 [P] [US5] Teste de equivalência em `src-tauri/tests/equivalence.rs` (feature `equivalence`, `PRELO_TYPST_CLI`): para `artigo-basico`, `bibliografia`, `imagens`, `fontes`, PDF do Prelo e do `typst` CLI 0.15.1 com `--ignore-system-fonts --ignore-embedded-fonts --font-path src-tauri/fonts --font-path <projeto>/fonts`, renderizados com `typst-render` e comparados página a página (FR-031, SC-005)
+- [x] T065 [P] [US5] Testes em `src-tauri/tests/compile_export.rs`: PDF com o mesmo número de páginas e tamanhos da prévia e gerado do mesmo `compileId` da última prévia `Ok` (FR-011); com erro de compilação → `compile_errors` com a lista; falha de gravação não deixa arquivo parcial (FR-028, FR-029)
+- [x] T066 [P] [US5] Teste de equivalência em `src-tauri/tests/equivalence.rs` (feature `equivalence`, `PRELO_TYPST_CLI`): para `artigo-basico`, `bibliografia`, `imagens`, `fontes`, PDF do Prelo e do `typst` CLI 0.15.1 com `--ignore-system-fonts --ignore-embedded-fonts --font-path src-tauri/fonts --font-path <projeto>/fonts`, renderizados com `typst-render` e comparados página a página (FR-031, SC-005)
 
 ### Implementação para User Story 5
 
-- [ ] T067 [US5] Implementar `src-tauri/src/compile/export.rs` (`typst-pdf`, gravação atômica) e `export_pdf_dialog` até T065 passar
-- [ ] T068 [P] [US5] Escrever teste em `src/export.test.ts`: ação "Exportar PDF" chama `export_pdf_dialog`; `compile_errors` mostra a lista; desativada com versão diferente. Confirmar que falha
-- [ ] T069 [US5] Adicionar a ação "Exportar PDF" com lista de erros em `src/main.ts` até T068 passar
+- [x] T067 [US5] Implementar `src-tauri/src/compile/export.rs` (`typst-pdf`, gravação atômica) e `export_pdf_dialog` até T065 passar
+- [x] T068 [P] [US5] Escrever teste em `src/export.test.ts`: ação "Exportar PDF" chama `export_pdf_dialog`; `compile_errors` mostra a lista; desativada com versão diferente. Confirmar que falha
+- [x] T069 [US5] Adicionar a ação "Exportar PDF" com lista de erros em `src/main.ts` até T068 passar
 - [ ] T070 [US5] Adicionar job de equivalência ao CI em `.github/workflows/ci.yml` (instala `typst` 0.15.1 só nesse job) até T066 passar nos três sistemas
 
 **Checkpoint**: US5 funciona com US1; QA valida.

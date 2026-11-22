@@ -10,6 +10,7 @@ import { EditorView } from "@codemirror/view";
 import { compilerStatus, mountAbout, type AboutHandle } from "./about";
 import { mountAppInfo, type Invoke } from "./app-info";
 import { mountEditor, type EditorHandle } from "./editor/editor";
+import { mountExport } from "./export";
 import { errorMessage, toIpcError, type Ipc, type IpcError, type PreviewUpdate, type ProjectInfo } from "./ipc";
 import { mountPreview, type BlobUrls, type PreviewHandle } from "./preview/preview";
 import { conflictResolver, watchExternalChanges } from "./project/prompts";
@@ -81,7 +82,9 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   saveBtn.title = "Salvar (⌘S / Ctrl+S)";
   saveBtn.disabled = true;
   const aboutBtn = button("Sobre");
-  top.append(projectEl, el("div", "ws-spacer"), openBtn, saveBtn, aboutBtn);
+  // "Exportar PDF" (US5): a ação principal da barra; o resto em src/export.ts.
+  const exporter = mountExport({ ipc, onError: (err) => showError(err) });
+  top.append(projectEl, el("div", "ws-spacer"), openBtn, saveBtn, aboutBtn, exporter.button);
 
   const message = el("div", "ws-message");
   message.setAttribute("role", "status");
@@ -104,7 +107,9 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   appInfoEl.dataset.testid = "app-info";
   status.append(compileEl, saveEl, el("div", "ws-spacer"), compilerEl, appInfoEl);
 
-  app.append(top, message, banner, body, status);
+  status.insertBefore(exporter.status, compilerEl.previousSibling);
+
+  app.append(top, message, exporter.errors, banner, body, status);
   root.replaceChildren(app);
 
   // ---------------------------------------------------------------- estado
@@ -168,6 +173,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     preview.update(u);
     editor?.setDiagnostics(u.diagnostics);
     renderCompile(u);
+    exporter.update(u);
     for (const cb of [...observers]) cb(u);
   }
 
@@ -179,6 +185,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     const st = compilerStatus(info.compiler);
     compilerEl.textContent = st.label;
     compilerEl.classList.toggle("is-warn", st.mismatch);
+    exporter.setProject(info);
     renderBanner();
   }
 
@@ -250,6 +257,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     info = next;
     last = null;
     showMessage(null);
+    exporter.reset();
     // O núcleo recomeça a prévia ao abrir outro projeto: a interface também.
     preview.destroy();
     // O zoom da prévia é lembrado por projeto (FR-013a); `ProjectInfo` não traz o caminho da
@@ -294,6 +302,22 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     try {
       const r = await ipc.openFile(path);
       if (editor?.path === path) editor.reload(r.text, r.version);
+    } catch (err) {
+      showError(toIpcError(err));
+    }
+  }
+
+  /**
+   * O núcleo recarregou do disco um arquivo sem alteração local (FR-008): o editor aberto com
+   * esse caminho passa a mostrar o texto novo, sem diálogo. Árvore e status não mudam. Versão
+   * que o editor já tem (evento repetido ou atrasado) não busca de novo.
+   */
+  async function externalReload(path: string, version: number) {
+    if (editor?.path !== path || editor.version() >= version) return;
+    try {
+      const r = await ipc.openFile(path);
+      const current = editor as EditorHandle | null;
+      if (current?.path === path && r.version > current.version()) current.reload(r.text, r.version);
     } catch (err) {
       showError(toIpcError(err));
     }
@@ -363,6 +387,10 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     watchExternalChanges(conflictOpts, resolveConflict).then(
       (stop) => stops.push(stop),
       (err: unknown) => console.warn("conflito externo: sem escuta de eventos", err),
+    );
+    ipc.onExternalChangeReloaded(({ path, version }) => void externalReload(path, version)).then(
+      (stop) => stops.push(stop),
+      (err: unknown) => console.warn("mudança externa: sem escuta de eventos", err),
     );
     await appReady;
   })();

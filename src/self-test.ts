@@ -1,7 +1,9 @@
 // Autoteste ponta a ponta (T012/T020 e T031): só roda em build com VITE_SELF_TEST definido.
 // Além da versão do app (001), percorre US1 no app real: abre a fixture `artigo-basico`
 // (cópia temporária feita pelo núcleo), edita, espera a prévia mudar, introduz um erro e
-// espera o diagnóstico marcado no editor. Reporta ao núcleo o que observou; o núcleo confere,
+// espera o diagnóstico marcado no editor; depois grava o arquivo aberto "por fora" (sem
+// alteração local) e espera o editor mostrar o texto do disco com o diagnóstico na linha
+// certa (FR-008, T084). Reporta ao núcleo o que observou; o núcleo confere,
 // inclusive que não há `typst` no PATH (SC-006), e encerra o app
 // (contracts/ipc.md, `self_test_report`).
 import { diagnosticCount } from "@codemirror/lint";
@@ -25,6 +27,12 @@ export interface ScenarioResult {
   compilerShown: string;
   /** O que a conferência de layout achou no app real (vazio em jsdom, sem conferência). */
   layoutProblems: string[];
+  /** O editor passou a mostrar o texto gravado por fora (sem alteração local). */
+  externalReloaded: boolean;
+  /** Linha (1-based) do erro no texto gravado por fora. */
+  externalErrorLine: number;
+  /** Linha do diagnóstico de erro no editor recarregado, se veio. */
+  externalDiagnosticLine: number | null;
   failure?: string;
 }
 
@@ -33,6 +41,8 @@ export interface ScenarioOptions {
   timeoutMs?: number;
   /** Mede o layout na webview real (src/layout-check.ts); ausente em jsdom. */
   checkLayout?: () => string[];
+  /** Grava o arquivo principal como outro programa faria (`self_test_write_external`). */
+  writeExternal?: (text: string) => Promise<void>;
 }
 
 function waitFor(
@@ -57,6 +67,22 @@ function waitFor(
 
 const hashes = (u: PreviewUpdate) => u.pages.map((p) => p.hash).join(",");
 
+/** Espera `pred` ficar verdadeiro, conferindo a cada 50 ms. */
+async function until(what: string, pred: () => boolean, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!pred()) {
+    if (Date.now() > deadline) throw new Error(`${what} em ${timeoutMs} ms`);
+    await new Promise((r) => setTimeout(r, 50));
+  }
+}
+
+/** Texto que "outro programa" grava: bem mais longo que o aberto, com o erro no fim. */
+export function externalText(): { text: string; errorLine: number } {
+  const lines = Array.from({ length: 130 }, (_, i) => `Linha ${i + 1} gravada por outro programa.`);
+  lines.push(ERROR_SNIPPET, "");
+  return { text: lines.join("\n"), errorLine: 131 };
+}
+
 /** Percorre US1 sobre a área de trabalho montada; nunca lança: falha vai em `failure`. */
 export async function runEditorScenario(
   ws: WorkspaceHandle,
@@ -72,6 +98,9 @@ export async function runEditorScenario(
     editorMarked: false,
     compilerShown: "",
     layoutProblems: [],
+    externalReloaded: false,
+    externalErrorLine: 0,
+    externalDiagnosticLine: null,
   };
   try {
     const first = waitFor(ws, "compilou ao abrir o projeto", (u) => u.ok && u.pages.length > 0, timeoutMs);
@@ -109,6 +138,37 @@ export async function runEditorScenario(
     else if (typeof d.line === "number") r.diagnosticLine = d.line;
     r.editorMarked = diagnosticCount(view.state) > 0;
 
+    // FR-008: outro programa grava o arquivo aberto sem alteração local → o editor mostra o
+    // texto do disco (sem diálogo) e o diagnóstico cai numa linha que o editor tem.
+    if (opts.writeExternal) {
+      if (!(await editor.save())) throw new Error("não salvou antes da mudança externa");
+      let latest: PreviewUpdate | null = null;
+      const stop = ws.onPreviewUpdate((u) => (latest = u));
+      try {
+        const ext = externalText();
+        r.externalErrorLine = ext.errorLine;
+        await opts.writeExternal(ext.text);
+        const shown = () => ws.editor()?.view.state.doc.toString() === ext.text;
+        await until("o editor não mostrou o texto gravado no disco", shown, timeoutMs);
+        r.externalReloaded = true;
+        const diagLine = (): number | null => {
+          const v = ws.editor()?.view;
+          const d = (latest as PreviewUpdate | null)?.diagnostics.find(
+            (x) => x.severity === "error" && x.path === info.mainFile && x.range,
+          );
+          if (!v || !d?.range || !shown()) return null;
+          return v.state.doc.lineAt(Math.min(d.range.from, v.state.doc.length)).number;
+        };
+        await until(
+          "o diagnóstico do texto do disco não apareceu na linha do erro",
+          () => (r.externalDiagnosticLine = diagLine()) === ext.errorLine,
+          timeoutMs,
+        );
+      } finally {
+        stop();
+      }
+    }
+
     // Layout no app real: texto mais alto que o editor e uma linha mais larga que ele, para
     // conferir gutter em coluna, rolagem vertical e quebra da linha longa.
     if (opts.checkLayout) {
@@ -142,6 +202,7 @@ export async function reportSelfTest(
   const rendered = ws.appInfoElement.textContent?.trim() ?? "";
   const scenario = await runEditorScenario(ws, () => invoke<ProjectInfo>("self_test_open_project"), {
     checkLayout: () => [...cspViolations(), ...layoutProblems(document), ...previewZoomProblems(document)],
+    writeExternal: (text) => invoke("self_test_write_external", { text }),
   });
   await invoke("self_test_report", { rendered, elapsedMs, scenario });
 }
