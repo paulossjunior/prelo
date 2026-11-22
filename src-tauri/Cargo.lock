@@ -3779,6 +3779,7 @@ dependencies = [
  "typst-ide",
  "typst-layout",
  "typst-pdf",
+ "typst-render",
  "typst-svg",
  "ureq",
  "windows-sys 0.61.2",

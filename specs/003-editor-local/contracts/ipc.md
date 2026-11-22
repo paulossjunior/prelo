@@ -61,6 +61,11 @@ vêm da última prévia `Ok`.
 |---|---|---|---|
 | `export_pdf_dialog` | — | `{ path }` ou `null` | `compile_errors` (com `Diagnostic[]`), `compiler_version_mismatch`, `write_failed` |
 
+`compile_errors` chega como `{ code: "compile_errors", diagnostics: Diagnostic[] }` (os da última
+compilação); os outros erros, como código em texto. O núcleo recusa antes de mostrar o diálogo
+de salvar. O PDF sai do documento da última `PreviewUpdate` com `ok: true` (mesmo `compileId`),
+sem recompilar, e é gravado de forma atômica.
+
 ## Arquivo externo, plugins e pacotes
 
 | Evento / comando | Conteúdo |

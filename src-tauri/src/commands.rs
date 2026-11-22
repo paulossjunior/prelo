@@ -31,6 +31,7 @@ use tauri::State;
 
 use typst_layout::PagedDocument;
 
+use crate::compile::export::{ExportError, ExportSource, Exported};
 use crate::compile::preview::{render_svg, PreviewHub, PreviewUpdate};
 use crate::compile::project::{CompileInput, ProjectCompiler};
 use crate::compile::scheduler::Scheduler;
@@ -755,6 +756,41 @@ impl AppState {
         }
         project.recompile();
         Ok(project.info())
+    }
+
+    /// O que exportar (FR-011, FR-012, FR-029): o documento da última prévia `Ok`, o nome do
+    /// projeto (nome sugerido do PDF) e a raiz (pasta inicial do diálogo). Recusa sem projeto,
+    /// com versão registrada ≠ embutida e quando a última compilação teve erro.
+    pub fn export_source(&self) -> Result<(ExportSource, String, PathBuf), ExportError> {
+        let (name, root) = {
+            let guard = self.lock();
+            let project = guard.as_ref().ok_or(ExportError::NoProject)?;
+            if project.version_differs() || project.compiler.is_none() {
+                return Err(ExportError::VersionMismatch);
+            }
+            (project.info().name, project.scope.root().to_owned())
+        };
+        match self.preview.export_source() {
+            Some(Ok((compile_id, document))) => Ok((
+                ExportSource {
+                    compile_id,
+                    document,
+                },
+                name,
+                root,
+            )),
+            Some(Err(diagnostics)) => Err(ExportError::CompileErrors(diagnostics)),
+            None => Err(ExportError::CompileErrors(vec![
+                crate::compile::export::not_compiled_yet(),
+            ])),
+        }
+    }
+
+    /// Exporta o PDF da última prévia `Ok` para `path` (o caminho que o diálogo nativo de
+    /// `export_pdf_dialog` devolve; nunca vem da interface).
+    pub fn export_pdf(&self, path: &Path) -> Result<Exported, ExportError> {
+        let (source, _, _) = self.export_source()?;
+        crate::compile::export::export(&source, path)
     }
 
     /// Versões embutida e registrada (contracts/ipc.md `compiler_info`).

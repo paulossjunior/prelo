@@ -57,6 +57,9 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage
 [dev-dependencies]
 tauri = { version = "2.12", features = ["test"] }
 tempfile = "3.27"
+# Teste de equivalência (tests/equivalence.rs, FR-031): renderiza as páginas dos dois PDFs
+# para comparar pixel a pixel. Só em teste; mesma versão e licença (Apache-2.0) do `typst`.
+typst-render = "=0.15.1"
 
 [features]
 # Autoteste ponta a ponta (research R3). Nunca habilitado em release.
