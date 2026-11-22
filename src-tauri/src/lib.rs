@@ -1,4 +1,5 @@
 mod app_info;
+pub mod commands;
 pub mod compile;
 pub mod diagnostic;
 pub mod fs;
@@ -13,20 +14,56 @@ mod webview_args;
 
 use tauri::{Builder, Runtime};
 
-/// Registra os comandos IPC do contrato (specs/001-app-skeleton/contracts/ipc.md).
+/// Registra os comandos IPC do contrato (specs/001-app-skeleton/contracts/ipc.md e
+/// specs/003-editor-local/contracts/ipc.md) com o estado padrão do núcleo.
 /// Recebe o builder de fora para os testes de contrato usarem `tauri::test::mock_builder()`.
-#[cfg(not(feature = "self-test"))]
 pub fn configure<R: Runtime>(builder: Builder<R>) -> Builder<R> {
-    builder.invoke_handler(tauri::generate_handler![app_info::get_app_info])
+    configure_with_state(builder, commands::AppState::default())
+}
+
+/// Como [`configure`], com o estado do núcleo dado (os testes trocam o motor por um falso).
+#[cfg(not(feature = "self-test"))]
+pub fn configure_with_state<R: Runtime>(
+    builder: Builder<R>,
+    state: commands::AppState,
+) -> Builder<R> {
+    builder
+        .manage(state)
+        .invoke_handler(tauri::generate_handler![
+            app_info::get_app_info,
+            commands::list_tree,
+            commands::choose_main_file,
+            commands::open_file,
+            commands::edit_file,
+            commands::save_file,
+            commands::resolve_external_change,
+            commands::complete,
+            commands::semantic_tokens,
+            commands::jump_from_cursor
+        ])
 }
 
 /// Variante de teste: acrescenta `self_test_report` (nunca em release).
 #[cfg(feature = "self-test")]
-pub fn configure<R: Runtime>(builder: Builder<R>) -> Builder<R> {
-    builder.invoke_handler(tauri::generate_handler![
-        app_info::get_app_info,
-        self_test::self_test_report
-    ])
+pub fn configure_with_state<R: Runtime>(
+    builder: Builder<R>,
+    state: commands::AppState,
+) -> Builder<R> {
+    builder
+        .manage(state)
+        .invoke_handler(tauri::generate_handler![
+            app_info::get_app_info,
+            commands::list_tree,
+            commands::choose_main_file,
+            commands::open_file,
+            commands::edit_file,
+            commands::save_file,
+            commands::resolve_external_change,
+            commands::complete,
+            commands::semantic_tokens,
+            commands::jump_from_cursor,
+            self_test::self_test_report
+        ])
 }
 
 /// Inicia o app. A janela principal sai do tauri.conf.json (`create: false`) e é criada aqui
