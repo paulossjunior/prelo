@@ -1,7 +1,9 @@
 // Testes da conferência de layout do autoteste (T037/T039). O jsdom não faz layout: as medidas
 // são fixadas à mão, reproduzindo o app real com e sem o tema base do CodeMirror.
 import { afterEach, describe, expect, it } from "vitest";
-import { layoutProblems, watchCspViolations } from "./layout-check";
+import { layoutProblems, previewZoomProblems, watchCspViolations } from "./layout-check";
+import { mountPreview } from "./preview/preview";
+import { fakeCore } from "./testing/fake-core";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -118,5 +120,68 @@ describe("watchCspViolations", () => {
     Object.assign(ev, { effectiveDirective: "style-src-elem", violatedDirective: "style-src", blockedURI: "inline" });
     target.dispatchEvent(ev);
     expect(seen()).toEqual(["CSP bloqueou style-src-elem: inline"]);
+  });
+});
+
+// ---------------------------------------------------------------- zoom da prévia (T090; FR-013a)
+
+describe("previewZoomProblems", () => {
+  /** Prévia de verdade (mountPreview) com medidas fixadas: painel de 370 px, A4 nas páginas. */
+  function zoomedPreview(opts: { overflowX?: string; windowScrolls?: boolean; widePage?: boolean } = {}) {
+    const core = fakeCore({ page_svg: () => "<svg></svg>" });
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const pv = mountPreview(parent, { ipc: core.ipc, urls: { create: () => "blob:x", revoke: () => {} } });
+    pv.update({
+      compileId: 1,
+      ok: true,
+      changed: [0],
+      diagnostics: [],
+      durationMs: 1,
+      pages: [{ index: 0, hash: "a", widthPt: 595, heightPt: 842 }],
+    });
+    const pane = parent.querySelector<HTMLElement>(".pv-pages")!;
+    pane.style.overflowX = opts.overflowX ?? "auto";
+    const page = parent.querySelector<HTMLElement>(".pv-page")!;
+    const pageWidth = () => {
+      const w = parseFloat(page.style.width);
+      return Number.isFinite(w) && opts.widePage !== false ? w : 334;
+    };
+    Object.defineProperty(pane, "clientWidth", { configurable: true, get: () => 370 });
+    Object.defineProperty(pane, "clientHeight", { configurable: true, get: () => 600 });
+    Object.defineProperty(pane, "scrollWidth", { configurable: true, get: () => Math.max(370, pageWidth() + 36) });
+    scrollable(document.documentElement, {
+      scrollHeight: 700,
+      clientHeight: 700,
+      scrollWidth: opts.windowScrolls ? 2000 : 1000,
+      clientWidth: 1000,
+    });
+    return { pv, pane };
+  }
+
+  it("aceita a prévia que a 200 % rola na horizontal dentro do painel, e volta ao zoom anterior", () => {
+    const { pv } = zoomedPreview();
+    expect(previewZoomProblems(document)).toEqual([]);
+    expect(pv.zoom()).toBe("fit");
+    pv.destroy();
+  });
+
+  it("recusa prévia sem rolagem horizontal ou com a janela rolando", () => {
+    const { pv } = zoomedPreview({ overflowX: "hidden", windowScrolls: true });
+    const p = previewZoomProblems(document);
+    expect(p.some((x) => x.includes("na horizontal"))).toBe(true);
+    expect(p.some((x) => x.includes("janela"))).toBe(true);
+    pv.destroy();
+  });
+
+  it("recusa página que não cresce com o zoom", () => {
+    const { pv } = zoomedPreview({ widePage: false });
+    expect(previewZoomProblems(document).some((x) => x.includes("não ficou mais larga"))).toBe(true);
+    pv.destroy();
+  });
+
+  it("recusa prévia sem a barra de zoom", () => {
+    document.body.innerHTML = `<div class="pv"><div class="pv-pages"></div></div>`;
+    expect(previewZoomProblems(document)[0]).toMatch(/barra de zoom/);
   });
 });

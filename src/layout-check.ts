@@ -88,3 +88,50 @@ export function layoutProblems(doc: Document = document): string[] {
   }
   return problems;
 }
+
+const pctOf = (el: Element) => parseInt(el.textContent ?? "", 10);
+
+/**
+ * Zoom da prévia no app real (T091; FR-013a): leva a prévia a 200 % pelo botão "+", confere que
+ * a página ficou mais larga que o painel, que o painel rola na horizontal e que a janela não
+ * rola, e devolve o zoom ao nível de antes. Vazio quando está tudo certo.
+ */
+export function previewZoomProblems(doc: Document = document): string[] {
+  const q = <T extends HTMLElement = HTMLElement>(sel: string) => doc.querySelector<T>(sel);
+  const pane = q(".pv-pages");
+  const plus = q<HTMLButtonElement>(".pv-zoom-in");
+  const minus = q<HTMLButtonElement>(".pv-zoom-out");
+  const fit = q<HTMLButtonElement>(".pv-zoom-fit");
+  const pct = q(".pv-zoom-pct");
+  if (!pane || !plus || !minus || !fit || !pct) return ["barra de zoom da prévia ausente (.pv-zoom-in/out/fit/pct)"];
+  if (!pane.querySelector(".pv-page")) return ["prévia sem páginas para conferir o zoom"];
+
+  const wasFit = fit.getAttribute("aria-pressed") === "true";
+  const problems: string[] = [];
+  let clicks = 0;
+  while (!(pctOf(pct) >= 200) && !plus.disabled && clicks < 20) {
+    plus.click();
+    clicks++;
+  }
+  if (pctOf(pct) !== 200) problems.push(`o "+" não chegou a 200 % (parou em ${pct.textContent})`);
+
+  const page0 = pane.querySelector<HTMLElement>(".pv-page")!;
+  if (pane.scrollWidth <= pane.clientWidth + TOL) {
+    problems.push(
+      `a 200 % a página não ficou mais larga que o painel (${pane.scrollWidth} ≤ ${pane.clientWidth}; página ${page0.style.width || "100%"})`,
+    );
+  }
+  if (!/^(auto|scroll)$/.test(getComputedStyle(pane).overflowX)) {
+    problems.push("a 200 % a prévia não rola na horizontal (.pv-pages sem overflow-x auto)");
+  }
+  const page = doc.scrollingElement ?? doc.documentElement;
+  if (page.scrollWidth > page.clientWidth + TOL || page.scrollHeight > page.clientHeight + TOL) {
+    problems.push(
+      `a 200 % a janela rola (${page.scrollWidth}×${page.scrollHeight} > ${page.clientWidth}×${page.clientHeight})`,
+    );
+  }
+
+  if (wasFit) fit.click();
+  else for (let i = 0; i < clicks; i++) minus.click();
+  return problems;
+}
