@@ -616,3 +616,157 @@ fn documento_dentro_da_raiz_compila() {
     doc.assert_contained(&diagnostics);
     assert!(!doc.case.opens.all().is_empty());
 }
+
+// ---------------------------------------------------------------------------------------
+// Autocompletar de caminhos (T041; RF-08, FR-021; contracts/file-access.md, "Autocompletar
+// de caminhos"): toda sugestão passa pelos passos 2–4 da regra de escopo; link simbólico
+// para fora não aparece, nem com `..` digitado.
+// ---------------------------------------------------------------------------------------
+
+use prelo_lib::commands::AppState;
+use prelo_lib::lang_service::{path_candidates, Completion};
+
+/// Projeto com links simbólicos para fora (arquivo e pasta), um interno e uma imagem.
+fn completion_case() -> Case {
+    let case = Case::new();
+    case.project.write("capitulos/cap2.typ", "== Capítulo 2");
+    case.project.write("figuras/grafico.png", "png");
+    std::fs::write(case.outside.root().join("vizinho.typ"), SECRET).unwrap();
+    std::fs::write(case.outside.root().join("foto.png"), SECRET).unwrap();
+    symlink(
+        &case.outside.root().join("vizinho.typ"),
+        &case.project.path("segredo.typ"),
+    )
+    .unwrap();
+    symlink(
+        &case.outside.root().join("foto.png"),
+        &case.project.path("foto.png"),
+    )
+    .unwrap();
+    symlink(&case.outside.root(), &case.project.path("pasta-fora")).unwrap();
+    symlink(
+        &case.project.path("capitulos/cap1.typ"),
+        &case.project.path("atalho.typ"),
+    )
+    .unwrap();
+    case
+}
+
+/// Caminhos sugeridos (`kind = text`), sem as aspas que o `typst-ide` põe em volta.
+fn suggested_paths(items: &[Completion]) -> Vec<String> {
+    items
+        .iter()
+        .filter(|c| c.kind.as_deref() == Some("text"))
+        .map(|c| c.label.trim_matches('"').to_owned())
+        .collect()
+}
+
+/// Nenhuma sugestão sai da raiz: cada uma, relativa a `current`, passa pela regra de escopo,
+/// e nenhuma cita o que está do lado de fora.
+fn assert_inside(case: &Case, current: &str, paths: &[String]) {
+    let outside_dir = case.outside.root();
+    let outside_name = outside_dir.file_name().unwrap().to_str().unwrap();
+    for path in paths {
+        let resolved = case.scope.resolve_from(current, path);
+        assert!(
+            resolved.is_ok(),
+            "sugestão {path:?} sai da raiz: {resolved:?}"
+        );
+        for forbidden in ["segredo", "foto.png", "pasta-fora", "vizinho", outside_name] {
+            assert!(
+                !path.contains(forbidden),
+                "sugestão revela {forbidden}: {path}"
+            );
+        }
+    }
+}
+
+#[test]
+fn candidatos_de_caminho_ficam_dentro_da_raiz() {
+    let case = completion_case();
+    let candidates = path_candidates(&case.scope);
+    for expected in [
+        "main.typ",
+        "capitulos/cap1.typ",
+        "capitulos/cap2.typ",
+        "figuras/grafico.png",
+        // Link interno é aceito (FR-021).
+        "atalho.typ",
+    ] {
+        assert!(
+            candidates.iter().any(|c| c == expected),
+            "faltou {expected}: {candidates:?}"
+        );
+    }
+    assert_inside(&case, "", &candidates);
+    // Listar não abre arquivo nenhum, muito menos fora da raiz.
+    case.assert_no_open_outside();
+}
+
+#[cfg(unix)]
+#[test]
+fn candidatos_de_caminho_ignoram_fifo_e_arquivos_ocultos() {
+    let case = completion_case();
+    mkfifo(&case.project.path("fila.typ")).unwrap();
+    case.project.write(".prelo/project.json", "{}");
+    case.project.write(".git/config", "x");
+    let candidates = path_candidates(&case.scope);
+    assert!(
+        !candidates.iter().any(|c| c.contains("fila")),
+        "{candidates:?}"
+    );
+    assert!(
+        !candidates.iter().any(|c| c.starts_with('.')),
+        "{candidates:?}"
+    );
+    assert!(candidates.iter().any(|c| c == "main.typ"), "{candidates:?}");
+}
+
+#[test]
+fn autocompletar_de_include_com_ponto_ponto_nao_sugere_nada_fora() {
+    let case = completion_case();
+    let state = AppState::default();
+    state
+        .open_project(&case.project.root())
+        .expect("abrir projeto");
+
+    // `..` digitado no arquivo da raiz: o que vier não pode sair dela.
+    let main = "= Artigo\n#include \"../\"\n";
+    case.project.write("main.typ", main);
+    state.open_file("main.typ").expect("abrir main");
+    let cursor = main.find("../").unwrap() + 3;
+    let items = state.complete("main.typ", cursor).expect("complete");
+    let paths = suggested_paths(&items);
+    assert!(paths.iter().any(|p| p == "capitulos/cap1.typ"), "{items:?}");
+    assert!(paths.iter().any(|p| p == "atalho.typ"), "{items:?}");
+    assert_inside(&case, "main.typ", &paths);
+
+    // `../../` num capítulo: sobe até a raiz e não além.
+    let cap = "#include \"../../\"\n";
+    case.project.write("capitulos/cap1.typ", cap);
+    state.open_file("capitulos/cap1.typ").expect("abrir cap1");
+    let cursor = cap.find("../../").unwrap() + 6;
+    let items = state
+        .complete("capitulos/cap1.typ", cursor)
+        .expect("complete");
+    let paths = suggested_paths(&items);
+    assert!(paths.iter().any(|p| p == "../main.typ"), "{items:?}");
+    assert_inside(&case, "capitulos/cap1.typ", &paths);
+}
+
+#[test]
+fn autocompletar_de_imagem_nao_lista_link_para_fora() {
+    let case = completion_case();
+    let state = AppState::default();
+    state
+        .open_project(&case.project.root())
+        .expect("abrir projeto");
+    let main = "#image(\"\")\n";
+    case.project.write("main.typ", main);
+    state.open_file("main.typ").expect("abrir main");
+    let cursor = main.find('"').unwrap() + 1;
+    let items = state.complete("main.typ", cursor).expect("complete");
+    let paths = suggested_paths(&items);
+    assert_eq!(paths, vec!["figuras/grafico.png".to_owned()], "{items:?}");
+    assert_inside(&case, "main.typ", &paths);
+}

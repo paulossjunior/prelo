@@ -12,6 +12,8 @@ use std::path::Path;
 
 use serde_json::{Map, Value};
 
+use crate::diagnostic::{Diagnostic, Kind, Severity};
+
 /// Caminho do registro relativo à raiz do projeto.
 pub const RECORD_PATH: &str = ".prelo/project.json";
 /// Tamanho máximo aceito do registro (1 MiB).
@@ -41,8 +43,8 @@ pub enum InvalidReason {
     TooLarge,
     /// Não é um arquivo comum (link simbólico, pasta, FIFO, dispositivo).
     NotAFile,
-    /// JSON malformado ou não UTF-8.
-    Json(String),
+    /// JSON malformado ou não UTF-8, com a linha do erro quando o leitor a informa.
+    Json(String, Option<u32>),
     /// `schema` com valor desconhecido ou ausente.
     UnknownSchema(String),
     /// Campo com tipo errado ou obrigatório ausente; guarda o nome do campo.
@@ -95,8 +97,10 @@ impl ProjectRecord {
         if bytes.len() as u64 > MAX_RECORD_BYTES {
             return Err(InvalidReason::TooLarge);
         }
-        let value: Value =
-            serde_json::from_slice(bytes).map_err(|e| InvalidReason::Json(e.to_string()))?;
+        let value: Value = serde_json::from_slice(bytes).map_err(|e| {
+            let line = u32::try_from(e.line()).ok().filter(|&l| l > 0);
+            InvalidReason::Json(e.to_string(), line)
+        })?;
         let Value::Object(mut root) = value else {
             return Err(InvalidReason::WrongType("(raiz)"));
         };
@@ -217,7 +221,7 @@ impl fmt::Display for InvalidReason {
         match self {
             Self::TooLarge => write!(f, "maior que 1 MiB"),
             Self::NotAFile => write!(f, "não é um arquivo comum"),
-            Self::Json(e) => write!(f, "JSON malformado ({e})"),
+            Self::Json(e, _) => write!(f, "JSON malformado ({e})"),
             Self::UnknownSchema(s) => write!(f, "schema desconhecido ({s})"),
             Self::WrongType(field) => write!(f, "campo `{field}` ausente ou com tipo errado"),
             Self::BadMain(why) => write!(f, "`main` fora do projeto ({why})"),
@@ -227,6 +231,20 @@ impl fmt::Display for InvalidReason {
 }
 
 impl std::error::Error for InvalidReason {}
+
+impl InvalidReason {
+    /// Aviso como diagnóstico (`kind = project`, FR-024): cita `.prelo/project.json` e, quando
+    /// o JSON é malformado, a linha do erro. O projeto abre com os padrões, por isso é aviso.
+    pub fn diagnostic(&self) -> Diagnostic {
+        let mut diag = Diagnostic::error(Kind::Project, self.to_string());
+        diag.severity = Severity::Warning;
+        diag.path = Some(RECORD_PATH.to_owned());
+        if let Self::Json(_, line) = self {
+            diag.line = *line;
+        }
+        diag
+    }
+}
 
 impl fmt::Display for SaveError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -455,13 +473,13 @@ mod tests {
     #[test]
     fn malformed_json_is_invalid() {
         let reason = assert_invalid_with_defaults(br#"{ "schema": 1, "compiler": "#);
-        assert!(matches!(reason, InvalidReason::Json(_)), "{reason:?}");
+        assert!(matches!(reason, InvalidReason::Json(..)), "{reason:?}");
     }
 
     #[test]
     fn non_utf8_is_invalid() {
         let reason = assert_invalid_with_defaults(b"{\"schema\":1,\"main\":\"\xff\xfe\"}");
-        assert!(matches!(reason, InvalidReason::Json(_)), "{reason:?}");
+        assert!(matches!(reason, InvalidReason::Json(..)), "{reason:?}");
     }
 
     #[test]

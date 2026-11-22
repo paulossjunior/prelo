@@ -25,6 +25,7 @@ use typst_layout::PagedDocument;
 
 use crate::commands::{Engine, EngineContext, JumpTarget, ProjectPath};
 use crate::compile::project::ProjectCompiler;
+use crate::fs::scope::Scope;
 use crate::world::PreloFeat;
 
 /// Sugestão de autocompletar: `{ label, kind?, detail?, info?, apply? }` (src/editor/completion.ts).
@@ -56,37 +57,104 @@ pub struct Hover {
     pub code: bool,
 }
 
-/// Visão de qualquer [`World`] como [`IdeWorld`]. Sem lista de arquivos nem de pacotes: as
-/// sugestões de caminho passam pelo escopo do projeto em T046 (RF-08).
-struct Ide<'a, W>(&'a W);
+/// Visão de qualquer [`World`] como [`IdeWorld`], com a lista de arquivos do projeto já
+/// filtrada pela regra de escopo ([`path_candidates`]). Sem lista de pacotes.
+struct Ide<'a, W> {
+    world: &'a W,
+    files: Vec<FileId>,
+}
+
+/// Profundidade máxima de pastas varridas para sugerir caminhos.
+const MAX_SCAN_DEPTH: usize = 16;
+/// Quantidade máxima de caminhos sugeridos (e de entradas de pasta examinadas, ×10): projeto
+/// enorme não trava o autocompletar.
+const MAX_PATH_CANDIDATES: usize = 2_000;
+
+/// Arquivos do projeto que podem ser sugeridos no autocompletar de caminhos (RF-08, FR-021;
+/// contracts/file-access.md, "Autocompletar de caminhos"), relativos à raiz com `/`.
+///
+/// - Cada entrada passa por [`Scope::resolve`] (passos 2–4): link simbólico que leva para
+///   fora some; link interno para arquivo fica.
+/// - Só arquivo comum entra (FIFO, dispositivo e socket não).
+/// - Pasta que é link simbólico não é varrida, mesmo interna: evita laço e não lista nada de
+///   fora.
+/// - Nomes iniciados por `.` (`.prelo/`, `.git/`) e não UTF-8 ficam de fora.
+///
+/// Só lista pastas e consulta metadados; nenhum arquivo é aberto.
+pub fn path_candidates(scope: &Scope) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut examined = 0usize;
+    let mut stack: Vec<(std::path::PathBuf, String, usize)> =
+        vec![(scope.root().to_path_buf(), String::new(), 0)];
+    while let Some((dir, prefix, depth)) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            examined += 1;
+            if out.len() >= MAX_PATH_CANDIDATES || examined > MAX_PATH_CANDIDATES * 10 {
+                out.sort();
+                return out;
+            }
+            let Ok(name) = entry.file_name().into_string() else {
+                continue;
+            };
+            if name.starts_with('.') {
+                continue;
+            }
+            // `file_type` da entrada não segue link simbólico.
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            let relative = format!("{prefix}{name}");
+            if kind.is_dir() {
+                if depth < MAX_SCAN_DEPTH {
+                    stack.push((entry.path(), format!("{relative}/"), depth + 1));
+                }
+                continue;
+            }
+            if !(kind.is_file() || kind.is_symlink()) {
+                continue;
+            }
+            let Ok(canonical) = scope.resolve(&relative) else {
+                continue;
+            };
+            if std::fs::metadata(&canonical).is_ok_and(|m| m.is_file()) {
+                out.push(relative);
+            }
+        }
+    }
+    out.sort();
+    out
+}
 
 impl<W: World> World for Ide<'_, W> {
     fn library(&self) -> &LazyHash<Library> {
-        self.0.library()
+        self.world.library()
     }
 
     fn book(&self) -> &LazyHash<FontBook> {
-        self.0.book()
+        self.world.book()
     }
 
     fn main(&self) -> FileId {
-        self.0.main()
+        self.world.main()
     }
 
     fn source(&self, id: FileId) -> FileResult<Source> {
-        self.0.source(id)
+        self.world.source(id)
     }
 
     fn file(&self, id: FileId) -> FileResult<Bytes> {
-        self.0.file(id)
+        self.world.file(id)
     }
 
     fn font(&self, index: usize) -> Option<Font> {
-        self.0.font(index)
+        self.world.font(index)
     }
 
     fn today(&self, offset: Option<Duration>) -> Option<Datetime> {
-        self.0.today(offset)
+        self.world.today(offset)
     }
 }
 
@@ -94,6 +162,22 @@ impl<W: World> IdeWorld for Ide<'_, W> {
     fn upcast(&self) -> &dyn World {
         self
     }
+
+    fn files(&self) -> Vec<FileId> {
+        self.files.clone()
+    }
+}
+
+/// `FileId`s, na raiz do arquivo principal de `world`, dos caminhos de [`path_candidates`].
+fn project_files<W: World>(world: &W, scope: &Scope) -> Vec<FileId> {
+    let main = world.main();
+    path_candidates(scope)
+        .into_iter()
+        .filter_map(|relative| {
+            let vpath = VirtualPath::new(&relative).ok()?;
+            Some(FileId::new(main.get().map(|_| vpath)))
+        })
+        .collect()
 }
 
 /// UTF-16 → byte em `source`; `None` fora do texto ou no meio de um caractere.
@@ -163,9 +247,11 @@ fn convert(c: typst_ide::Completion) -> Completion {
 
 /// Sugestões em `offset` (UTF-16) de `source`, no World `world`. `document` (última compilação
 /// boa) habilita os rótulos. O `typst-ide` decide quando há o que sugerir (`explicit = false`):
-/// a interface pergunta a cada palavra digitada, e texto comum não deve abrir lista.
+/// a interface pergunta a cada palavra digitada, e texto comum não deve abrir lista. Com
+/// `scope`, sugere caminhos de arquivo do projeto, só os que a regra de escopo aceita.
 pub fn complete<W: World>(
     world: &W,
+    scope: Option<&Scope>,
     document: Option<&PagedDocument>,
     source: &Source,
     offset: usize,
@@ -173,7 +259,11 @@ pub fn complete<W: World>(
     let Some(cursor) = to_byte(source, offset) else {
         return Vec::new();
     };
-    typst_ide::autocomplete(&Ide(world), document, source, cursor, false)
+    let ide = Ide {
+        world,
+        files: scope.map(|s| project_files(world, s)).unwrap_or_default(),
+    };
+    typst_ide::autocomplete(&ide, document, source, cursor, false)
         .map(|(_, items)| items.into_iter().map(convert).collect())
         .unwrap_or_default()
 }
@@ -186,7 +276,11 @@ pub fn hover<W: World>(
     offset: usize,
 ) -> Option<Hover> {
     let cursor = to_byte(source, offset)?;
-    match typst_ide::tooltip(&Ide(world), document, source, cursor, Side::After)? {
+    let ide = Ide {
+        world,
+        files: Vec::new(),
+    };
+    match typst_ide::tooltip(&ide, document, source, cursor, Side::After)? {
         Tooltip::Text(text) => Some(Hover {
             text: text.to_string(),
             code: false,
@@ -255,24 +349,25 @@ impl LangService {
         &self,
         ctx: &EngineContext,
         path: &ProjectPath,
-        f: impl FnOnce(&CompilerWorld<PreloFeat>, &Source) -> T,
+        f: impl FnOnce(&CompilerWorld<PreloFeat>, &Scope, &Source) -> T,
     ) -> Option<T> {
         if !is_typ(path) {
             return None;
         }
-        let snapshot = {
+        let (snapshot, scope) = {
             let mut guard = self.world.lock().unwrap_or_else(PoisonError::into_inner);
             let stale = guard.as_ref().is_none_or(|c| c.root() != ctx.root);
             if stale {
                 *guard = Some(ProjectCompiler::new(ctx.root.clone(), &ctx.input.main));
             }
             let compiler = guard.as_mut()?;
-            compiler.sync(ctx.input.clone()).ok()?.snapshot()
+            let world = compiler.sync(ctx.input.clone()).ok()?;
+            (world.snapshot(), world.access().scope().clone())
         };
         let vpath = VirtualPath::new(path.relative()).ok()?;
         let id = FileId::new(snapshot.main().get().map(|_| vpath));
         let source = snapshot.source(id).ok()?;
-        Some(f(&snapshot, &source))
+        Some(f(&snapshot, &scope, &source))
     }
 }
 
@@ -285,8 +380,8 @@ impl Engine for LangService {
     ) -> Result<Vec<Completion>, String> {
         let doc = ctx.document.as_deref();
         Ok(self
-            .with_source(ctx, path, |world, source| {
-                complete(world, doc, source, offset)
+            .with_source(ctx, path, |world, scope, source| {
+                complete(world, Some(scope), doc, source, offset)
             })
             .unwrap_or_default())
     }
@@ -297,7 +392,7 @@ impl Engine for LangService {
         path: &ProjectPath,
     ) -> Result<Vec<Token>, String> {
         Ok(self
-            .with_source(ctx, path, |_, source| semantic_tokens(source))
+            .with_source(ctx, path, |_, _, source| semantic_tokens(source))
             .unwrap_or_default())
     }
 
