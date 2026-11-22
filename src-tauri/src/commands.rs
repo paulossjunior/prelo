@@ -11,13 +11,15 @@
 //! `subscribe_preview`; `page_svg` serve o SVG de cada página (T035). O serviço de linguagem
 //! (T036) passa pelo trait [`Engine`]: o padrão é o [`LangService`], que recebe o mesmo estado
 //! da compilação ([`EngineContext`]); `jump_from_cursor` ainda responde `not_implemented`.
-//! Mudança externa (`resolve_external_change`, T034) já valida o caminho e responde
-//! `not_implemented`. Arquivo aberto e gravação (`open_file`, `edit_file`, `save_file`,
+//! Mudança externa (T034): o observador de [`crate::fs::watch`] repassa caminhos para
+//! [`AppState::handle_disk_change`], que recarrega ou marca conflito; `resolve_external_change`
+//! aplica a escolha da pessoa. Arquivo aberto e gravação (`open_file`, `edit_file`, `save_file`,
 //! salvamento automático e último Salvar ao fechar; T033) moram em [`crate::fs::save`].
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::{Instant, SystemTime};
 
@@ -35,6 +37,8 @@ use crate::compile::scheduler::Scheduler;
 pub use crate::fs::save::{apply_changes, Change};
 use crate::fs::save::{format_utc, OpenFile};
 use crate::fs::scope::{Refusal, Scope};
+use crate::fs::watch::{watch, ProjectWatcher};
+pub use crate::fs::watch::{DiskChange, Keep};
 use crate::lang_service::{Completion, LangService, Token};
 use crate::project::record::{self, LoadedRecord, RecordState};
 
@@ -230,6 +234,9 @@ struct OpenProject {
     /// Agenda de compilação; `None` com versão registrada ≠ embutida (FR-012): sem
     /// compilação nem prévia até `update_project_compiler_version`.
     compiler: Option<Scheduler<ProjectCompiler>>,
+    /// Observador de mudanças externas da raiz; `None` se o sistema recusou (o editor segue,
+    /// só sem detectar mudanças externas).
+    _watcher: Option<ProjectWatcher>,
 }
 
 impl OpenProject {
@@ -357,6 +364,10 @@ pub struct AppState {
     engine: Arc<dyn Engine>,
     /// Um pedido de fechar já foi recusado por falha de gravação (o próximo é aceito).
     close_refused: AtomicBool,
+    /// Caminhos relativos avisados pelo observador; a ponta de leitura vai para a thread que
+    /// chama [`AppState::handle_disk_change`] ([`AppState::take_disk_changes`]).
+    disk_tx: Mutex<Sender<String>>,
+    disk_rx: Mutex<Option<Receiver<String>>>,
 }
 
 impl Default for AppState {
@@ -367,11 +378,14 @@ impl Default for AppState {
 
 impl AppState {
     pub fn new(engine: Arc<dyn Engine>) -> Self {
+        let (disk_tx, disk_rx) = mpsc::channel();
         Self {
             project: Mutex::new(None),
             preview: Arc::new(PreviewHub::default()),
             engine,
             close_refused: AtomicBool::new(false),
+            disk_tx: Mutex::new(disk_tx),
+            disk_rx: Mutex::new(Some(disk_rx)),
         }
     }
 
@@ -387,11 +401,13 @@ impl AppState {
     pub fn open_project(&self, root: &Path) -> std::io::Result<ProjectInfo> {
         let scope = Scope::new(root)?;
         let record = record::load(scope.root(), EMBEDDED_TYPST);
+        let watcher = self.watch_root(scope.root());
         let mut project = OpenProject {
             scope,
             record,
             files: HashMap::new(),
             compiler: None,
+            _watcher: watcher,
         };
         let info = project.info();
         let mut guard = self.lock();
@@ -408,6 +424,84 @@ impl AppState {
         project.recompile();
         *guard = Some(project);
         Ok(info)
+    }
+
+    /// Liga o observador de mudanças externas a `root`; os avisos vão para a fila de
+    /// [`take_disk_changes`](Self::take_disk_changes).
+    fn watch_root(&self, root: &Path) -> Option<ProjectWatcher> {
+        let tx = self
+            .disk_tx
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone();
+        watch(root, move |relative| {
+            let _ = tx.send(relative);
+        })
+        .map_err(|e| eprintln!("prelo: observador de arquivos indisponível: {e}"))
+        .ok()
+    }
+
+    /// Fila de caminhos avisados pelo observador (só a primeira chamada recebe). Quem a lê
+    /// chama [`handle_disk_change`](Self::handle_disk_change) para cada caminho.
+    pub fn take_disk_changes(&self) -> Option<Receiver<String>> {
+        self.disk_rx
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take()
+    }
+
+    /// O observador avisou que `relative` pode ter mudado no disco: relê pela regra de escopo
+    /// e decide pelo conteúdo (FR-008). `Reloaded` já recompilou; `Conflict` → a interface
+    /// recebe `external_change_conflict`. Arquivo não aberto, fora da raiz (inclusive por link)
+    /// ou removido → `Ignored`.
+    pub fn handle_disk_change(&self, relative: &str) -> DiskChange {
+        let mut guard = self.lock();
+        let Some(project) = guard.as_mut() else {
+            return DiskChange::Ignored;
+        };
+        let Ok(path) = validate_path(&project.scope, relative) else {
+            return DiskChange::Ignored;
+        };
+        let Some(file) = project.files.get_mut(path.relative()) else {
+            return DiskChange::Ignored;
+        };
+        let outcome = match project.scope.read(path.relative()) {
+            Ok(bytes) => file.disk_changed(bytes),
+            Err(Refusal::TooLarge { .. }) => file.mark_conflict(),
+            Err(_) => DiskChange::Ignored,
+        };
+        if outcome == DiskChange::Reloaded {
+            project.recompile();
+        }
+        outcome
+    }
+
+    /// Escolha da pessoa diante de uma mudança externa: `Mine` mantém o texto em memória (e
+    /// volta a gravá-lo); `Disk` relê o disco e troca o texto, numa versão nova.
+    pub fn resolve_external_change(
+        &self,
+        requested: &str,
+        keep: Keep,
+    ) -> Result<OpenedFile, String> {
+        self.with_path(requested, |project, path| {
+            let file = project.files.get_mut(path.relative()).ok_or(NOT_FOUND)?;
+            match keep {
+                Keep::Mine => file.keep_mine(),
+                Keep::Disk => {
+                    let bytes = project
+                        .scope
+                        .read(path.relative())
+                        .map_err(|r| refusal_code(&r))?;
+                    file.keep_disk(bytes)?;
+                }
+            }
+            let opened = OpenedFile {
+                text: file.text().to_owned(),
+                version: file.version(),
+            };
+            project.recompile();
+            Ok(opened)
+        })
     }
 
     /// Assina a prévia: `sink` recebe cada `PreviewUpdate`, e logo a prévia atual, se houver.
@@ -432,11 +526,6 @@ impl AppState {
         let project = guard.as_mut().ok_or(NO_PROJECT)?;
         let path = validate_path(&project.scope, requested)?;
         f(project, path)
-    }
-
-    /// Só valida (sem segurar o estado).
-    fn validated(&self, requested: &str) -> Result<ProjectPath, String> {
-        self.with_path(requested, |_, path| Ok(path))
     }
 
     /// Valida e copia o estado para o motor (só `Arc`s), sem segurar a trava durante a
@@ -642,17 +731,9 @@ struct EditArgs {
 }
 
 #[derive(Deserialize)]
-#[serde(rename_all = "lowercase")]
-enum Keep {
-    Mine,
-    Disk,
-}
-
-#[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct KeepArgs {
     path: String,
-    #[allow(dead_code)] // usado por T034
     keep: Keep,
 }
 
@@ -720,15 +801,14 @@ pub fn save_file(state: State<'_, AppState>, request: Request<'_>) -> Result<Sav
     Ok(SaveResult { saved_at })
 }
 
-/// Conflito com mudança externa entra com T034; aqui só a validação.
+/// Escolha diante de `external_change_conflict` (FR-008): `{ text, version }` do arquivo.
 #[tauri::command(async)]
 pub fn resolve_external_change(
     state: State<'_, AppState>,
     request: Request<'_>,
-) -> Result<Value, String> {
+) -> Result<OpenedFile, String> {
     let a: KeepArgs = args(&request)?;
-    state.validated(&a.path)?;
-    Err(NOT_IMPLEMENTED.into())
+    state.resolve_external_change(&a.path, a.keep)
 }
 
 /// Canal da prévia: recebe um `PreviewUpdate` a cada compilação (e logo a prévia atual).

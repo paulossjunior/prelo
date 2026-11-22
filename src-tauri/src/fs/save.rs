@@ -78,12 +78,15 @@ pub fn apply_changes(text: &str, changes: &[Change]) -> Result<String, &'static 
 #[derive(Debug)]
 pub struct OpenFile {
     /// Compartilhado com a compilação sem cópia.
-    text: Arc<str>,
-    version: u64,
-    dirty: bool,
-    last_saved_hash: [u8; 32],
+    pub(super) text: Arc<str>,
+    pub(super) version: u64,
+    pub(super) dirty: bool,
+    pub(super) last_saved_hash: [u8; 32],
     /// Desde quando o arquivo está ocioso: última edição ou última gravação que falhou.
     idle_since: Instant,
+    /// Mudança externa à espera da escolha da pessoa ([`super::watch`]): enquanto `true`, nada
+    /// é gravado por cima do disco.
+    pub(super) conflict: bool,
 }
 
 impl OpenFile {
@@ -97,6 +100,7 @@ impl OpenFile {
             dirty: false,
             last_saved_hash,
             idle_since: Instant::now(),
+            conflict: false,
         })
     }
 
@@ -142,13 +146,17 @@ impl OpenFile {
         Ok(self.version)
     }
 
-    /// Hora de salvar sozinho: sujo e ocioso há pelo menos [`AUTOSAVE_DELAY`] em `now`.
+    /// Hora de salvar sozinho: sujo, sem conflito com o disco e ocioso há pelo menos
+    /// [`AUTOSAVE_DELAY`] em `now`.
     pub fn autosave_due(&self, now: Instant) -> bool {
-        self.dirty && now.saturating_duration_since(self.idle_since) >= AUTOSAVE_DELAY
+        self.dirty
+            && !self.conflict
+            && now.saturating_duration_since(self.idle_since) >= AUTOSAVE_DELAY
     }
 
     /// Grava o texto em `path` de forma atômica. Limpo → nada a gravar. Falha → `write_failed`,
-    /// texto e `dirty` mantidos.
+    /// texto e `dirty` mantidos. Com conflito pendente → `external_change_conflict` sem tocar o
+    /// disco (gravar descartaria a versão externa antes da escolha; Princípio III).
     pub fn save(&mut self, path: &Path) -> Result<(), &'static str> {
         self.save_with(path, io::Write::write_all)
     }
@@ -161,6 +169,9 @@ impl OpenFile {
     ) -> Result<(), &'static str> {
         if !self.dirty {
             return Ok(());
+        }
+        if self.conflict {
+            return Err(super::watch::CONFLICT);
         }
         let bytes = self.text.as_bytes();
         match write_atomic_with(path, |file| fill(file, bytes)) {
@@ -212,7 +223,7 @@ fn write_atomic_with(
     Ok(())
 }
 
-fn sha256(bytes: &[u8]) -> [u8; 32] {
+pub(super) fn sha256(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
 }
 
