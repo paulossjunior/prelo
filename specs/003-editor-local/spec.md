@@ -69,6 +69,12 @@ diagnóstico na linha certa e que a versão do compilador aparece no app.
    entre editor e prévia, **Then** as larguras mudam sem deixar painel menor que o mínimo, e o
    clique duplo na divisória volta ao padrão; ao reabrir o projeto, o arranjo escolhido volta
    (FR-013b; emenda de 2026-11-22).
+10. **Given** um arquivo aberto no editor, **When** a pessoa aumenta ou diminui o zoom do código
+    ("−"/"+" no cabeçalho do editor, ⌘/Ctrl + `+`/`-` com o foco no editor, ⌘/Ctrl + roda ou
+    pinça sobre o editor), **Then** o código e os números de linha crescem ou diminuem juntos,
+    continuam alinhados, a quebra de linha é refeita, o cursor e a seleção não mudam e a linha
+    que estava no topo continua no topo; "100%" (ou ⌘/Ctrl + `0`) volta ao padrão; ao reabrir
+    o projeto, o zoom do editor volta (FR-013c; emenda de 2026-11-22).
 
 ---
 
@@ -281,8 +287,9 @@ comando.
 - **Zoom da prévia nos limites** (FR-013a): em 50 % o "−" fica desativado e em 300 % o "+";
   atalho, roda ou pinça além do limite param no limite, sem erro. Com zoom maior que a largura
   do painel, a prévia rola na horizontal dentro do próprio painel; a janela não rola.
-- **Zoom com o foco no editor**: ⌘/Ctrl + `+`/`-`/`0` só valem com o foco na prévia; no editor,
-  as teclas seguem para o editor (nenhum atalho do editor é tomado).
+- **Zoom pelo teclado e foco**: ⌘/Ctrl + `+`/`-`/`0` mudam o zoom do painel que está com o foco:
+  a prévia (FR-013a) ou o editor (FR-013c); com o foco em outro lugar (árvore, barra), nada muda.
+  O mapa de teclas do editor não usa essas combinações.
 - **Armazenamento local indisponível** (modo privado, cota cheia, acesso negado): o zoom
   funciona na sessão e só não é lembrado; a prévia não quebra.
 - **Recolher o último painel de conteúdo** (FR-013b): editor e prévia não ficam os dois
@@ -384,6 +391,17 @@ comando.
   rolagem, e a prévia MUST continuar pedindo as páginas visíveis (FR-013). O arranjo MUST ser
   lembrado por projeto, nos dados locais da interface, e falha desse armazenamento MUST NOT
   quebrar a área de trabalho. Só interface: o núcleo e o contrato IPC não mudam (RF-02, RF-04).
+- **FR-013c**: A pessoa MUST poder mudar o zoom do código no editor (emenda de 2026-11-22,
+  pedido do dono: "coloque zoom também no código do Typst"). O cabeçalho do editor MUST ter "−",
+  a porcentagem, "+" e "100%", no mesmo estilo da barra da prévia. O zoom MUST ir de 70 % a
+  200 % em degraus (70, 80, 90, 100, 110, 125, 150, 175, 200; 100 % = fonte de 12,5 px do
+  protótipo); ⌘/Ctrl + roda e pinça sobre o editor MAY dar valores entre os degraus, dentro dos
+  limites. ⌘/Ctrl + `+`, `-` e `0` (este volta a 100 %) MUST valer quando o foco está no editor,
+  com o mesmo escopo por foco de FR-013a. O zoom MUST escalar juntos o código, os números de
+  linha e a entrelinha, mantendo os números alinhados com as linhas e refazendo a quebra de
+  linha; cursor e seleção MUST NOT mudar, e a linha que estava no topo MUST continuar no topo.
+  O nível MUST ser lembrado por projeto, separado do zoom da prévia, e falha do armazenamento
+  MUST NOT quebrar o editor. Só interface: o núcleo e o contrato IPC não mudam (RF-01).
 - **FR-014**: Quando o texto não compila, a prévia MUST manter a última versão bem-sucedida e
   indicar que há erro (RF-02).
 - **FR-015**: Uma compilação lenta, que não termina ou que excede o limite de tempo MUST NOT
