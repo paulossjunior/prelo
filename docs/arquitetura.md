@@ -255,7 +255,7 @@ Os estados de sincronização continuam os quatro de [requisitos.md §5](requisi
 | Embutidas + fontes do sistema | Usa o que já está instalado | Prévia e PDF podem mudar de um computador para outro |
 | Embutidas + pasta de fontes no projeto | Reprodutível e flexível | Arquivos de fonte vão para o git; a licença de cada fonte precisa permitir redistribuição |
 
-Decidido em [D-15](adrs.md#d-15-fontes-embutidas--pasta-do-projeto-licença-ofl-11-aceita-só-para-arquivos-de-fonte): fontes embutidas no app mais a pasta `fonts/` do projeto, que segue RF-08; fontes do sistema não são lidas. Arquivos de fonte embutidos podem usar OFL-1.1, além das licenças de RNF-06.
+Decidido em [D-15](adrs/D-15-fontes-embutidas-e-do-projeto.md): fontes embutidas no app mais a pasta `fonts/` do projeto, que segue RF-08; fontes do sistema não são lidas. Arquivos de fonte embutidos podem usar OFL-1.1, além das licenças de RNF-06.
 
 **Pacotes.** Pacotes `@preview` são baixados do registro do Typst para um cache local e lidos com a pasta do pacote como raiz (RF-08). Eles são entrada não confiável: trazem código Typst e podem trazer plugins WASM. O download revela ao registro o nome e a versão dos pacotes e o endereço IP de quem baixa, mas não o conteúdo do artigo (Princípio II). Pacotes `@local` ficam na máquina de quem os criou e não existem nos outros computadores, como um arquivo fora do projeto (D-13). Cache para compilar offline e cache no git continuam em aberto ([seção 7](#7-riscos-técnicos-e-questões-em-aberto)).
 
@@ -265,9 +265,9 @@ Decididas pelo dono em 2026-11-18:
 
 | ID | Pergunta | Decisão |
 |---|---|---|
-| [D-12](adrs.md#d-12-transporte-de-arquivos-binários-entre-coautores) | Como imagens e outros binários chegam aos coautores? | Blobs por iroh com manifesto no documento Yjs, git como canal assíncrono |
-| [D-13](adrs.md#d-13-arquivos-fora-do-projeto) | Como usar um arquivo fora do projeto, como um `.bib` compartilhado? | Não permitir; copiar para dentro do projeto |
-| [D-14](adrs.md#d-14-edição-concorrente-de-bibliografia) | `.bib` e `.yml` se fundem pelo CRDT ou como arquivo inteiro? | CRDT de texto, como o `.typ`; `.csl` como arquivo inteiro |
+| [D-12](adrs/D-12-binarios-entre-coautores.md) | Como imagens e outros binários chegam aos coautores? | Blobs por iroh com manifesto no documento Yjs, git como canal assíncrono |
+| [D-13](adrs/D-13-arquivos-fora-do-projeto.md) | Como usar um arquivo fora do projeto, como um `.bib` compartilhado? | Não permitir; copiar para dentro do projeto |
+| [D-14](adrs/D-14-bibliografia-concorrente.md) | `.bib` e `.yml` se fundem pelo CRDT ou como arquivo inteiro? | CRDT de texto, como o `.typ`; `.csl` como arquivo inteiro |
 
 ## 7. Riscos técnicos e questões em aberto
 
