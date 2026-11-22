@@ -38,10 +38,15 @@ export function toCompletion(raw: Completion): CmCompletion | null {
   return out;
 }
 
-// Palavra em curso: identificadores Typst (letras, dígitos, `_`, `-`, `.` para campos).
-const WORD = /[\p{L}\p{N}_.-]+$/u;
-// Depois destes caracteres o Typst tem o que sugerir mesmo sem palavra (`#`, `@`, `<`).
-const TRIGGER = /[#@<]$/;
+// Palavra em curso: o identificador Typst (letras, dígitos, `_`, `-`) depois do último `.`.
+// O `.` fica fora: em `calc.ab`, escolher `abs` troca só `ab` (bug do PR #179).
+const WORD = /[\p{L}\p{N}_-]+$/u;
+// Depois destes caracteres o Typst tem o que sugerir mesmo sem palavra (`#`, `@`, `<`, e `.`
+// para campos e métodos).
+const TRIGGER = /[#@<.]$/;
+// `validFor` é testado contra o texto de `from` até o cursor: ancorado nos dois lados, um `.`
+// digitado depois invalida a lista e pede de novo ao núcleo.
+const VALID_FOR = /^[\p{L}\p{N}_-]*$/u;
 
 export function completionSource(opts: CompletionOptions): CompletionSource {
   let available = true;
@@ -62,7 +67,7 @@ export function completionSource(opts: CompletionOptions): CompletionSource {
     if (!Array.isArray(raw)) return null;
     const options = raw.map(toCompletion).filter((c): c is CmCompletion => c !== null);
     if (options.length === 0) return null;
-    return { from: word ? word.from : context.pos, options, validFor: WORD };
+    return { from: word ? word.from : context.pos, options, validFor: VALID_FOR };
   };
 }
 
