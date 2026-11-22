@@ -50,3 +50,9 @@ impl Diagnostic {
         }
     }
 }
+
+impl serde::Serialize for Diagnostic {
+    fn serialize<S: serde::Serializer>(&self, _serializer: S) -> Result<S::Ok, S::Error> {
+        todo!("T035")
+    }
+}

@@ -21,6 +21,7 @@ use serde_json::Value;
 use tauri::ipc::{InvokeBody, Request};
 use tauri::State;
 
+use crate::compile::preview::PreviewUpdate;
 use crate::fs::scope::{Refusal, Scope, MAX_FILE_BYTES};
 use crate::project::record::{self, LoadedRecord, RecordState};
 
@@ -439,6 +440,14 @@ impl AppState {
             file.version += 1;
             Ok(file.version)
         })
+    }
+
+    /// Assina a prévia: `sink` recebe cada `PreviewUpdate` (T035).
+    pub fn subscribe_preview(&self, _sink: impl Fn(&PreviewUpdate) + Send + Sync + 'static) {}
+
+    /// SVG da página `index` da prévia atual, se `hash` for o atual; senão `stale_page`.
+    pub fn page_svg(&self, _index: usize, _hash: &str) -> Result<String, String> {
+        Err(NOT_IMPLEMENTED.into())
     }
 
     pub fn choose_main_file(&self, requested: &str) -> Result<ProjectInfo, String> {
