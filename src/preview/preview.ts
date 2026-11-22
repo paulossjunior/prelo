@@ -4,7 +4,27 @@
 // dessa janela soltam a imagem. Uma página só é pedida de novo quando o hash dela muda (o
 // núcleo lista essas em `PreviewUpdate.changed`). Compilação com erro mantém as páginas e mostra
 // a faixa de erro.
+//
+// Zoom (T091; FR-013a): a barra da prévia tem "−", "+", a porcentagem e "Ajustar à largura"
+// (padrão). O zoom só muda a largura CSS das páginas; como cada página é um SVG, ela continua
+// nítida e nada é pedido de novo ao núcleo. Ao mudar o nível, o ponto da página sob o centro (ou
+// sob o ponteiro, na roda e na pinça) volta ao mesmo lugar da tela.
 import { toIpcError, type Ipc, type PageInfo, type PreviewUpdate } from "../ipc";
+import {
+  MAX_ZOOM,
+  MIN_ZOOM,
+  PX_PER_PT,
+  anchorScroll,
+  clampZoom,
+  loadZoom,
+  saveZoom,
+  stepIn,
+  stepOut,
+  zoomShortcut,
+  type Box,
+  type ZoomLevel,
+  type ZoomStorage,
+} from "./zoom";
 import "../workspace.css";
 
 export interface BlobUrls {
@@ -16,6 +36,10 @@ export interface PreviewOptions {
   ipc: Ipc;
   /** Criação e revogação de blob URLs; padrão `URL.createObjectURL`/`revokeObjectURL`. */
   urls?: BlobUrls;
+  /** Chave do projeto para lembrar o zoom; sem chave, o zoom não é lembrado. */
+  zoomKey?: string | null;
+  /** Onde o zoom é lembrado; padrão `localStorage`. */
+  storage?: ZoomStorage | null;
 }
 
 export interface PreviewHandle {
@@ -26,6 +50,10 @@ export interface PreviewHandle {
   setVisible(indices: number[]): void;
   /** Espera os pedidos de página em curso terminarem. */
   idle(): Promise<void>;
+  /** Nível de zoom atual: "fit" (ajustar à largura) ou porcentagem. */
+  zoom(): ZoomLevel;
+  /** Muda o zoom mantendo o trecho sob o centro da prévia. */
+  setZoom(level: ZoomLevel): void;
   destroy(): void;
 }
 
@@ -62,13 +90,50 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
   const root = document.createElement("section");
   root.className = "pv";
   root.setAttribute("aria-label", "Prévia");
+
+  // Barra da prévia como a do protótipo (.pvbar + .seg).
+  const bar = document.createElement("div");
+  bar.className = "pvbar";
+  const label = document.createElement("span");
+  label.className = "pv-label";
+  label.textContent = "Prévia";
+  const seg = document.createElement("div");
+  seg.className = "seg";
+  seg.setAttribute("role", "group");
+  seg.setAttribute("aria-label", "Zoom da prévia");
+  const mkButton = (text: string, aria: string | null, cls: string) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = cls;
+    b.textContent = text;
+    if (aria) b.setAttribute("aria-label", aria);
+    return b;
+  };
+  const outBtn = mkButton("−", "Diminuir zoom", "pv-zoom-out");
+  outBtn.title = "Diminuir zoom (⌘− / Ctrl+−)";
+  const pct = document.createElement("span");
+  pct.className = "pv-zoom-pct";
+  const inBtn = mkButton("+", "Aumentar zoom", "pv-zoom-in");
+  inBtn.title = "Aumentar zoom (⌘+ / Ctrl++)";
+  const fitBtn = mkButton("Ajustar à largura", null, "pv-zoom-fit");
+  fitBtn.title = "Ajustar à largura (⌘0 / Ctrl+0)";
+  seg.append(outBtn, pct, inBtn, fitBtn);
+  const live = document.createElement("span");
+  live.className = "pv-live";
+  live.setAttribute("role", "status");
+  live.setAttribute("aria-live", "polite");
+  bar.append(label, seg, live);
+
   const band = document.createElement("div");
   band.className = "pv-error";
   band.setAttribute("role", "status");
   band.hidden = true;
   const pagesEl = document.createElement("div");
-  pagesEl.className = "pv-pages";
-  root.append(band, pagesEl);
+  pagesEl.className = "pv-pages pv-fit";
+  // Focável para rolar pelo teclado e para os atalhos de zoom valerem só aqui.
+  pagesEl.tabIndex = 0;
+  pagesEl.setAttribute("aria-label", "Páginas da prévia");
+  root.append(bar, band, pagesEl);
   parent.append(root);
 
   const slots: Slot[] = [];
@@ -76,6 +141,7 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
   let lastCompileId = -Infinity;
   let visible: number[] = [0];
   let destroyed = false;
+  let level: ZoomLevel = loadZoom(opts.zoomKey, opts.storage);
 
   const visibleSet = new Set<number>();
   const observer =
@@ -167,8 +233,148 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
 
   function setVisible(indices: number[]) {
     visible = indices.length > 0 ? indices : [0];
+    renderLabel();
     sync();
   }
+
+  // ---------------------------------------------------------------- zoom
+
+  function renderLabel() {
+    label.textContent =
+      slots.length === 0 ? "Prévia" : `Prévia · pág. ${Math.min(Math.min(...visible) + 1, slots.length)} de ${slots.length}`;
+  }
+
+  function sizePage(slot: Slot) {
+    slot.el.style.width = level === "fit" ? "" : `${(slot.info.widthPt * PX_PER_PT * level) / 100}px`;
+  }
+
+  function padX(): number {
+    const cs = getComputedStyle(pagesEl);
+    const l = parseFloat(cs.paddingLeft);
+    const r = parseFloat(cs.paddingRight);
+    return (Number.isFinite(l) ? l : 18) + (Number.isFinite(r) ? r : 18);
+  }
+
+  /** Porcentagem em vigor; em "ajustar à largura", a calculada pela largura do painel. */
+  function effective(): number | null {
+    if (level !== "fit") return level;
+    const widest = Math.max(0, ...slots.map((s) => s.info.widthPt * PX_PER_PT));
+    const avail = pagesEl.clientWidth - padX();
+    return widest > 0 && avail > 0 ? (avail / widest) * 100 : null;
+  }
+
+  function renderZoom() {
+    const eff = effective();
+    pct.textContent = eff === null ? "—" : `${Math.round(eff)}%`;
+    fitBtn.setAttribute("aria-pressed", String(level === "fit"));
+    const cur = eff ?? 100;
+    outBtn.disabled = cur <= MIN_ZOOM + 0.5;
+    inBtn.disabled = cur >= MAX_ZOOM - 0.5;
+  }
+
+  function boxOf(el: HTMLElement): Box {
+    return { top: el.offsetTop, left: el.offsetLeft, width: el.offsetWidth, height: el.offsetHeight };
+  }
+
+  /** Página sob o ponto `at` da tela da prévia (ou a mais próxima acima). */
+  function slotAt(at: { x: number; y: number }): Slot | null {
+    const y = pagesEl.scrollTop + at.y;
+    let best: Slot | null = null;
+    for (const s of slots) {
+      if (s.el.offsetTop <= y) best = s;
+      else break;
+    }
+    return best;
+  }
+
+  function applyZoom(next: ZoomLevel, at?: { x: number; y: number }) {
+    next = next === "fit" ? "fit" : clampZoom(next);
+    const point = at ?? { x: pagesEl.clientWidth / 2, y: pagesEl.clientHeight / 2 };
+    const anchor = slotAt(point);
+    const before = anchor ? boxOf(anchor.el) : null;
+    const scroll = { top: pagesEl.scrollTop, left: pagesEl.scrollLeft };
+    level = next;
+    pagesEl.classList.toggle("pv-fit", level === "fit");
+    for (const s of slots) sizePage(s);
+    if (anchor && before) {
+      const s = anchorScroll(before, boxOf(anchor.el), point, scroll);
+      pagesEl.scrollTop = s.top;
+      pagesEl.scrollLeft = s.left;
+    }
+    saveZoom(opts.zoomKey, level, opts.storage);
+    renderZoom();
+  }
+
+  function announce() {
+    const eff = effective();
+    live.textContent =
+      level === "fit" ? "Zoom: ajustar à largura" : `Zoom ${Math.round(eff ?? level)}%`;
+  }
+
+  function zoomBy(dir: "in" | "out" | "fit", at?: { x: number; y: number }) {
+    const cur = effective() ?? 100;
+    applyZoom(dir === "fit" ? "fit" : dir === "in" ? stepIn(cur) : stepOut(cur), at);
+    announce();
+  }
+
+  function pointerIn(e: { clientX?: number; clientY?: number }): { x: number; y: number } | undefined {
+    if (typeof e.clientX !== "number" || typeof e.clientY !== "number") return undefined;
+    const r = pagesEl.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  inBtn.addEventListener("click", () => zoomBy("in"));
+  outBtn.addEventListener("click", () => zoomBy("out"));
+  fitBtn.addEventListener("click", () => zoomBy("fit"));
+
+  // Atalhos só com o foco dentro da prévia: o editor fica com as teclas dele.
+  root.addEventListener("keydown", (e) => {
+    const dir = zoomShortcut(e);
+    if (!dir) return;
+    e.preventDefault();
+    zoomBy(dir);
+  });
+
+  // Pinça do WebKit (WKWebView do macOS): eventos de gesto com `scale` relativo ao início.
+  let gestureBase: number | null = null;
+  pagesEl.addEventListener("gesturestart", (e) => {
+    e.preventDefault();
+    gestureBase = effective() ?? 100;
+  });
+  pagesEl.addEventListener("gesturechange", (e) => {
+    e.preventDefault();
+    const scale = (e as Event & { scale?: number }).scale ?? 1;
+    applyZoom(clampZoom((gestureBase ?? effective() ?? 100) * scale), pointerIn(e as unknown as MouseEvent));
+  });
+  pagesEl.addEventListener("gestureend", (e) => {
+    e.preventDefault();
+    gestureBase = null;
+    announce();
+  });
+
+  // ⌘/Ctrl + roda: degrau por "clique" do mouse; deltas pequenos (pinça no Chromium/WebView2,
+  // que chega como roda com Ctrl) dão zoom contínuo.
+  pagesEl.addEventListener(
+    "wheel",
+    (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      if (gestureBase !== null) return; // o gesto do WebKit já está cuidando
+      const at = pointerIn(e);
+      if (e.deltaMode !== 0 || Math.abs(e.deltaY) >= 50) {
+        if (e.deltaY !== 0) zoomBy(e.deltaY < 0 ? "in" : "out", at);
+        return;
+      }
+      applyZoom(clampZoom((effective() ?? 100) * Math.exp(-e.deltaY / 100)), at);
+      announce();
+    },
+    { passive: false },
+  );
+
+  const resizer =
+    typeof ResizeObserver === "function" ? new ResizeObserver(() => level === "fit" && renderZoom()) : null;
+  resizer?.observe(pagesEl);
+  applyZoom(level);
 
   function update(u: PreviewUpdate) {
     if (destroyed || u.compileId <= lastCompileId) return;
@@ -202,7 +408,10 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
       slot.el.dataset.pageIndex = String(info.index);
       slot.el.style.aspectRatio = `${info.widthPt} / ${info.heightPt}`;
       if (slot.img) slot.img.alt = `Página ${info.index + 1}`;
+      sizePage(slot);
     });
+    renderLabel();
+    renderZoom();
     sync();
   }
 
@@ -215,9 +424,12 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
     update,
     setVisible,
     idle,
+    zoom: () => level,
+    setZoom: (next: ZoomLevel) => applyZoom(next),
     destroy() {
       destroyed = true;
       observer?.disconnect();
+      resizer?.disconnect();
       for (const slot of slots) release(slot);
       slots.length = 0;
       root.remove();

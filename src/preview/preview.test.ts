@@ -227,3 +227,334 @@ describe("faixa de erro (FR-014)", () => {
     expect(imgOf(parent, 0)).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------- zoom (T090; FR-013a)
+
+const PAD = 18;
+const GAP = 10;
+
+/**
+ * O jsdom não calcula layout: as medidas das páginas vêm da largura que a prévia põe em
+ * `style.width` (zoom fixo) ou da largura do painel (ajustar à largura), na proporção da página.
+ */
+function fakeLayout(parent: HTMLElement, pane = { width: 500, height: 600 }) {
+  const pagesEl = parent.querySelector<HTMLElement>(".pv-pages")!;
+  Object.defineProperty(pagesEl, "clientWidth", { configurable: true, get: () => pane.width });
+  Object.defineProperty(pagesEl, "clientHeight", { configurable: true, get: () => pane.height });
+  const widthOf = (el: HTMLElement) => {
+    const w = parseFloat(el.style.width);
+    return Number.isFinite(w) ? w : pane.width - 2 * PAD;
+  };
+  const heightOf = (el: HTMLElement) => {
+    const [w = 1, h = 1] = el.style.aspectRatio.split("/").map(Number);
+    return (widthOf(el) * h) / w;
+  };
+  const all = () => [...pagesEl.querySelectorAll<HTMLElement>("[data-page-index]")];
+  const topOf = (el: HTMLElement) => {
+    let y = PAD;
+    for (const p of all()) {
+      if (p === el) return y;
+      y += heightOf(p) + GAP;
+    }
+    return y;
+  };
+  for (const el of all()) {
+    Object.defineProperty(el, "offsetWidth", { configurable: true, get: () => widthOf(el) });
+    Object.defineProperty(el, "offsetHeight", { configurable: true, get: () => heightOf(el) });
+    Object.defineProperty(el, "offsetTop", { configurable: true, get: () => topOf(el) });
+    Object.defineProperty(el, "offsetLeft", { configurable: true, get: () => PAD });
+  }
+  return { pagesEl, widthOf, heightOf, topOf, page: (i: number) => all()[i]! };
+}
+
+function zoomSetup(opts: { zoomKey?: string | null; storage?: Pick<Storage, "getItem" | "setItem"> } = {}) {
+  const core = fakeCore({ page_svg: (a) => `<svg data-page="${String(a.index)}"></svg>` });
+  let n = 0;
+  const urls = { create: vi.fn(() => `blob:prelo/${++n}`), revoke: vi.fn() };
+  const parent = document.createElement("div");
+  document.body.append(parent);
+  handle = mountPreview(parent, { ipc: core.ipc, urls, ...opts });
+  const q = <T extends HTMLElement>(sel: string) => parent.querySelector<T>(sel)!;
+  return {
+    core,
+    parent,
+    preview: handle,
+    zoomIn: q<HTMLButtonElement>('button[aria-label="Aumentar zoom"]'),
+    zoomOut: q<HTMLButtonElement>('button[aria-label="Diminuir zoom"]'),
+    fit: q<HTMLButtonElement>(".pv-zoom-fit"),
+    pct: q<HTMLElement>(".pv-zoom-pct"),
+    live: q<HTMLElement>(".pv-live"),
+    pagesEl: q<HTMLElement>(".pv-pages"),
+  };
+}
+
+function memoryStorage(init: Record<string, string> = {}) {
+  const m = new Map(Object.entries(init));
+  return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), map: m };
+}
+
+describe("barra de zoom", () => {
+  it("tem '−', '+', porcentagem e 'Ajustar à largura', que começa ligado", () => {
+    const { zoomIn, zoomOut, fit, pct, parent } = zoomSetup();
+    expect(zoomIn.textContent).toBe("+");
+    expect(zoomOut.textContent).toBe("−");
+    expect(fit.textContent).toBe("Ajustar à largura");
+    expect(fit.getAttribute("aria-pressed")).toBe("true");
+    expect(pct).not.toBeNull();
+    const group = parent.querySelector('.pvbar [role="group"]');
+    expect(group?.getAttribute("aria-label")).toBe("Zoom da prévia");
+    expect(group?.classList.contains("seg")).toBe(true);
+  });
+
+  it("'+' a partir do ajuste à largura vai ao degrau acima do nível efetivo", () => {
+    const { preview, parent, zoomIn, fit, pct } = zoomSetup();
+    preview.update(upd({ pages: pages(3) }));
+    fakeLayout(parent); // 464 px de 793,3 px (A4 a 100 %) ≈ 58 %
+    zoomIn.click();
+    expect(preview.zoom()).toBe(67);
+    expect(fit.getAttribute("aria-pressed")).toBe("false");
+    expect(pct.textContent).toBe("67%");
+  });
+
+  it("muda a largura das páginas pelo nível: 100 % = tamanho real (1 pt = 1/72 pol.)", () => {
+    const { preview, parent } = zoomSetup();
+    preview.update(upd({ pages: [{ index: 0, hash: "a", widthPt: 600, heightPt: 800 }] }));
+    preview.setZoom(100);
+    const page = parent.querySelector<HTMLElement>('[data-page-index="0"]')!;
+    expect(parseFloat(page.style.width)).toBeCloseTo(800);
+    preview.setZoom(200);
+    expect(parseFloat(page.style.width)).toBeCloseTo(1600);
+    preview.setZoom("fit");
+    expect(page.style.width).toBe("");
+  });
+
+  it("páginas que chegam depois do zoom já vêm no nível atual", () => {
+    const { preview, parent } = zoomSetup();
+    preview.setZoom(150);
+    preview.update(upd({ pages: [{ index: 0, hash: "a", widthPt: 600, heightPt: 800 }] }));
+    const page = parent.querySelector<HTMLElement>('[data-page-index="0"]')!;
+    expect(parseFloat(page.style.width)).toBeCloseTo(1200);
+  });
+
+  it("'−' desativa em 50 % e '+' em 300 %", () => {
+    const { preview, zoomIn, zoomOut } = zoomSetup();
+    preview.setZoom(67);
+    zoomOut.click();
+    expect(preview.zoom()).toBe(50);
+    expect(zoomOut.disabled).toBe(true);
+    expect(zoomIn.disabled).toBe(false);
+    preview.setZoom(250);
+    zoomIn.click();
+    expect(preview.zoom()).toBe(300);
+    expect(zoomIn.disabled).toBe(true);
+    expect(zoomOut.disabled).toBe(false);
+  });
+
+  it("'Ajustar à largura' volta ao padrão", () => {
+    const { preview, fit } = zoomSetup();
+    preview.setZoom(200);
+    fit.click();
+    expect(preview.zoom()).toBe("fit");
+    expect(fit.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("anuncia a porcentagem numa região viva", () => {
+    const { preview, live, zoomIn } = zoomSetup();
+    expect(live.getAttribute("aria-live")).toBe("polite");
+    preview.setZoom(100);
+    zoomIn.click();
+    expect(live.textContent).toBe("Zoom 110%");
+  });
+
+  it("mostra a página atual e o total", () => {
+    const { preview, parent } = zoomSetup();
+    preview.update(upd({ pages: pages(7) }));
+    preview.setVisible([2, 3]);
+    expect(parent.querySelector(".pv-label")?.textContent).toBe("Prévia · pág. 3 de 7");
+  });
+});
+
+describe("atalhos de zoom", () => {
+  const press = (target: HTMLElement, key: string, mods: Partial<KeyboardEventInit> = {}) => {
+    const ev = new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, ...mods });
+    target.dispatchEvent(ev);
+    return ev;
+  };
+
+  it("⌘/Ctrl + '+', '-' e '0' com o foco na prévia", () => {
+    const { preview, pagesEl } = zoomSetup();
+    expect(pagesEl.tabIndex).toBe(0);
+    preview.setZoom(100);
+    const ev = press(pagesEl, "+", { metaKey: true });
+    expect(ev.defaultPrevented).toBe(true);
+    expect(preview.zoom()).toBe(110);
+    press(pagesEl, "-", { ctrlKey: true });
+    press(pagesEl, "-", { ctrlKey: true });
+    expect(preview.zoom()).toBe(90);
+    press(pagesEl, "0", { metaKey: true });
+    expect(preview.zoom()).toBe("fit");
+  });
+
+  it("fora da prévia (editor) as teclas não mudam o zoom nem são consumidas", () => {
+    const { preview } = zoomSetup();
+    const editor = document.createElement("div");
+    editor.tabIndex = 0;
+    document.body.append(editor);
+    preview.setZoom(100);
+    const ev = press(editor, "+", { metaKey: true });
+    expect(ev.defaultPrevented).toBe(false);
+    expect(preview.zoom()).toBe(100);
+  });
+});
+
+describe("roda e pinça", () => {
+  it("⌘/Ctrl + roda muda o zoom e não rola a página", () => {
+    const { preview, pagesEl } = zoomSetup();
+    preview.setZoom(100);
+    const ev = new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, bubbles: true, cancelable: true });
+    pagesEl.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(preview.zoom()).toBe(110);
+    pagesEl.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, metaKey: true, bubbles: true, cancelable: true }));
+    expect(preview.zoom()).toBe(100);
+  });
+
+  it("pinça do trackpad (roda com Ctrl e deltas pequenos) dá zoom contínuo dentro dos limites", () => {
+    const { preview, pagesEl } = zoomSetup();
+    preview.setZoom(100);
+    pagesEl.dispatchEvent(new WheelEvent("wheel", { deltaY: -10, ctrlKey: true, bubbles: true, cancelable: true }));
+    const z = preview.zoom() as number;
+    expect(z).toBeGreaterThan(100);
+    expect(z).toBeLessThan(125);
+    for (let i = 0; i < 200; i++) {
+      pagesEl.dispatchEvent(new WheelEvent("wheel", { deltaY: -10, ctrlKey: true, bubbles: true, cancelable: true }));
+    }
+    expect(preview.zoom()).toBe(300);
+  });
+
+  it("pinça do WebKit (gesturechange) muda o zoom pela escala do gesto", () => {
+    const { preview, pagesEl } = zoomSetup();
+    preview.setZoom(100);
+    const gesture = (type: string, scale: number) => {
+      const ev = new Event(type, { bubbles: true, cancelable: true }) as Event & { scale: number };
+      ev.scale = scale;
+      pagesEl.dispatchEvent(ev);
+      return ev;
+    };
+    gesture("gesturestart", 1);
+    const ev = gesture("gesturechange", 1.5);
+    expect(ev.defaultPrevented).toBe(true);
+    expect(preview.zoom()).toBeCloseTo(150);
+    gesture("gesturechange", 0.1);
+    expect(preview.zoom()).toBe(50);
+  });
+
+  it("roda sem modificador só rola (não muda o zoom)", () => {
+    const { preview, pagesEl } = zoomSetup();
+    preview.setZoom(100);
+    const ev = new WheelEvent("wheel", { deltaY: -100, bubbles: true, cancelable: true });
+    pagesEl.dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(false);
+    expect(preview.zoom()).toBe(100);
+  });
+});
+
+describe("posição de leitura", () => {
+  /** Página e fração (vertical) do documento sob o ponto y da tela da prévia. */
+  function under(l: ReturnType<typeof fakeLayout>, n: number, y: number) {
+    const docY = l.pagesEl.scrollTop + y;
+    for (let i = 0; i < n; i++) {
+      const el = l.page(i);
+      const top = l.topOf(el);
+      if (docY >= top && docY <= top + l.heightOf(el)) return { i, f: (docY - top) / l.heightOf(el) };
+    }
+    return null;
+  }
+
+  it("mantém o trecho sob o centro ao mudar o zoom pelos botões", () => {
+    const { preview, parent, zoomIn } = zoomSetup();
+    preview.update(upd({ pages: pages(10) }));
+    const l = fakeLayout(parent);
+    preview.setZoom(100);
+    l.pagesEl.scrollTop = 1200;
+    const before = under(l, 10, 300)!;
+    expect(before.i).toBe(1);
+    zoomIn.click();
+    zoomIn.click();
+    const after = under(l, 10, 300)!;
+    expect(after.i).toBe(before.i);
+    expect(after.f).toBeCloseTo(before.f, 3);
+    expect(l.pagesEl.scrollTop).not.toBe(1200);
+  });
+
+  it("na roda, mantém o trecho sob o ponteiro", () => {
+    const { preview, parent } = zoomSetup();
+    preview.update(upd({ pages: pages(10) }));
+    const l = fakeLayout(parent);
+    preview.setZoom(100);
+    l.pagesEl.scrollTop = 3000;
+    l.pagesEl.getBoundingClientRect = () =>
+      ({ left: 0, top: 50, right: 500, bottom: 650, width: 500, height: 600, x: 0, y: 50 }) as DOMRect;
+    const before = under(l, 10, 100)!;
+    l.pagesEl.dispatchEvent(
+      new WheelEvent("wheel", { deltaY: -100, ctrlKey: true, clientX: 200, clientY: 150, bubbles: true, cancelable: true }),
+    );
+    const after = under(l, 10, 100)!;
+    expect(after.i).toBe(before.i);
+    expect(after.f).toBeCloseTo(before.f, 3);
+  });
+});
+
+describe("zoom sem novo pedido ao núcleo", () => {
+  it("mudar o zoom não pede página de novo nem troca as imagens", async () => {
+    const { core, preview, parent } = zoomSetup();
+    preview.update(upd({ pages: pages(5) }));
+    await preview.idle();
+    const src = parent.querySelector('[data-page-index="0"] img')!.getAttribute("src");
+    const n = core.calls("page_svg").length;
+    for (const z of [50, 100, 200, 300, "fit"] as const) preview.setZoom(z);
+    await preview.idle();
+    expect(core.calls("page_svg")).toHaveLength(n);
+    expect(parent.querySelector('[data-page-index="0"] img')!.getAttribute("src")).toBe(src);
+  });
+
+  it("visíveis ± 2 continua valendo em qualquer zoom", async () => {
+    const { core, preview } = zoomSetup();
+    preview.update(upd({ pages: pages(20) }));
+    preview.setZoom(300);
+    await preview.idle();
+    preview.setVisible([10]);
+    await preview.idle();
+    expect(core.calls("page_svg").map((c) => c.args.index)).toEqual([0, 1, 2, 8, 9, 10, 11, 12]);
+  });
+});
+
+describe("zoom lembrado por projeto", () => {
+  it("grava a escolha e a recupera ao montar a prévia do mesmo projeto", () => {
+    const storage = memoryStorage();
+    const a = zoomSetup({ zoomKey: "artigo", storage });
+    a.preview.setZoom(175);
+    a.preview.destroy();
+    const b = zoomSetup({ zoomKey: "artigo", storage });
+    expect(b.preview.zoom()).toBe(175);
+    expect(b.pct.textContent).toBe("175%");
+    b.preview.destroy();
+    const c = zoomSetup({ zoomKey: "outro", storage });
+    expect(c.preview.zoom()).toBe("fit");
+  });
+
+  it("armazenamento quebrado não impede o zoom", () => {
+    const storage = {
+      getItem: () => {
+        throw new Error("SecurityError");
+      },
+      setItem: () => {
+        throw new Error("QuotaExceededError");
+      },
+    };
+    const { preview, zoomIn } = zoomSetup({ zoomKey: "artigo", storage });
+    preview.setZoom(100);
+    zoomIn.click();
+    expect(preview.zoom()).toBe(110);
+  });
+});

@@ -55,7 +55,13 @@ diagnóstico na linha certa e que a versão do compilador aparece no app.
 7. **Given** alterações feitas no editor, **When** a pessoa salva, fecha o app ou o app
    encerra de forma inesperada, **Then** o texto editado está no disco ao reabrir o projeto,
    exceto no máximo os últimos segundos de digitação no caso de encerramento inesperado.
-8. **Given** o projeto aberto, **When** a pessoa cria um arquivo ou uma pasta pela árvore
+8. **Given** a prévia de um projeto aberto, **When** a pessoa aumenta ou diminui o zoom da
+   prévia (botões "−"/"+" da barra da prévia, ⌘/Ctrl + `+`/`-` com o foco na prévia, ⌘/Ctrl +
+   roda do mouse ou pinça no trackpad), **Then** as páginas ficam maiores ou menores e nítidas,
+   a porcentagem aparece na barra, o trecho que estava sob o centro da prévia (ou sob o
+   ponteiro) continua no lugar, e "Ajustar à largura" (ou ⌘/Ctrl + `0`) volta ao padrão; ao
+   reabrir o projeto, o zoom escolhido volta (FR-013a; emenda de 2026-11-22).
+9. **Given** o projeto aberto, **When** a pessoa cria um arquivo ou uma pasta pela árvore
    ("Novo arquivo" / "Nova pasta", digitando o nome na própria árvore), **Then** o item
    aparece vazio na pasta escolhida, sem sobrescrever nada que exista; um `.typ`, `.bib` ou
    `.yml` novo abre no editor; nome inválido, nome que já existe ou caminho fora do projeto é
@@ -270,6 +276,13 @@ comando.
 - **Plugin aprovado num projeto e usado em outro projeto**: pede confirmação de novo.
 - **Pasta do projeto removida ou renomeada com o app aberto**: o app avisa e mantém o texto em
   memória até a pessoa escolher onde salvar.
+- **Zoom da prévia nos limites** (FR-013a): em 50 % o "−" fica desativado e em 300 % o "+";
+  atalho, roda ou pinça além do limite param no limite, sem erro. Com zoom maior que a largura
+  do painel, a prévia rola na horizontal dentro do próprio painel; a janela não rola.
+- **Zoom com o foco no editor**: ⌘/Ctrl + `+`/`-`/`0` só valem com o foco na prévia; no editor,
+  as teclas seguem para o editor (nenhum atalho do editor é tomado).
+- **Armazenamento local indisponível** (modo privado, cota cheia, acesso negado): o zoom
+  funciona na sessão e só não é lembrado; a prévia não quebra.
 - **Disco cheio ou sem permissão de escrita ao salvar ou exportar**: o app avisa, não perde o
   texto do editor e não deixa arquivo parcialmente gravado no lugar do original.
 - **Criar arquivo ou pasta com nome que já existe** (inclusive como link simbólico, mesmo
@@ -364,6 +377,20 @@ comando.
   versão embutida" regrava o registro e libera a compilação (RF-07, D-10).
 - **FR-013**: A prévia MUST ficar ao lado do editor e atualizar enquanto se digita, sem ação
   da pessoa (RF-02).
+- **FR-013a**: A pessoa MUST poder mudar o zoom da prévia sem sair dela (emenda de
+  2026-11-22, pedido do dono: "zoom no pdf"). A barra da prévia MUST ter "−", "+", a
+  porcentagem atual e "Ajustar à largura", que é o padrão. O zoom MUST ir de 50 % a 300 % em
+  degraus (50, 67, 75, 90, 100, 110, 125, 150, 175, 200, 250, 300; 100 % = tamanho real da
+  página, 1 pt = 1/72 pol.); ⌘/Ctrl + roda do mouse e a pinça do trackpad MAY dar valores
+  entre os degraus, dentro dos limites. ⌘/Ctrl + `+`, `-` e `0` (este volta a "Ajustar à
+  largura") MUST valer quando o foco está na prévia e MUST NOT ser tomados do editor. Ao mudar
+  o zoom, o ponto do documento sob o centro da prévia (ou sob o ponteiro, na roda e na pinça)
+  MUST continuar no mesmo lugar da tela. As páginas MUST continuar nítidas e o zoom MUST NOT
+  pedir as páginas de novo ao núcleo; a virtualização de FR-013 (visíveis ± 2) MUST valer em
+  qualquer zoom. O nível MUST ser lembrado por projeto, nos dados locais da interface, e falha
+  desse armazenamento MUST NOT quebrar a prévia. Os controles MUST ter nome acessível e a
+  porcentagem MUST ser anunciada a leitores de tela. Só interface: o núcleo e o contrato IPC
+  não mudam (RF-02).
 - **FR-014**: Quando o texto não compila, a prévia MUST manter a última versão bem-sucedida e
   indicar que há erro (RF-02).
 - **FR-015**: Uma compilação lenta, que não termina ou que excede o limite de tempo MUST NOT
