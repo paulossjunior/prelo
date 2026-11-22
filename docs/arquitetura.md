@@ -48,7 +48,7 @@ flowchart LR
 | Documento compartilhado | Yjs (interface) e yrs (núcleo) | CRDT: edições simultâneas se fundem sem conflito, também depois de períodos offline | RF-20, RF-30 |
 | Compilação e prévia | typst (com `typst-ide`, D-17) + Tinymist (World, VFS, pacotes), embutidos | Diagnósticos, autocompletar e realce pelo `typst-ide`/`typst-syntax` (D-17), prévia SVG incremental, PDFs; leitura de arquivos restrita ao projeto ([seção 6](#6-acesso-a-arquivos-pelo-compilador)) | RF-01, RF-02, RF-06, RF-08, RF-09, RF-42–44, RF-50–54 |
 | Rede | iroh + mDNS | Conexão direta entre computadores ([seção 3](#3-conexão-sem-servidor)) | RF-23, RNF-02 |
-| Histórico | gitoxide | Commit, push, pull, versões nomeadas | RF-33, RF-40, RF-41 |
+| Histórico | gitoxide | Commit, push, pull, versões nomeadas; no GitHub, por HTTPS com token OAuth de GitHub App guardado no cofre do sistema ([D-18](adrs/D-18-github-oauth.md)) | RF-33, RF-40, RF-41 |
 
 ## 2. Arquivos no repositório do artigo
 
@@ -76,6 +76,8 @@ O Yjs junta as edições dentro de cada computador, então não é preciso um se
 | Internet, rede muito fechada | Tráfego passa pelo relay do iroh, criptografado de ponta a ponta | Um relay, público ou do grupo |
 | Rede privada existente (Tailscale, ZeroTier, VPN) | Os computadores já se enxergam | Nenhum além da VPN |
 | Ninguém online ao mesmo tempo | Salvar e fechar gravam no git; quem abre depois faz pull (D-05) | O GitHub ou GitLab do grupo |
+
+Para o pull e o push no GitHub, o núcleo autentica por OAuth (GitHub App, device flow); o token fica só no cofre de credenciais do sistema e nunca chega à webview ([D-18](adrs/D-18-github-oauth.md)). A autenticação no GitLab ainda não foi decidida.
 
 **Par sempre ligado (opcional)**: um grupo que queira entrega mesmo sem ninguém online pode deixar um computador do laboratório rodando o Prelo. Ele é só mais um participante, com o mesmo código.
 
@@ -281,5 +283,6 @@ Decididas pelo dono em 2026-11-18:
 - **Plugins WASM de coautores.** `plugin()` executa código WASM vindo do projeto ou de um pacote. O typst o roda em sandbox, mas é código de terceiros executado no computador de quem compila. TODO(plugins): permitir sempre, pedir confirmação na primeira vez ou recusar.
 - **Imagens grandes na prévia.** RF-51 cobre edições que não tocam a imagem. A primeira compilação depois que uma imagem grande chega ou muda, e o envio dela para a prévia na interface, podem passar da meta de RF-02. TODO(imagem-grande).
 - **Escape da raiz do projeto.** Um link simbólico versionado ou trocado durante a leitura pode tentar levar o compilador para fora do projeto. Mitigação: RF-08, conferência sobre o arquivo aberto ([seção 6.2](#62-regras-de-escopo-rf-08)) e testes de segurança.
+- **Credenciais do git remoto.** O login no GitHub depende de um GitHub App registrado e mantido pelo dono do projeto, de rede até `github.com` e da renovação de tokens que expiram ([D-18](adrs/D-18-github-oauth.md)). Token revogado ou *refresh token* inválido pedem novo login sem perder a fila de Salvar (Princípio III). GitLab fica para decisão futura.
 - **Atualizar o compilador.** Uma versão nova do Typst pode mudar o layout. Falta definir quando o app atualiza a versão registrada no projeto e quem decide.
 - **Compatibilidade com o Typst web app.** Não há API pública documentada para sincronizar com projetos do typst.app; a interoperação seria pelo git.
