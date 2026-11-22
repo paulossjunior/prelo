@@ -21,6 +21,7 @@ import {
 import { toIpcError, type Change, type Diagnostic, type Ipc, type IpcError } from "../ipc";
 import "../workspace.css";
 import { completionExtension } from "./completion";
+import { styleNonce } from "./csp";
 import { applyDiagnostics, diagnosticsExtension } from "./diagnostics";
 import { highlightExtension, refreshTokens } from "./highlight";
 
@@ -174,6 +175,9 @@ export function mountEditor(parent: HTMLElement, opts: EditorOptions): EditorHan
     sendChanges,
   ];
   if (isTypst(path)) extensions.push(completionExtension({ ipc, path, flush }));
+  // Sem o nonce a CSP bloqueia o tema base do CodeMirror (ver ./csp.ts).
+  const nonce = styleNonce(parent.ownerDocument);
+  if (nonce) extensions.push(EditorView.cspNonce.of(nonce));
 
   const view = new EditorView({
     parent,

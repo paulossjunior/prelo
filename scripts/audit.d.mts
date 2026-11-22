@@ -41,6 +41,7 @@ export interface DenyLicenseException {
   allow?: string[];
 }
 
+export declare const FONT_DIRS: string[];
 export declare function parseFontLicenses(tomlText: string): FontLicense[];
 export declare function fontLicenseViolations(
   files: string[],

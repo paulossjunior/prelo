@@ -1,7 +1,10 @@
 // Testes da tela "Sobre" (T039; FR-012, D-15, D-16). Contrato: contracts/ipc.md
 // (`compiler_info` → `{ embedded, registered, fonts }`).
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { compilerStatus, mountAbout, TYPST_ASSETS_NOTICES } from "./about";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { parseFontLicenses } from "../scripts/audit.mjs";
+import { compilerStatus, mountAbout, TYPST_ASSETS_NOTICES, UI_FONTS } from "./about";
 import { fakeCore, settle } from "./testing/fake-core";
 
 afterEach(() => {
@@ -145,5 +148,33 @@ describe("mountAbout", () => {
     await about.open();
     about.element.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
     expect(about.isOpen()).toBe(false);
+  });
+});
+
+describe("fontes da interface (OFL-1.1, D-15)", () => {
+  it("a lista mostrada no Sobre é a de src/fonts/licenses.toml", () => {
+    const entries = parseFontLicenses(readFileSync(resolve(process.cwd(), "src/fonts/licenses.toml"), "utf8"));
+    expect(entries.length).toBeGreaterThan(0);
+    const fromToml = [...new Map(entries.map((e) => [e.family, e])).values()].map((e) => ({
+      family: e.family,
+      license: e.license,
+      copyright: e.copyright,
+    }));
+    expect(UI_FONTS.map((f) => ({ family: f.family, license: f.license, copyright: f.copyright }))).toEqual(fromToml);
+  });
+
+  it("o Sobre lista cada família da interface com licença, copyright e o texto da OFL", async () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const about = mountAbout(parent, {
+      ipc: fakeCore({ compiler_info: () => ({ embedded: "0.15.1", registered: null, fonts: [] }) }).ipc,
+      compiler: () => ({ embedded: "0.15.1", registered: null }),
+    });
+    await about.open();
+    const text = about.element.textContent ?? "";
+    expect(text).toContain("Fontes da interface");
+    for (const f of ["IBM Plex Sans", "JetBrains Mono", "Bricolage Grotesque"]) expect(text).toContain(f);
+    expect(text).toContain("IBM Corp.");
+    expect(text).toMatch(/SIL OPEN FONT LICENSE Version 1\.1/);
   });
 });

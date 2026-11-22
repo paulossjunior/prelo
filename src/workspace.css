@@ -1,13 +1,19 @@
-/* Área de trabalho do editor local (T037/T038): árvore, editor e prévia.
-   Tokens e linguagem visual de prototype/index.html (claro/escuro). O layout de quatro painéis
-   é montado em src/main.ts (T039). Só folha de estilo própria: a CSP é `style-src 'self'`. */
+/* Área de trabalho do editor local (T037/T038/T039): árvore, editor, prévia e status.
+   Cores, tipografia e medidas de prototype/index.html (claro/escuro), a fonte de verdade do
+   design; src/theme.test.ts confere os tokens. Só folha de estilo própria e fontes servidas
+   pelo app: a CSP é `style-src 'self'` e não libera origem remota. */
+@import "./fonts/fonts.css";
+
 :root {
   --bg: #f3f5f6; --surface: #ffffff; --surface-2: #eaeef0; --line: #d5dcdf; --fg: #172126;
   --muted: #5b6a71; --accent: #0d6a73; --accent-soft: #d9eef0; --ink: #0b2a33;
-  --err: #b4332b; --err-bg: #f8dfdc; --warn: #9a6a00; --warn-bg: #fbedc6;
-  --paper: #ffffff; --code-bg: #fbfcfc;
-  --tok-fn: #7a3fb0; --tok-lbl: #a0521b; --tok-ref: #0d6a73; --tok-h: #0b2a33; --tok-cmt: #6b787e;
-  --tok-kw: #0d6a73; --tok-str: #1f7a3d; --tok-num: #a0521b; --tok-math: #2266cc;
+  --ins: #1f7a3d; --ins-bg: #dcf1e2; --del: #b4332b; --del-bg: #f8dfdc; --cmt: #9a6a00; --cmt-bg: #fbedc6;
+  --paper: #ffffff; --paper-fg: #1a1a1a; --code-bg: #fbfcfc;
+  --tok-fn: #7a3fb0; --tok-lbl: #a0521b; --tok-ref: #0d6a73; --tok-h: #0b2a33; --tok-cmt: #7d8a90;
+  --shadow: 0 18px 50px -18px rgba(11,42,51,.35);
+  /* Erro e aviso usam as cores de exclusão e de comentário do protótipo. */
+  --err: var(--del); --err-bg: var(--del-bg); --warn: var(--cmt); --warn-bg: var(--cmt-bg);
+  --f-display: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
   --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
@@ -15,20 +21,20 @@
   :root:not([data-theme="light"]) {
     --bg: #0f1517; --surface: #162024; --surface-2: #1d292e; --line: #2c3b41; --fg: #e3eaec;
     --muted: #93a3a9; --accent: #4cc1c9; --accent-soft: #16383c; --ink: #e3eaec;
-    --err: #ff8a80; --err-bg: #3d1e1b; --warn: #f0c35a; --warn-bg: #3a2f12;
-    --paper: #f6f4ef; --code-bg: #121b1f;
-    --tok-fn: #c79bff; --tok-lbl: #f0a46a; --tok-ref: #4cc1c9; --tok-h: #ffffff; --tok-cmt: #7f9097;
-    --tok-kw: #4cc1c9; --tok-str: #6fd38f; --tok-num: #f0a46a; --tok-math: #6aa5ff;
+    --ins: #6fd38f; --ins-bg: #173524; --del: #ff8a80; --del-bg: #3d1e1b; --cmt: #f0c35a; --cmt-bg: #3a2f12;
+    --paper: #f6f4ef; --paper-fg: #1a1a1a; --code-bg: #121b1f;
+    --tok-fn: #c79bff; --tok-lbl: #f0a46a; --tok-ref: #4cc1c9; --tok-h: #ffffff; --tok-cmt: #6f8087;
+    --shadow: 0 18px 50px -18px rgba(0,0,0,.7);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #0f1517; --surface: #162024; --surface-2: #1d292e; --line: #2c3b41; --fg: #e3eaec;
   --muted: #93a3a9; --accent: #4cc1c9; --accent-soft: #16383c; --ink: #e3eaec;
-  --err: #ff8a80; --err-bg: #3d1e1b; --warn: #f0c35a; --warn-bg: #3a2f12;
-  --paper: #f6f4ef; --code-bg: #121b1f;
-  --tok-fn: #c79bff; --tok-lbl: #f0a46a; --tok-ref: #4cc1c9; --tok-h: #ffffff; --tok-cmt: #7f9097;
-  --tok-kw: #4cc1c9; --tok-str: #6fd38f; --tok-num: #f0a46a; --tok-math: #6aa5ff;
+  --ins: #6fd38f; --ins-bg: #173524; --del: #ff8a80; --del-bg: #3d1e1b; --cmt: #f0c35a; --cmt-bg: #3a2f12;
+  --paper: #f6f4ef; --paper-fg: #1a1a1a; --code-bg: #121b1f;
+  --tok-fn: #c79bff; --tok-lbl: #f0a46a; --tok-ref: #4cc1c9; --tok-h: #ffffff; --tok-cmt: #6f8087;
+  --shadow: 0 18px 50px -18px rgba(0,0,0,.7);
   color-scheme: dark;
 }
 
@@ -52,24 +58,43 @@ button.pt-item:hover { background: var(--accent-soft); }
 .pt :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 /* ---------- editor ---------- */
+/* Protótipo (.editor/.ln): mono 12,5 px, entrelinha 1,7, 10 px em cima e embaixo, números à
+   direita numa coluna de 38 px em cinza a 70 %, 10 px até o código, sem fio entre eles. */
 .prelo-editor { height: 100%; background: var(--code-bg); color: var(--fg); font-size: 12.5px; }
 .prelo-editor .cm-scroller { font-family: var(--f-mono); line-height: 1.7; }
-.prelo-editor .cm-gutters { background: var(--code-bg); color: var(--muted); border-right: 1px solid var(--line); }
+.prelo-editor .cm-content { padding: 10px 0; }
+.prelo-editor .cm-line { padding: 0 14px 0 10px; }
+.prelo-editor .cm-gutters { background: var(--code-bg); color: var(--muted); border-right: 0; }
+.prelo-editor .cm-lineNumbers .cm-gutterElement { min-width: 38px; padding: 0; text-align: right; opacity: 0.7; }
+.prelo-editor .cm-gutter-lint { width: 1.2em; }
+.prelo-editor .cm-gutter-lint .cm-gutterElement { padding: 0; }
 .prelo-editor .cm-activeLine { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
-.prelo-editor .cm-activeLineGutter { background: var(--accent-soft); }
+.prelo-editor .cm-activeLineGutter { background: transparent; color: var(--ink); }
 .prelo-editor .cm-cursor { border-left-color: var(--fg); }
-.prelo-editor.cm-focused { outline: 2px solid var(--accent); outline-offset: -2px; }
+.prelo-editor.cm-focused { outline: 0; }
 .prelo-editor .cm-lintRange-error { background: var(--err-bg); text-decoration: underline wavy var(--err); }
 .prelo-editor .cm-lintRange-warning { background: var(--warn-bg); text-decoration: underline wavy var(--warn); }
+/* O tema do @codemirror/lint desenha sublinhados e marcadores com imagens `data:`, que a CSP
+   (`img-src` sem `data:`) bloqueia. Mesmo desenho só com CSS. */
+.prelo-editor .cm-content .cm-lintRange { background-image: none; }
+.prelo-editor .cm-content .cm-lintRange-info,
+.prelo-editor .cm-content .cm-lintRange-hint { text-decoration: underline dotted var(--muted); }
+.prelo-editor .cm-gutter-lint .cm-lint-marker {
+  content: normal; box-sizing: border-box; width: 0.8em; height: 0.8em; margin: 0.35em auto 0;
+  background: var(--muted);
+}
+.prelo-editor .cm-gutter-lint .cm-lint-marker-error { background: var(--err); border-radius: 50%; }
+.prelo-editor .cm-gutter-lint .cm-lint-marker-warning {
+  background: var(--warn); clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+/* Realce como o do protótipo: `#nome` (funções e palavras-chave) roxo, `<rótulo>` laranja,
+   `@referência` verde-azulado, títulos em negrito, comentários em itálico; o resto na cor do
+   texto. Classes = tags do Typst sem o prefixo `typ-` (src-tauri/src/lang_service.rs). */
 .tok-heading { color: var(--tok-h); font-weight: 600; }
-.tok-function, .tok-func { color: var(--tok-fn); }
+.tok-func, .tok-key { color: var(--tok-fn); }
 .tok-label { color: var(--tok-lbl); }
-.tok-ref, .tok-reference { color: var(--tok-ref); }
+.tok-ref { color: var(--tok-ref); }
 .tok-comment { color: var(--tok-cmt); font-style: italic; }
-.tok-keyword { color: var(--tok-kw); font-weight: 500; }
-.tok-string { color: var(--tok-str); }
-.tok-number { color: var(--tok-num); }
-.tok-math, .tok-math-delimiter { color: var(--tok-math); }
 .tok-strong { font-weight: 600; }
 .tok-emph { font-style: italic; }
 
@@ -80,10 +105,10 @@ button.pt-item:hover { background: var(--accent-soft); }
   border-bottom: 1px solid color-mix(in srgb, var(--err) 35%, var(--line));
 }
 .pv-error[hidden] { display: none; }
-.pv-pages { overflow: auto; padding: 18px; display: grid; align-content: start; justify-items: center; gap: 14px; }
+.pv-pages { overflow: auto; padding: 18px; display: grid; align-content: start; justify-items: center; gap: 10px; }
 .pv-page {
   width: 100%; max-width: 640px; background: var(--paper);
-  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18); color: var(--paper-fg);
 }
 .pv-page img { display: block; width: 100%; height: 100%; user-select: none; }
 
@@ -101,14 +126,14 @@ body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
 }
 .ws-project { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ws-project strong { font-weight: 600; }
-.ws-project small { color: var(--muted); margin-left: 8px; font-size: 12px; }
+.ws-project small { font-weight: 400; color: var(--muted); margin-left: 6px; }
 .ws-spacer { flex: 1; }
 .btn {
   font: inherit; font-size: 12.5px; border: 1px solid var(--line); background: var(--surface);
   color: var(--fg); padding: 5px 11px; border-radius: 7px; cursor: pointer;
 }
 .btn:hover:not(:disabled) { border-color: var(--accent); }
-.btn:disabled { opacity: 0.5; cursor: default; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
 .btn.sm { font-size: 11.5px; padding: 3px 8px; }
 .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -116,11 +141,12 @@ body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
   padding: 5px 12px; font-size: 12.5px; color: var(--err); background: var(--err-bg);
   border-bottom: 1px solid var(--line);
 }
-.ws-banner { background: var(--warn-bg); color: var(--fg); border-bottom: 1px solid var(--line); }
+.ws-banner { background: var(--warn-bg); color: var(--warn); border-bottom: 1px solid var(--line); }
 .ws-banner-row { display: flex; align-items: center; gap: 12px; padding: 6px 12px; font-size: 12.5px; }
 .ws-banner-row span { flex: 1; }
 .ws-message[hidden], .ws-banner[hidden] { display: none; }
-.ws-body { display: grid; grid-template-columns: 210px minmax(0, 1.15fr) minmax(0, 1fr); min-height: 0; }
+/* Colunas do protótipo (200px | 1,25fr | 1fr), sem o painel de revisão, que é da fase 4. */
+.ws-body { display: grid; grid-template-columns: 200px minmax(0, 1.25fr) minmax(0, 1fr); min-height: 0; }
 .ws-side { border-right: 1px solid var(--line); padding: 10px; overflow: auto; background: var(--surface-2); }
 .ws-side h4 {
   font-family: var(--f-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
@@ -132,10 +158,11 @@ body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
 .ws-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); }
 .ws-empty p { margin: 0; }
 .ws-status {
-  display: flex; align-items: center; gap: 16px; padding: 4px 12px; font-size: 12px;
+  display: flex; align-items: center; gap: 16px; padding: 4px 12px; font-size: 11.5px;
   color: var(--muted); background: var(--surface-2); border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
 }
-.ws-compile.is-ok { color: var(--accent); }
+.ws-compile.is-ok { color: var(--ins); }
 .ws-compile.is-err { color: var(--err); }
 .ws-compiler.is-warn { color: var(--warn); font-weight: 600; }
 
@@ -146,22 +173,27 @@ body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
 }
 .ws-backdrop[hidden] { display: none; }
 .ws-modal {
-  background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: 0 10px 28px -12px rgba(11, 42, 51, 0.5); padding: 18px 20px;
+  background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow); padding: 18px 20px;
   width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto;
 }
 .ws-modal:focus { outline: none; }
-.ws-modal h2 { font-size: 16px; margin: 0 0 10px; color: var(--ink); }
-.ws-modal h3 { font-size: 13px; margin: 16px 0 6px; color: var(--ink); }
+/* Títulos como os do protótipo (.scr h6, h3): fonte de exibição, peso 600, cor de tinta. */
+.ws-modal h2 { font: 600 16px/1.15 var(--f-display); margin: 0 0 10px; color: var(--ink); }
+.ws-modal h3 { font: 600 13px/1.15 var(--f-display); margin: 16px 0 6px; color: var(--ink); }
 .ws-modal code { font-family: var(--f-mono); background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
 .ws-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 .ws-dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; margin: 0; }
 .ws-dl dt { color: var(--muted); }
 .ws-dl dd { margin: 0; font-family: var(--f-mono); }
 .ws-muted { color: var(--muted); font-size: 12px; }
-.ws-warn { background: var(--warn-bg); color: var(--fg); padding: 6px 10px; border-radius: 6px; }
+.ws-warn { background: var(--warn-bg); color: var(--warn); padding: 6px 10px; border-radius: 6px; }
 .ws-fonts { width: 100%; border-collapse: collapse; font-size: 12px; }
 .ws-fonts th, .ws-fonts td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ws-fonts th {
+  font: 500 10.5px/1.5 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); background: var(--surface-2);
+}
 .ws-license {
   white-space: pre-wrap; font: 11px/1.45 var(--f-mono); background: var(--surface-2);
   padding: 8px; border-radius: 6px; max-height: 220px; overflow: auto;

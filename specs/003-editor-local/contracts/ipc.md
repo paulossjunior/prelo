@@ -80,6 +80,12 @@ outra permissão `core:`). Nenhuma permissão de `fs`,
 `dialog`, `http`, `shell` ou `opener` na webview. CSP:
 `default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' blob: prelo-asset: http://prelo-asset.localhost; style-src 'self'`.
 O teste de configuração de segurança é atualizado para essa lista exata.
+Estilos do CodeMirror: sem `'unsafe-inline'`. O Tauri troca, a cada carga de `index.html`, o
+nonce do `<style data-csp-nonce>` vazio por um valor aleatório e acrescenta `'nonce-…'` ao
+`style-src` servido; o editor repassa esse nonce ao CodeMirror (`EditorView.cspNonce`,
+`src/editor/csp.ts`). Desenhos que o CodeMirror faria com imagens `data:` (marcadores e
+sublinhados de diagnóstico) são refeitos em CSS, porque `img-src` não libera `data:`. O
+autoteste falha se a webview real registrar violação da CSP ou layout quebrado do editor.
 
 ## Autoteste e e2e (só build de teste, feature `self-test`)
 
