@@ -34,8 +34,7 @@ use crate::fs::save::{format_utc, OpenFile};
 use crate::fs::scope::{Refusal, Scope};
 use crate::project::record::{self, LoadedRecord, RecordState};
 
-/// Versão do compilador embutido (`typst` no Cargo.toml; T026 confere contra o Cargo.lock).
-pub const EMBEDDED_TYPST: &str = "0.15.1";
+pub use crate::project::EMBEDDED_TYPST;
 
 const OUTSIDE: &str = "path_outside_project";
 const NOT_FOUND: &str = "not_found";
@@ -518,6 +517,11 @@ impl AppState {
             Ok(project.info())
         })
     }
+
+    /// "Atualizar o projeto para a versão embutida" (FR-012). T032.
+    pub fn update_project_compiler_version(&self) -> Result<ProjectInfo, String> {
+        todo!("T032")
+    }
 }
 
 // ---------------------------------------------------------------- comandos
@@ -623,6 +627,19 @@ pub fn choose_main_file(
 ) -> Result<ProjectInfo, String> {
     let a: PathArgs = args(&request)?;
     state.choose_main_file(&a.path)
+}
+
+#[tauri::command(async)]
+pub fn update_project_compiler_version(
+    _state: State<'_, AppState>,
+    _request: Request<'_>,
+) -> Result<ProjectInfo, String> {
+    Err(NOT_IMPLEMENTED.into())
+}
+
+#[tauri::command(async)]
+pub fn compiler_info(_state: State<'_, AppState>, _request: Request<'_>) -> Result<Value, String> {
+    Err(NOT_IMPLEMENTED.into())
 }
 
 #[tauri::command(async)]

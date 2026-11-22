@@ -127,6 +127,7 @@ describe("erros do núcleo", () => {
     "not_a_typ_file",
     "folder_not_empty",
     "project_json_invalid",
+    "main_file_missing",
     "compiler_version_mismatch",
     "compile_errors",
     "stale_page",
@@ -153,6 +154,7 @@ describe("erros do núcleo", () => {
     expect(errorMessage("too_large")).toMatch(/grande demais/i);
     expect(errorMessage("write_failed")).toMatch(/gravar/i);
     expect(errorMessage("compiler_version_mismatch")).toMatch(/versão/i);
+    expect(errorMessage("main_file_missing")).toMatch(/arquivo principal/i);
   });
 
   it("código desconhecido vira mensagem genérica que cita o código", () => {
