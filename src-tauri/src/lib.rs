@@ -30,11 +30,18 @@ pub fn configure_with_state<R: Runtime>(
     state: commands::AppState,
 ) -> Builder<R> {
     builder
+        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`). Os comandos
+        // `plugin:dialog|*` ficam fora do alcance da webview: nenhuma capability concede
+        // `dialog:` (tests/security_config.rs, tests/security_ipc.rs).
+        .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             app_info::get_app_info,
             commands::list_tree,
             commands::choose_main_file,
+            project::open_project_dialog,
+            project::update_project_compiler_version,
+            project::compiler_info,
             commands::open_file,
             commands::edit_file,
             commands::save_file,
@@ -54,11 +61,18 @@ pub fn configure_with_state<R: Runtime>(
     state: commands::AppState,
 ) -> Builder<R> {
     builder
+        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`). Os comandos
+        // `plugin:dialog|*` ficam fora do alcance da webview: nenhuma capability concede
+        // `dialog:` (tests/security_config.rs, tests/security_ipc.rs).
+        .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             app_info::get_app_info,
             commands::list_tree,
             commands::choose_main_file,
+            project::open_project_dialog,
+            project::update_project_compiler_version,
+            project::compiler_info,
             commands::open_file,
             commands::edit_file,
             commands::save_file,

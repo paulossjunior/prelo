@@ -127,6 +127,8 @@ export const ERROR_MESSAGES = {
   folder_not_empty: "A pasta escolhida não está vazia. Escolha uma pasta vazia.",
   project_json_invalid:
     "O registro do projeto (.prelo/project.json) é inválido; usando os padrões.",
+  main_file_missing:
+    "O arquivo principal do projeto não foi encontrado. Escolha um .typ como arquivo principal.",
   compiler_version_mismatch:
     "O projeto foi registrado com outra versão do Typst. Atualize a versão do projeto para compilar.",
   compile_errors: "O documento tem erros; corrija-os antes de exportar o PDF.",
