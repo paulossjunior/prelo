@@ -464,3 +464,56 @@ describe("painéis ajustáveis", () => {
     expect(b.root.querySelector<HTMLElement>(".ws-col-tree")!.hidden).toBe(true);
   });
 });
+
+// ---------------------------------------------------------------- zoom do editor (T094; FR-013c)
+
+describe("zoom do editor na área de trabalho", () => {
+  afterEach(() => {
+    try {
+      localStorage.clear();
+    } catch {
+      // sem armazenamento no ambiente: nada a limpar
+    }
+  });
+  const press = (target: HTMLElement, key: string) => {
+    const ev = new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true, cancelable: true });
+    target.dispatchEvent(ev);
+    return ev;
+  };
+
+  it("o cabeçalho do editor tem o grupo de zoom", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    expect(root.querySelector(".ws-col-editor .ws-pane-h [aria-label='Zoom do editor']")).not.toBeNull();
+  });
+
+  it("⌘+ vale para o painel com o foco: editor ou prévia", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    const edPct = () => root.querySelector(".ed-zoom-pct")!.textContent;
+    const pvLevel = () => root.querySelector(".pv-zoom-fit")!.getAttribute("aria-pressed");
+    expect(press(ws.editor()!.view.contentDOM, "=").defaultPrevented).toBe(true);
+    expect(edPct()).toBe("110%");
+    expect(pvLevel()).toBe("true");
+    press(root.querySelector<HTMLElement>(".pv-pages")!, "=");
+    expect(edPct()).toBe("110%");
+    expect(pvLevel()).toBe("false");
+  });
+
+  it("o zoom do editor continua ao abrir outro arquivo", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    byLabelZoom(root, "Aumentar zoom do editor").click();
+    byLabelZoom(root, "Aumentar zoom do editor").click();
+    await ws.openFile("capitulos/metodo.typ");
+    expect(parseFloat(ws.editor()!.view.dom.style.fontSize)).toBeCloseTo(12.5 * 1.25);
+  });
+});
+
+function byLabelZoom(root: ParentNode, label: string) {
+  return root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+}
