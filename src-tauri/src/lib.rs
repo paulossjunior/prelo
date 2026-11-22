@@ -1,6 +1,7 @@
 mod app_info;
 pub mod compile;
 pub mod diagnostic;
+pub mod fs;
 pub mod project;
 #[cfg(feature = "self-test")]
 mod self_test;

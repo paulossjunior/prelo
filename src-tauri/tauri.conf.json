@@ -20,7 +20,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self'; style-src 'self'"
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; img-src 'self' blob: prelo-asset: http://prelo-asset.localhost; style-src 'self'"
     }
   },
   "bundle": {
