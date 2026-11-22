@@ -246,7 +246,7 @@ function fakeLayout(parent: HTMLElement, pane = { width: 500, height: 600 }) {
     return Number.isFinite(w) ? w : pane.width - 2 * PAD;
   };
   const heightOf = (el: HTMLElement) => {
-    const [w, h] = el.style.aspectRatio.split("/").map(Number);
+    const [w = 1, h = 1] = el.style.aspectRatio.split("/").map(Number);
     return (widthOf(el) * h) / w;
   };
   const all = () => [...pagesEl.querySelectorAll<HTMLElement>("[data-page-index]")];
@@ -264,7 +264,7 @@ function fakeLayout(parent: HTMLElement, pane = { width: 500, height: 600 }) {
     Object.defineProperty(el, "offsetTop", { configurable: true, get: () => topOf(el) });
     Object.defineProperty(el, "offsetLeft", { configurable: true, get: () => PAD });
   }
-  return { pagesEl, widthOf, heightOf, topOf, page: (i: number) => all()[i] };
+  return { pagesEl, widthOf, heightOf, topOf, page: (i: number) => all()[i]! };
 }
 
 function zoomSetup(opts: { zoomKey?: string | null; storage?: Pick<Storage, "getItem" | "setItem"> } = {}) {

@@ -252,7 +252,9 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     showMessage(null);
     // O núcleo recomeça a prévia ao abrir outro projeto: a interface também.
     preview.destroy();
-    preview = mountPreview(previewBox, { ipc, urls: opts.previewUrls });
+    // O zoom da prévia é lembrado por projeto (FR-013a); `ProjectInfo` não traz o caminho da
+    // raiz, então a chave é o nome da pasta.
+    preview = mountPreview(previewBox, { ipc, urls: opts.previewUrls, zoomKey: next.name });
     compileEl.textContent = "Compilando…";
     compileEl.classList.remove("is-ok", "is-err");
     saveEl.textContent = "";
