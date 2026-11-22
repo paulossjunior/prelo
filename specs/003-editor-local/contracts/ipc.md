@@ -36,8 +36,9 @@ O núcleo mostra o diálogo nativo; a webview não tem permissão de diálogo ne
 | Comando / evento | Conteúdo |
 |---|---|
 | `subscribe_preview(channel)` | Canal Tauri; recebe `PreviewUpdate` a cada compilação |
-| evento `PreviewUpdate` | `{ compileId, ok, pages: {index, hash, widthPt, heightPt}[], changed: number[], diagnostics: Diagnostic[], durationMs }` |
+| evento `PreviewUpdate` | `{ compileId, ok, pages: {index, hash, widthPt, heightPt}[], changed: number[], diagnostics: Diagnostic[], durationMs }`. Com `ok: false`, `pages` são as da última `Ok` e `changed` vem vazio; quem assina depois recebe logo a prévia atual com todas as páginas em `changed` |
 | `page_svg` | `{ index, hash }` → SVG da página (texto). `hash` velho → `stale_page` |
+| `Diagnostic.range` | `{ from, to }` em **unidades UTF-16** do texto atual do arquivo (as mesmas de `edit_file` e do CodeMirror); o núcleo converte os bytes do Typst |
 | `prelo-asset://<sha256>` | Protocolo próprio: bytes de imagem por hash; hash desconhecido → 404 |
 | `jump_from_click` | `{ page, xPt, yPt }` → `{ path, line, column }` ou `null` (sem origem) |
 | `jump_from_cursor` | `{ path, offset }` → `{ page, xPt, yPt }[]` |

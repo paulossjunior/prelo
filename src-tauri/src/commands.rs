@@ -6,11 +6,13 @@
 //! canônico (links resolvidos) e nunca absoluto; caminho absoluto, `..` além da raiz ou link
 //! para fora vira `path_outside_project` sem tocar o disco fora do projeto nem chegar ao motor.
 //!
-//! O que depende do World (T020) e dos serviços de prévia e linguagem (T035, T036) passa pelo
-//! trait [`Engine`]; até lá, [`Unavailable`] responde `not_implemented`. Mudança externa
-//! (`resolve_external_change`, T034) já valida o caminho e responde `not_implemented`.
-//! Arquivo aberto e gravação (`open_file`, `edit_file`, `save_file`, salvamento automático e
-//! último Salvar ao fechar; T033) moram em [`crate::fs::save`].
+//! Abrir o projeto liga a agenda de compilação ao World do projeto; `edit_file` e
+//! `choose_main_file` recompilam, e cada resultado chega à interface pelo canal de
+//! `subscribe_preview`; `page_svg` serve o SVG de cada página (T035). O serviço de linguagem
+//! (T036) passa pelo trait [`Engine`]; até lá, [`Unavailable`] responde `not_implemented`.
+//! Mudança externa (`resolve_external_change`, T034) já valida o caminho e responde
+//! `not_implemented`. Arquivo aberto e gravação (`open_file`, `edit_file`, `save_file`,
+//! salvamento automático e último Salvar ao fechar; T033) moram em [`crate::fs::save`].
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
@@ -21,9 +23,12 @@ use std::time::{Instant, SystemTime};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::ipc::{InvokeBody, Request};
+use tauri::ipc::{Channel, InvokeBody, Request};
 use tauri::State;
 
+use crate::compile::preview::{render_svg, PreviewHub, PreviewUpdate};
+use crate::compile::project::{CompileInput, ProjectCompiler};
+use crate::compile::scheduler::Scheduler;
 pub use crate::fs::save::{apply_changes, Change};
 use crate::fs::save::{format_utc, OpenFile};
 use crate::fs::scope::{Refusal, Scope};
@@ -37,6 +42,7 @@ const NOT_FOUND: &str = "not_found";
 const INVALID_ARGUMENTS: &str = "invalid_arguments";
 const NO_PROJECT: &str = "no_project";
 const NOT_IMPLEMENTED: &str = "not_implemented";
+const VERSION_MISMATCH: &str = "compiler_version_mismatch";
 
 /// Profundidade e quantidade máximas de nós de `list_tree` (pasta enorme não trava o núcleo).
 const TREE_MAX_DEPTH: usize = 32;
@@ -187,9 +193,26 @@ struct OpenProject {
     scope: Scope,
     record: LoadedRecord,
     files: HashMap<String, OpenFile>,
+    /// Agenda de compilação; `None` com versão registrada ≠ embutida (FR-012): sem
+    /// compilação nem prévia até `update_project_compiler_version`.
+    compiler: Option<Scheduler<ProjectCompiler>>,
 }
 
 impl OpenProject {
+    /// Põe o estado atual (principal + arquivos abertos) na fila de compilação.
+    fn recompile(&self) {
+        if let Some(compiler) = &self.compiler {
+            compiler.submit(CompileInput {
+                main: self.record.record.main_or_default().to_owned(),
+                files: self
+                    .files
+                    .iter()
+                    .map(|(path, file)| (path.clone(), file.shared_text()))
+                    .collect(),
+            });
+        }
+    }
+
     fn info(&self) -> ProjectInfo {
         let registered = match self.record.state {
             RecordState::Valid => Some(self.record.record.compiler_typst().to_owned()),
@@ -200,7 +223,7 @@ impl OpenProject {
             warnings.push(reason.code().to_owned());
         }
         if registered.as_deref().is_some_and(|v| v != EMBEDDED_TYPST) {
-            warnings.push("compiler_version_mismatch".to_owned());
+            warnings.push(VERSION_MISMATCH.to_owned());
         }
         ProjectInfo {
             name: self
@@ -288,9 +311,10 @@ impl OpenProject {
     }
 }
 
-/// Estado do núcleo gerenciado pelo Tauri: projeto aberto, arquivos abertos e o motor.
+/// Estado do núcleo gerenciado pelo Tauri: projeto aberto, arquivos abertos, prévia e o motor.
 pub struct AppState {
     project: Mutex<Option<OpenProject>>,
+    preview: Arc<PreviewHub>,
     engine: Arc<dyn Engine>,
     /// Um pedido de fechar já foi recusado por falha de gravação (o próximo é aceito).
     close_refused: AtomicBool,
@@ -306,6 +330,7 @@ impl AppState {
     pub fn new(engine: Arc<dyn Engine>) -> Self {
         Self {
             project: Mutex::new(None),
+            preview: Arc::new(PreviewHub::default()),
             engine,
             close_refused: AtomicBool::new(false),
         }
@@ -317,17 +342,45 @@ impl AppState {
 
     /// Abre o projeto em `root` (canonicalizada uma vez) e lê o registro sem regravá-lo. Chamado
     /// pelo diálogo nativo do núcleo (T032) e pelos testes; nunca exposto à interface.
+    ///
+    /// Começa a compilar o arquivo principal com o compilador embutido; o resultado chega ao
+    /// assinante da prévia. Com versão registrada ≠ embutida, não compila (FR-012).
     pub fn open_project(&self, root: &Path) -> std::io::Result<ProjectInfo> {
         let scope = Scope::new(root)?;
         let record = record::load(scope.root(), EMBEDDED_TYPST);
-        let project = OpenProject {
+        let mut project = OpenProject {
             scope,
             record,
             files: HashMap::new(),
+            compiler: None,
         };
         let info = project.info();
-        *self.lock() = Some(project);
+        let mut guard = self.lock();
+        // A prévia do projeto anterior deixa de valer antes de qualquer compilação nova.
+        let generation = self.preview.reset();
+        if !info.warnings.iter().any(|w| w == VERSION_MISMATCH) {
+            let root = project.scope.root().to_owned();
+            let main = project.record.record.main_or_default().to_owned();
+            let (scheduler, compilations) =
+                Scheduler::new(move || ProjectCompiler::new(root.clone(), &main));
+            self.preview.spawn_pump(generation, compilations);
+            project.compiler = Some(scheduler);
+        }
+        project.recompile();
+        *guard = Some(project);
         Ok(info)
+    }
+
+    /// Assina a prévia: `sink` recebe cada `PreviewUpdate`, e logo a prévia atual, se houver.
+    pub fn subscribe_preview(&self, sink: impl Fn(&PreviewUpdate) + Send + Sync + 'static) {
+        self.preview.subscribe(Arc::new(sink));
+    }
+
+    /// SVG da página `index` da prévia atual, se `hash` for o atual; senão `stale_page`. O SVG
+    /// é gerado fora das travas.
+    pub fn page_svg(&self, index: usize, hash: &str) -> Result<String, String> {
+        let page = self.preview.page(index, hash)?;
+        Ok(render_svg(&page))
     }
 
     /// Projeto aberto e o `path` validado.
@@ -383,7 +436,10 @@ impl AppState {
     ) -> Result<u64, String> {
         self.with_path(requested, |project, path| {
             let file = project.files.get_mut(path.relative()).ok_or(NOT_FOUND)?;
-            Ok(file.edit(version, changes)?)
+            let version = file.edit(version, changes)?;
+            // A prévia acompanha o texto não salvo (FR-013).
+            project.recompile();
+            Ok(version)
         })
     }
 
@@ -458,6 +514,7 @@ impl AppState {
                 let root = project.scope.root().to_owned();
                 record::save(&root, &mut project.record).map_err(|_| "write_failed")?;
             }
+            project.recompile();
             Ok(project.info())
         })
     }
@@ -524,6 +581,21 @@ struct KeepArgs {
     keep: Keep,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PageArgs {
+    index: usize,
+    hash: String,
+}
+
+/// Corpo de `subscribe_preview`: só o canal (o Tauri o entrega à parte, como `Channel`).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ChannelArgs {
+    #[allow(dead_code)] // lido pelo Tauri como `Channel`
+    channel: String,
+}
+
 #[derive(Serialize)]
 pub struct EditResult {
     version: u64,
@@ -582,6 +654,29 @@ pub fn resolve_external_change(
     let a: KeepArgs = args(&request)?;
     state.validated(&a.path)?;
     Err(NOT_IMPLEMENTED.into())
+}
+
+/// Canal da prévia: recebe um `PreviewUpdate` a cada compilação (e logo a prévia atual).
+/// Assinar de novo troca o canal.
+#[tauri::command(async)]
+pub fn subscribe_preview(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+    channel: Channel<PreviewUpdate>,
+) -> Result<(), String> {
+    let _: ChannelArgs = args(&request)?;
+    state.subscribe_preview(move |update| {
+        // Webview fechada: a próxima assinatura troca o canal.
+        let _ = channel.send(update.clone());
+    });
+    Ok(())
+}
+
+/// SVG da página (texto); hash velho → `stale_page`.
+#[tauri::command(async)]
+pub fn page_svg(state: State<'_, AppState>, request: Request<'_>) -> Result<String, String> {
+    let a: PageArgs = args(&request)?;
+    state.page_svg(a.index, &a.hash)
 }
 
 #[tauri::command(async)]

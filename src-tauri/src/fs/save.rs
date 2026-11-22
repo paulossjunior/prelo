@@ -10,6 +10,7 @@
 use std::fs::File;
 use std::io;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::Deserialize;
@@ -76,7 +77,8 @@ pub fn apply_changes(text: &str, changes: &[Change]) -> Result<String, &'static 
 /// Limpo`; `Gravando → (falha) → Sujo`.
 #[derive(Debug)]
 pub struct OpenFile {
-    text: String,
+    /// Compartilhado com a compilação sem cópia.
+    text: Arc<str>,
     version: u64,
     dirty: bool,
     last_saved_hash: [u8; 32],
@@ -90,7 +92,7 @@ impl OpenFile {
         let last_saved_hash = sha256(&bytes);
         let text = String::from_utf8(bytes).map_err(|_| NOT_UTF8)?;
         Ok(Self {
-            text,
+            text: text.into(),
             version: 0,
             dirty: false,
             last_saved_hash,
@@ -100,6 +102,11 @@ impl OpenFile {
 
     pub fn text(&self) -> &str {
         &self.text
+    }
+
+    /// O texto, compartilhado (a compilação lê o mesmo `Arc` sem copiar).
+    pub fn shared_text(&self) -> Arc<str> {
+        Arc::clone(&self.text)
     }
 
     pub fn version(&self) -> u64 {
@@ -128,7 +135,7 @@ impl OpenFile {
         if text.len() as u64 > MAX_FILE_BYTES {
             return Err(TOO_LARGE);
         }
-        self.text = text;
+        self.text = text.into();
         self.version += 1;
         self.dirty = true;
         self.idle_since = Instant::now();
