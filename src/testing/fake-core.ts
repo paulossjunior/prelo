@@ -13,6 +13,10 @@ export interface FakeCore {
   calls(cmd?: string): { cmd: string; args: Record<string, unknown> }[];
   on(cmd: string, handler: Handler): void;
   channels: ChannelLike<unknown>[];
+  /** Emite um evento do núcleo (ex.: `external_change_conflict`) para quem escuta. */
+  emit(event: string, payload: unknown): void;
+  /** Envia um `PreviewUpdate` pelo último canal de `subscribe_preview`. */
+  push(update: unknown): void;
 }
 
 export function fakeCore(handlers: Record<string, Handler> = {}): FakeCore {
@@ -30,13 +34,24 @@ export function fakeCore(handlers: Record<string, Handler> = {}): FakeCore {
     channels.push(c);
     return c;
   }) as ChannelFactory;
-  const ipc = createIpc({ invoke, listen: async () => () => {}, channel });
+  const listeners = new Map<string, Set<(payload: unknown) => void>>();
+  const listen = async (event: string, handler: (payload: unknown) => void) => {
+    const set = listeners.get(event) ?? new Set();
+    listeners.set(event, set);
+    set.add(handler);
+    return () => void set.delete(handler);
+  };
+  const ipc = createIpc({ invoke, listen, channel });
   return {
     ipc,
     invoke,
     calls: (cmd) => (cmd ? log.filter((c) => c.cmd === cmd) : [...log]),
     on: (cmd, handler) => table.set(cmd, handler),
     channels,
+    emit: (event, payload) => {
+      for (const h of [...(listeners.get(event) ?? [])]) h(payload);
+    },
+    push: (update) => channels.at(-1)?.onmessage(update),
   };
 }
 

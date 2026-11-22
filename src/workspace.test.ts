@@ -1,0 +1,299 @@
+// Testes da área de trabalho montada em src/main.ts (T039; US1 cenários 1, 2, 4, 6).
+// Núcleo falso: contracts/ipc.md.
+import { diagnosticCount } from "@codemirror/lint";
+import { afterEach, describe, expect, it } from "vitest";
+import type { PreviewUpdate, ProjectInfo } from "./ipc";
+import { fakeCore, settle } from "./testing/fake-core";
+import { mountWorkspace, type WorkspaceHandle } from "./workspace";
+
+let handles: WorkspaceHandle[] = [];
+afterEach(() => {
+  for (const h of handles) h.destroy();
+  handles = [];
+  document.body.innerHTML = "";
+});
+
+const INFO: ProjectInfo = {
+  name: "artigo-basico",
+  mainFile: "main.typ",
+  compiler: { embedded: "0.15.1", registered: "0.15.1" },
+  warnings: [],
+};
+
+const TREE = [
+  { name: "capitulos", path: "capitulos", kind: "dir", children: [{ name: "metodo.typ", path: "capitulos/metodo.typ", kind: "file" }] },
+  { name: "main.typ", path: "main.typ", kind: "file" },
+];
+
+const FILES: Record<string, string> = {
+  "main.typ": "= Introdução\n\nOlá.\n",
+  "capitulos/metodo.typ": "= Método\n",
+};
+
+function update(over: Partial<PreviewUpdate> = {}): PreviewUpdate {
+  return {
+    compileId: 1,
+    ok: true,
+    pages: [{ index: 0, hash: "h1", widthPt: 595, heightPt: 842 }],
+    changed: [0],
+    diagnostics: [],
+    durationMs: 41,
+    ...over,
+  };
+}
+
+function setup(extra: Parameters<typeof fakeCore>[0] = {}) {
+  let version = 1;
+  const core = fakeCore({
+    get_app_info: () => ({ version: "0.1.0", os: "macos", arch: "aarch64" }),
+    subscribe_preview: () => null,
+    open_project_dialog: () => INFO,
+    list_tree: () => TREE,
+    open_file: (a) => ({ text: FILES[a.path as string] ?? "", version: 1 }),
+    edit_file: () => ({ version: ++version }),
+    save_file: () => ({ savedAt: "2026-11-22T10:15:00Z" }),
+    page_svg: () => "<svg xmlns='http://www.w3.org/2000/svg'/>",
+    ...extra,
+  });
+  const root = document.createElement("main");
+  document.body.append(root);
+  const ws = mountWorkspace(root, {
+    ipc: core.ipc,
+    appInfo: (cmd) => core.invoke(cmd),
+    previewUrls: { create: () => "blob:x", revoke: () => {} },
+    tokenDelayMs: 0,
+  });
+  handles.push(ws);
+  return { core, root, ws };
+}
+
+const button = (root: ParentNode, name: RegExp) =>
+  [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => name.test(b.textContent ?? ""));
+
+describe("layout", () => {
+  it("barra com abrir projeto, salvar e sobre; árvore | editor | prévia; versão do app", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    expect(button(root, /Abrir projeto/)).toBeDefined();
+    expect(button(root, /Salvar/)).toBeDefined();
+    expect(button(root, /Sobre/)).toBeDefined();
+    expect(root.querySelector("[aria-label='Arquivos do projeto']")).not.toBeNull();
+    expect(root.querySelector(".ws-editor")).not.toBeNull();
+    expect(root.querySelector("[aria-label='Prévia']")).not.toBeNull();
+    expect(ws.appInfoElement.textContent).toBe("Prelo 0.1.0 · macos");
+  });
+
+  it("sem projeto: convida a abrir um e Salvar fica desativado", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    expect(root.querySelector(".ws-editor")?.textContent).toContain("Nenhum projeto aberto");
+    expect(button(root, /Salvar/)!.disabled).toBe(true);
+  });
+
+  it("assina a prévia uma vez ao montar", async () => {
+    const { core, ws } = setup();
+    await ws.ready;
+    expect(core.calls("subscribe_preview")).toHaveLength(1);
+  });
+});
+
+describe("abrir projeto (cenário 1)", () => {
+  it("diálogo do núcleo → nome, árvore, arquivo principal no editor e marcado na árvore", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    expect(core.calls("open_project_dialog")).toHaveLength(1);
+    expect(root.querySelector(".ws-project")?.textContent).toContain("artigo-basico");
+    expect(root.querySelector(".ws-project")?.textContent).toContain("main.typ");
+    expect(core.calls("open_file")[0]?.args).toEqual({ path: "main.typ" });
+    expect(ws.editor()?.view.state.doc.toString()).toBe(FILES["main.typ"]);
+    expect(root.querySelector("button.pt-file[data-path='main.typ']")?.getAttribute("aria-current")).toBe("true");
+    expect(button(root, /Salvar/)!.disabled).toBe(false);
+    expect(root.querySelector(".ws-status")?.textContent).toContain("Typst 0.15.1");
+  });
+
+  it("cancelar o diálogo não muda nada", async () => {
+    const { core, root, ws } = setup({ open_project_dialog: () => null });
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    expect(core.calls("list_tree")).toHaveLength(0);
+    expect(ws.editor()).toBeNull();
+  });
+
+  it("núcleo sem o comando: mensagem em português, sem quebrar", async () => {
+    const { core, root, ws } = setup();
+    core.on("open_project_dialog", () => {
+      throw "not_implemented";
+    });
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    expect(root.querySelector(".ws-message")?.textContent).toContain("Recurso ainda não disponível");
+  });
+
+  it("clicar noutro arquivo da árvore abre no editor e move a marcação", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    root.querySelector<HTMLButtonElement>("button.pt-file[data-path='capitulos/metodo.typ']")!.click();
+    await settle();
+    expect(core.calls("open_file").at(-1)?.args).toEqual({ path: "capitulos/metodo.typ" });
+    expect(ws.editor()?.path).toBe("capitulos/metodo.typ");
+    expect(ws.editor()?.view.state.doc.toString()).toBe("= Método\n");
+    expect(root.querySelectorAll(".cm-editor")).toHaveLength(1);
+    expect(
+      root.querySelector("button.pt-file[data-path='capitulos/metodo.typ']")?.getAttribute("aria-current"),
+    ).toBe("true");
+  });
+});
+
+describe("prévia e diagnósticos (cenários 2 e 4)", () => {
+  it("o PreviewUpdate vai à prévia e ao status", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(update());
+    await settle();
+    expect(core.calls("page_svg")[0]?.args).toEqual({ index: 0, hash: "h1" });
+    expect(root.querySelector(".pv-page img")).not.toBeNull();
+    expect(root.querySelector(".ws-compile")?.textContent).toContain("41 ms");
+  });
+
+  it("os diagnósticos do arquivo aberto aparecem no editor; status conta os erros", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(
+      update({
+        compileId: 2,
+        ok: false,
+        pages: [],
+        changed: [],
+        diagnostics: [
+          { severity: "error", path: "main.typ", range: { from: 14, to: 18 }, message: "unknown variable", hints: [], kind: "typst" },
+        ],
+      }),
+    );
+    await settle();
+    expect(diagnosticCount(ws.editor()!.view.state)).toBe(1);
+    expect(root.querySelector(".ws-compile")?.textContent).toMatch(/1 erro/);
+    expect(root.querySelector(".pv-error")?.hasAttribute("hidden")).toBe(false);
+  });
+
+  it("diagnósticos já recebidos valem para o arquivo aberto depois", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(
+      update({
+        compileId: 2,
+        ok: false,
+        diagnostics: [
+          { severity: "error", path: "capitulos/metodo.typ", line: 1, message: "x", hints: [], kind: "typst" },
+        ],
+      }),
+    );
+    await settle();
+    expect(diagnosticCount(ws.editor()!.view.state)).toBe(0);
+    root.querySelector<HTMLButtonElement>("button.pt-file[data-path='capitulos/metodo.typ']")!.click();
+    await settle();
+    expect(diagnosticCount(ws.editor()!.view.state)).toBe(1);
+  });
+
+  it("onPreviewUpdate avisa quem observa (autoteste)", async () => {
+    const { core, ws } = setup();
+    await ws.ready;
+    const seen: number[] = [];
+    ws.onPreviewUpdate((u) => seen.push(u.compileId));
+    core.push(update({ compileId: 7 }));
+    expect(seen).toEqual([7]);
+  });
+});
+
+describe("salvar", () => {
+  it("botão Salvar chama save_file e mostra a hora", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    button(root, /Salvar/)!.click();
+    await settle();
+    expect(core.calls("save_file")[0]?.args).toEqual({ path: "main.typ" });
+    expect(root.querySelector(".ws-save")?.textContent).toMatch(/Salvo/);
+  });
+
+  it("editar marca alterações pendentes", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    const view = ws.editor()!.view;
+    view.dispatch({ changes: { from: 0, insert: "x" } });
+    await settle();
+    expect(root.querySelector(".ws-save")?.textContent).toMatch(/automaticamente/);
+  });
+
+  it("edição recusada pelo núcleo recarrega o arquivo (PR #176)", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.on("edit_file", () => {
+      throw "version_mismatch";
+    });
+    core.on("open_file", () => ({ text: "texto do núcleo", version: 5 }));
+    ws.editor()!.view.dispatch({ changes: { from: 0, insert: "x" } });
+    await settle(10);
+    expect(ws.editor()!.view.state.doc.toString()).toBe("texto do núcleo");
+    expect(ws.editor()!.version()).toBe(5);
+    expect(root.querySelector(".ws-message")?.textContent).toContain("recarregue");
+  });
+});
+
+describe("versão do compilador (cenário 6, FR-012)", () => {
+  it("versão diferente: faixa de aviso com ação explícita de atualizar", async () => {
+    const updated = { ...INFO, compiler: { embedded: "0.15.1", registered: "0.15.1" } };
+    const { core, root, ws } = setup({ update_project_compiler_version: () => updated });
+    await ws.ready;
+    await ws.showProject({
+      ...INFO,
+      compiler: { embedded: "0.15.1", registered: "0.14.0" },
+      warnings: ["compiler_version_mismatch"],
+    });
+    const banner = root.querySelector<HTMLElement>(".ws-banner")!;
+    expect(banner.hidden).toBe(false);
+    expect(banner.textContent).toContain("0.14.0");
+    expect(core.calls("update_project_compiler_version")).toHaveLength(0);
+    button(banner, /Atualizar/)!.click();
+    await settle();
+    expect(core.calls("update_project_compiler_version")).toHaveLength(1);
+    expect(banner.hidden).toBe(true);
+  });
+
+  it("Sobre abre o diálogo com as versões", async () => {
+    const { root, ws } = setup({
+      compiler_info: () => ({ embedded: "0.15.1", registered: "0.15.1", fonts: [] }),
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    button(root, /Sobre/)!.click();
+    await settle();
+    const dialog = root.querySelector<HTMLElement>("[role=dialog]")!;
+    expect(dialog.hidden).toBe(false);
+    expect(dialog.textContent).toMatch(/Embutido\s*0\.15\.1/);
+  });
+});
+
+describe("conflito externo", () => {
+  it("o evento abre o diálogo e a escolha recarrega o editor", async () => {
+    const { core, root, ws } = setup({
+      resolve_external_change: () => ({ text: "do disco", version: 3 }),
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.emit("external_change_conflict", { path: "main.typ" });
+    await settle();
+    button(root, /disco/)!.click();
+    await settle();
+    expect(ws.editor()!.view.state.doc.toString()).toBe("do disco");
+  });
+});
