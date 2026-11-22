@@ -281,23 +281,49 @@ fn escolher_principal_grava_o_registro_e_compila_o_escolhido() {
     assert!((update.pages[0].width_pt - 120.0).abs() < 0.01);
 }
 
-// O sinal "escolha o arquivo principal" ao abrir um projeto com vários `.typ` e sem
-// `main.typ` sai com o diálogo de abertura de projeto (T032, issue #97); este teste é a parte
-// de projeto de T024 e passa a valer quando T032 definir o aviso em `ProjectInfo`.
+// Parte de projeto de T024 (T032): vários `.typ` e nenhum `main.typ` → aviso
+// `main_file_missing` em `ProjectInfo` (a interface pede a escolha) e a prévia só traz o
+// diagnóstico de arquivo ausente; a escolha
+// grava `ProjectRecord.main` e compila o principal escolhido.
 #[test]
-// justificativa: depende de T032 (#97), que define o aviso de principal ausente
-#[ignore = "T032 (#97): aviso de arquivo principal ausente"]
 fn varios_typ_sem_main_pedem_escolha() {
     let project = TempProject::empty();
     project.write("a.typ", "A\n");
     project.write("b.typ", "B\n");
     let state = AppState::default();
+    let (tx, updates) = mpsc::channel();
+    state.subscribe_preview(move |update: &PreviewUpdate| {
+        let _ = tx.send(update.clone());
+    });
     let info = state.open_project(&project.root()).expect("abrir projeto");
-    assert!(
-        info.warnings.iter().any(|w| w == "main_file_missing"),
-        "{:?}",
-        info.warnings
-    );
+    let s = Session {
+        state,
+        updates,
+        project,
+    };
+    assert_eq!(info.warnings, ["main_file_missing"], "{:?}", info.warnings);
+    let missing = s.next_error();
+    assert!(missing.pages.is_empty());
+    let record: Value =
+        serde_json::from_slice(&std::fs::read(s.project.path(".prelo/project.json")).unwrap())
+            .unwrap();
+    assert!(record.get("main").is_none(), "{record}");
+
+    let info = s.state.choose_main_file("b.typ").expect("choose_main_file");
+    assert!(info.warnings.is_empty(), "{:?}", info.warnings);
+    assert_eq!(info.main_file, "b.typ");
+    let record: Value =
+        serde_json::from_slice(&std::fs::read(s.project.path(".prelo/project.json")).unwrap())
+            .unwrap();
+    assert_eq!(record["main"], "b.typ");
+    s.next_ok();
+
+    // Reaberto, o principal registrado vale e não há aviso.
+    let info = AppState::default()
+        .open_project(&s.project.root())
+        .expect("reabrir");
+    assert!(info.warnings.is_empty(), "{:?}", info.warnings);
+    assert_eq!(info.main_file, "b.typ");
 }
 
 // ---------------------------------------------------------------- IPC
