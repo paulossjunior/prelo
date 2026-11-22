@@ -1,14 +1,14 @@
 // Núcleo falso para os testes de interface: o `Ipc` real (createIpc) sobre um transporte
 // injetado. Cada comando responde pelo handler registrado; comando sem handler recusa com
 // `not_implemented`, como o núcleo faz com recursos ainda não entregues.
-import { vi } from "vitest";
+import { vi, type Mock } from "vitest";
 import { createIpc, type ChannelFactory, type ChannelLike, type Ipc } from "../ipc";
 
 export type Handler = (args: Record<string, unknown>) => unknown;
 
 export interface FakeCore {
   ipc: Ipc;
-  invoke: ReturnType<typeof vi.fn>;
+  invoke: Mock<(cmd: string, args?: Record<string, unknown>) => Promise<unknown>>;
   /** Comandos chamados, em ordem, com os argumentos. */
   calls(cmd?: string): { cmd: string; args: Record<string, unknown> }[];
   on(cmd: string, handler: Handler): void;

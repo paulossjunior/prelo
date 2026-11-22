@@ -54,7 +54,8 @@ pub fn configure_with_state<R: Runtime>(
         ])
 }
 
-/// Variante de teste: acrescenta `self_test_report` (nunca em release).
+/// Variante de teste: acrescenta `self_test_report` e `self_test_open_project` (nunca em
+/// release).
 #[cfg(feature = "self-test")]
 pub fn configure_with_state<R: Runtime>(
     builder: Builder<R>,
@@ -82,8 +83,10 @@ pub fn configure_with_state<R: Runtime>(
             commands::jump_from_cursor,
             commands::subscribe_preview,
             commands::page_svg,
-            self_test::self_test_report
+            self_test::self_test_report,
+            self_test::self_test_open_project
         ])
+        .manage(self_test::FixtureCopy::default())
 }
 
 /// Intervalo em que o núcleo confere se há arquivo para o salvamento automático.

@@ -228,7 +228,7 @@ describe("salvar", () => {
     await ws.ready;
     await ws.showProject(INFO);
     const view = ws.editor()!.view;
-    view.dispatch({ changes: { from: 0, insert: "x" } });
+    view.dispatch({ changes: { from: 0, insert: "x" }, userEvent: "input.type" });
     await settle();
     expect(root.querySelector(".ws-save")?.textContent).toMatch(/automaticamente/);
   });

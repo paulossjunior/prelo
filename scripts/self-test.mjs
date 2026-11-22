@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Autoteste ponta a ponta (T009, research R3): roda nos três sistemas, inclusive macOS,
+// Autoteste ponta a ponta (T009, T031; research R3): roda nos três sistemas, inclusive macOS,
 // onde não há WebDriver. Compila o app com a feature `self-test`, abre o binário real e
 // espera que ele se encerre sozinho com código 0 depois que a interface reportar ao núcleo.
 // Depois confirma que nenhum processo do app sobrou (FR-005).
@@ -7,8 +7,10 @@ import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { pathWithoutTypst } from "./no-typst-path.mjs";
 
-const TIMEOUT_MS = 30_000;
+// Inclui o roteiro do editor (T031): abrir a fixture, compilar, editar e esperar o erro.
+const TIMEOUT_MS = 60_000;
 const root = fileURLToPath(new URL("..", import.meta.url));
 const exe = process.platform === "win32" ? "prelo.exe" : "prelo";
 const binary = join(root, "src-tauri", "target", "debug", exe);
@@ -33,7 +35,9 @@ function build() {
 function run() {
   return new Promise((resolve) => {
     const started = Date.now();
-    const child = spawn(binary, [], { cwd: root, stdio: ["ignore", "inherit", "pipe"] });
+    // SC-006: o app roda sem `typst` no PATH; o núcleo confere de novo ao receber o relatório.
+    const env = { ...process.env, PATH: pathWithoutTypst(process.env.PATH) };
+    const child = spawn(binary, [], { cwd: root, env, stdio: ["ignore", "inherit", "pipe"] });
     let stderr = "";
     child.stderr.on("data", (chunk) => {
       stderr += chunk;
