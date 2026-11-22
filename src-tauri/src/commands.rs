@@ -9,7 +9,8 @@
 //! Abrir o projeto liga a agenda de compilação ao World do projeto; `edit_file` e
 //! `choose_main_file` recompilam, e cada resultado chega à interface pelo canal de
 //! `subscribe_preview`; `page_svg` serve o SVG de cada página (T035). O serviço de linguagem
-//! (T036) passa pelo trait [`Engine`]; até lá, [`Unavailable`] responde `not_implemented`. Gravação
+//! (T036) passa pelo trait [`Engine`]: o padrão é o [`LangService`], que recebe o mesmo estado
+//! da compilação ([`EngineContext`]); `jump_from_cursor` ainda responde `not_implemented`. Gravação
 //! (`save_file`, T033) e mudança externa (`resolve_external_change`, T034) já validam o
 //! caminho e respondem `not_implemented`.
 
@@ -23,10 +24,13 @@ use serde_json::Value;
 use tauri::ipc::{Channel, InvokeBody, Request};
 use tauri::State;
 
+use typst_layout::PagedDocument;
+
 use crate::compile::preview::{render_svg, PreviewHub, PreviewUpdate};
 use crate::compile::project::{CompileInput, ProjectCompiler};
 use crate::compile::scheduler::Scheduler;
 use crate::fs::scope::{Refusal, Scope, MAX_FILE_BYTES};
+use crate::lang_service::{Completion, LangService, Token};
 use crate::project::record::{self, LoadedRecord, RecordState};
 
 /// Versão do compilador embutido (`typst` no Cargo.toml; T026 confere contra o Cargo.lock).
@@ -110,32 +114,62 @@ pub struct JumpTarget {
     pub y_pt: f64,
 }
 
+/// Estado do projeto que o motor precisa para responder como a prévia veria o texto: a raiz,
+/// o mesmo [`CompileInput`] da compilação (principal + textos abertos, ainda não salvos;
+/// FR-011) e o último documento compilado com sucesso (rótulos).
+#[derive(Debug, Clone)]
+pub struct EngineContext {
+    pub root: PathBuf,
+    pub input: CompileInput,
+    pub document: Option<Arc<PagedDocument>>,
+}
+
 /// Consultas que dependem do World (T020) e dos serviços de prévia e linguagem (T035, T036).
-/// Recebem só caminhos já validados. Formatos de `Completion` e `Token` saem com T036.
+/// Recebem só caminhos já validados; `offset` em unidades UTF-16 do texto atual.
 pub trait Engine: Send + Sync + 'static {
-    fn complete(&self, path: &ProjectPath, offset: usize) -> Result<Vec<Value>, String>;
-    fn semantic_tokens(&self, path: &ProjectPath) -> Result<Vec<Value>, String>;
+    fn complete(
+        &self,
+        ctx: &EngineContext,
+        path: &ProjectPath,
+        offset: usize,
+    ) -> Result<Vec<Completion>, String>;
+    fn semantic_tokens(
+        &self,
+        ctx: &EngineContext,
+        path: &ProjectPath,
+    ) -> Result<Vec<Token>, String>;
     fn jump_from_cursor(
         &self,
+        ctx: &EngineContext,
         path: &ProjectPath,
         offset: usize,
     ) -> Result<Vec<JumpTarget>, String>;
 }
 
-/// Motor enquanto o World (T020) não existe.
+/// Motor que responde `not_implemented` a tudo (recurso ainda não entregue).
 pub struct Unavailable;
 
 impl Engine for Unavailable {
-    fn complete(&self, _path: &ProjectPath, _offset: usize) -> Result<Vec<Value>, String> {
+    fn complete(
+        &self,
+        _ctx: &EngineContext,
+        _path: &ProjectPath,
+        _offset: usize,
+    ) -> Result<Vec<Completion>, String> {
         Err(NOT_IMPLEMENTED.into())
     }
 
-    fn semantic_tokens(&self, _path: &ProjectPath) -> Result<Vec<Value>, String> {
+    fn semantic_tokens(
+        &self,
+        _ctx: &EngineContext,
+        _path: &ProjectPath,
+    ) -> Result<Vec<Token>, String> {
         Err(NOT_IMPLEMENTED.into())
     }
 
     fn jump_from_cursor(
         &self,
+        _ctx: &EngineContext,
         _path: &ProjectPath,
         _offset: usize,
     ) -> Result<Vec<JumpTarget>, String> {
@@ -246,17 +280,22 @@ struct OpenProject {
 }
 
 impl OpenProject {
-    /// Põe o estado atual (principal + arquivos abertos) na fila de compilação.
+    /// Estado atual da edição (principal + arquivos abertos), sem copiar texto.
+    fn input(&self) -> CompileInput {
+        CompileInput {
+            main: self.record.record.main_or_default().to_owned(),
+            files: self
+                .files
+                .iter()
+                .map(|(path, file)| (path.clone(), Arc::clone(&file.text)))
+                .collect(),
+        }
+    }
+
+    /// Põe o estado atual na fila de compilação.
     fn recompile(&self) {
         if let Some(compiler) = &self.compiler {
-            compiler.submit(CompileInput {
-                main: self.record.record.main_or_default().to_owned(),
-                files: self
-                    .files
-                    .iter()
-                    .map(|(path, file)| (path.clone(), Arc::clone(&file.text)))
-                    .collect(),
-            });
+            compiler.submit(self.input());
         }
     }
 
@@ -367,7 +406,7 @@ pub struct AppState {
 
 impl Default for AppState {
     fn default() -> Self {
-        Self::new(Arc::new(Unavailable))
+        Self::new(Arc::new(LangService::default()))
     }
 }
 
@@ -439,9 +478,45 @@ impl AppState {
         f(project, path)
     }
 
-    /// Só valida (sem segurar o estado durante a consulta ao motor).
+    /// Só valida (sem segurar o estado).
     fn validated(&self, requested: &str) -> Result<ProjectPath, String> {
         self.with_path(requested, |_, path| Ok(path))
+    }
+
+    /// Valida e copia o estado para o motor (só `Arc`s), sem segurar a trava durante a
+    /// consulta.
+    fn engine_query(&self, requested: &str) -> Result<(EngineContext, ProjectPath), String> {
+        let document = self.preview.document();
+        self.with_path(requested, |project, path| {
+            let ctx = EngineContext {
+                root: project.scope.root().to_owned(),
+                input: project.input(),
+                document,
+            };
+            Ok((ctx, path))
+        })
+    }
+
+    /// Sugestões de autocompletar em `offset` (UTF-16) do texto atual de `requested`.
+    pub fn complete(&self, requested: &str, offset: usize) -> Result<Vec<Completion>, String> {
+        let (ctx, path) = self.engine_query(requested)?;
+        self.engine.complete(&ctx, &path, offset)
+    }
+
+    /// *Tokens* de realce do texto atual de `requested`.
+    pub fn semantic_tokens(&self, requested: &str) -> Result<Vec<Token>, String> {
+        let (ctx, path) = self.engine_query(requested)?;
+        self.engine.semantic_tokens(&ctx, &path)
+    }
+
+    /// Posições na prévia do trecho em `offset` (US4).
+    pub fn jump_from_cursor(
+        &self,
+        requested: &str,
+        offset: usize,
+    ) -> Result<Vec<JumpTarget>, String> {
+        let (ctx, path) = self.engine_query(requested)?;
+        self.engine.jump_from_cursor(&ctx, &path, offset)
     }
 
     pub fn list_tree(&self) -> Result<Vec<TreeNode>, String> {
@@ -677,20 +752,21 @@ pub fn page_svg(state: State<'_, AppState>, request: Request<'_>) -> Result<Stri
 }
 
 #[tauri::command(async)]
-pub fn complete(state: State<'_, AppState>, request: Request<'_>) -> Result<Vec<Value>, String> {
+pub fn complete(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Vec<Completion>, String> {
     let a: OffsetArgs = args(&request)?;
-    let path = state.validated(&a.path)?;
-    state.engine.complete(&path, a.offset)
+    state.complete(&a.path, a.offset)
 }
 
 #[tauri::command(async)]
 pub fn semantic_tokens(
     state: State<'_, AppState>,
     request: Request<'_>,
-) -> Result<Vec<Value>, String> {
+) -> Result<Vec<Token>, String> {
     let a: PathArgs = args(&request)?;
-    let path = state.validated(&a.path)?;
-    state.engine.semantic_tokens(&path)
+    state.semantic_tokens(&a.path)
 }
 
 #[tauri::command(async)]
@@ -699,8 +775,7 @@ pub fn jump_from_cursor(
     request: Request<'_>,
 ) -> Result<Vec<JumpTarget>, String> {
     let a: OffsetArgs = args(&request)?;
-    let path = state.validated(&a.path)?;
-    state.engine.jump_from_cursor(&path, a.offset)
+    state.jump_from_cursor(&a.path, a.offset)
 }
 
 #[cfg(test)]
@@ -892,13 +967,24 @@ mod tests {
             relative: "main.typ".into(),
             absolute: PathBuf::from("main.typ"),
         };
-        assert_eq!(Unavailable.complete(&p, 0), Err("not_implemented".into()));
+        let ctx = EngineContext {
+            root: PathBuf::from("."),
+            input: CompileInput {
+                main: "main.typ".into(),
+                files: Vec::new(),
+            },
+            document: None,
+        };
         assert_eq!(
-            Unavailable.semantic_tokens(&p),
+            Unavailable.complete(&ctx, &p, 0),
             Err("not_implemented".into())
         );
         assert_eq!(
-            Unavailable.jump_from_cursor(&p, 0),
+            Unavailable.semantic_tokens(&ctx, &p),
+            Err("not_implemented".into())
+        );
+        assert_eq!(
+            Unavailable.jump_from_cursor(&ctx, &p, 0),
             Err("not_implemented".into())
         );
     }
