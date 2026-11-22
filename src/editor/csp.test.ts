@@ -4,6 +4,7 @@
 // põe um nonce aleatório, a cada carga da página, em todo <style> de index.html e na CSP servida;
 // o editor reaproveita esse nonce (`EditorView.cspNonce`).
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { fakeCore } from "../testing/fake-core";
 import { mountEditor, type EditorHandle } from "./editor";
@@ -27,7 +28,7 @@ function nonceCarrier(nonce: string) {
 
 describe("nonce de estilo", () => {
   it("index.html tem o <style> vazio onde o Tauri põe o nonce", () => {
-    const html = readFileSync(new URL("../../index.html", import.meta.url), "utf8");
+    const html = readFileSync(resolve(process.cwd(), "index.html"), "utf8");
     expect(html).toMatch(/<style data-csp-nonce><\/style>/);
   });
 
@@ -59,6 +60,6 @@ describe("nonce de estilo", () => {
       (s) => !s.hasAttribute("data-csp-nonce") && /\.cm-gutters/.test(s.textContent ?? ""),
     );
     expect(injected).toHaveLength(1);
-    expect(injected[0].getAttribute("nonce")).toBe("987654321");
+    expect(injected[0]?.getAttribute("nonce")).toBe("987654321");
   });
 });

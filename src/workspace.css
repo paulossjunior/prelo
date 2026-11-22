@@ -61,6 +61,19 @@ button.pt-item:hover { background: var(--accent-soft); }
 .prelo-editor.cm-focused { outline: 2px solid var(--accent); outline-offset: -2px; }
 .prelo-editor .cm-lintRange-error { background: var(--err-bg); text-decoration: underline wavy var(--err); }
 .prelo-editor .cm-lintRange-warning { background: var(--warn-bg); text-decoration: underline wavy var(--warn); }
+/* O tema do @codemirror/lint desenha sublinhados e marcadores com imagens `data:`, que a CSP
+   (`img-src` sem `data:`) bloqueia. Mesmo desenho só com CSS. */
+.prelo-editor .cm-content .cm-lintRange { background-image: none; }
+.prelo-editor .cm-content .cm-lintRange-info,
+.prelo-editor .cm-content .cm-lintRange-hint { text-decoration: underline dotted var(--muted); }
+.prelo-editor .cm-gutter-lint .cm-lint-marker {
+  content: normal; box-sizing: border-box; width: 0.8em; height: 0.8em; margin: 0.35em auto 0;
+  background: var(--muted);
+}
+.prelo-editor .cm-gutter-lint .cm-lint-marker-error { background: var(--err); border-radius: 50%; }
+.prelo-editor .cm-gutter-lint .cm-lint-marker-warning {
+  background: var(--warn); clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
 .tok-heading { color: var(--tok-h); font-weight: 600; }
 .tok-function, .tok-func { color: var(--tok-fn); }
 .tok-label { color: var(--tok-lbl); }

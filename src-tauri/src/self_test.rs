@@ -29,6 +29,9 @@ pub struct Scenario {
     pub editor_marked: bool,
     pub compiler_shown: String,
     pub failure: Option<String>,
+    /// Problemas de layout e violações da CSP medidos na webview real (src/layout-check.ts).
+    #[serde(default)]
+    pub layout_problems: Vec<String>,
 }
 
 /// Cópia temporária da fixture: o roteiro edita e o salvamento automático grava nela, nunca
@@ -166,6 +169,13 @@ fn check(
             scenario.compiler_shown
         ));
     }
+    // O jsdom não aplica CSP nem faz layout: só a webview real vê o editor sem tema base.
+    if !scenario.layout_problems.is_empty() {
+        return Err(format!(
+            "layout no app real: {}",
+            scenario.layout_problems.join("; ")
+        ));
+    }
     Ok(())
 }
 
@@ -244,9 +254,7 @@ mod tests {
             Box::new(|s| s.editor_marked = false),
             Box::new(|s| s.compiler_shown = "Typst 0.0.0".into()),
             Box::new(|s| s.failure = Some("prévia não chegou".into())),
-            Box::new(|s| {
-                s.layout_problems = vec!["números de linha não estão numa coluna".into()]
-            }),
+            Box::new(|s| s.layout_problems = vec!["números de linha não estão numa coluna".into()]),
         ];
         for change in cases {
             let mut s = ok_scenario();
