@@ -31,6 +31,7 @@ Status possíveis: **proposta**, **aceita**, **substituída por D-xx**.
 | <a id="d-15-fontes-embutidas--pasta-do-projeto-licença-ofl-11-aceita-só-para-arquivos-de-fonte"></a>D-15 | Fontes: embutidas + pasta do projeto; licença OFL-1.1 aceita só para arquivos de fonte | Aceita | [D-15-fontes-embutidas-e-do-projeto.md](adrs/D-15-fontes-embutidas-e-do-projeto.md) |
 | <a id="d-16-cc-by-40-e-w3c-só-como-exceção-da-crate-typst-assets"></a>D-16 | CC-BY-4.0 e W3C só como exceção da crate `typst-assets` | Aceita | [D-16-excecao-typst-assets.md](adrs/D-16-excecao-typst-assets.md) |
 | <a id="d-17-análise-do-editor-via-typst-ide-oficial-em-vez-de-tinymist-query"></a>D-17 | Análise do editor via `typst-ide` oficial em vez de `tinymist-query` | Aceita | [D-17-typst-ide-em-vez-de-tinymist-query.md](adrs/D-17-typst-ide-em-vez-de-tinymist-query.md) |
+| <a id="d-18-autenticação-no-github-por-oauth"></a>D-18 | Autenticação no GitHub por OAuth | Aceita | [D-18-github-oauth.md](adrs/D-18-github-oauth.md) |
 
 As âncoras `adrs.md#d-xx-...` das versões anteriores deste arquivo continuam apontando para a
 linha da decisão nesta tabela.
