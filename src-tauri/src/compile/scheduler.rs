@@ -355,6 +355,9 @@ mod tests {
         thread: ThreadId,
     }
 
+    /// Edição que faz o compilador falso entrar em pânico.
+    const PANIC: &str = "pânico";
+
     /// World falso: avisa quando começa a compilar e guarda qual instância compilou.
     struct FakeWorld {
         id: usize,
@@ -370,6 +373,9 @@ mod tests {
             let _ = self.started.lock().unwrap().send((input.tag, thread));
             if let Some(gate) = &input.gate {
                 gate.wait();
+            }
+            if input.tag == PANIC {
+                panic!("pânico falso do compilador");
             }
             if input.fail {
                 return Outcome {
@@ -605,6 +611,31 @@ mod tests {
         h.wait_started("antigo");
         assert_eq!(h.next().status, Status::Abandonada);
         gate.open();
+        h.assert_quiet();
+    }
+
+    /// Pânico do compilador (erro interno do Typst com entrada malformada) vira diagnóstico na
+    /// hora, sem esperar o limite de tempo, e a próxima edição compila num World novo.
+    #[test]
+    fn compiler_panic_becomes_a_diagnostic_and_the_next_edit_compiles() {
+        let h = Harness::new(WAIT);
+        let started = Instant::now();
+        let id = h.scheduler.submit(quick(PANIC));
+        let c = h.next();
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "esperou o limite"
+        );
+        assert_eq!((c.compile_id, c.status), (id, Status::ComErros));
+        let diag = &c.diagnostics[0];
+        assert_eq!(diag.kind, Kind::Typst);
+        assert_eq!(diag.severity, Severity::Error);
+        assert!(diag.message.contains("erro interno"), "{diag:?}");
+
+        let id = h.scheduler.submit(quick("depois"));
+        let c = h.next();
+        assert_eq!((c.compile_id, c.status), (id, Status::Ok));
+        assert_eq!(c.output.expect("saída").world, 1, "World não foi refeito");
         h.assert_quiet();
     }
 }
