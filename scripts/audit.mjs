@@ -73,7 +73,11 @@ export function licenseViolations(packages, allow) {
 
 // OFL-1.1 vale só para arquivos de fonte embutidos (D-15), nunca para dependências.
 const FONT_ONLY_LICENSES = ["OFL-1.1"];
-const FONT_FILE = /\.(ttf|otf|ttc|otc)$/i;
+const FONT_FILE = /\.(ttf|otf|ttc|otc|woff2?)$/i;
+
+/** Pastas com arquivos de fonte do app, cada uma com o seu licenses.toml: as do compilador
+ * (embutidas no núcleo) e as da interface (servidas pela webview). */
+export const FONT_DIRS = ["src-tauri/fonts", "src/fonts"];
 
 /** src-tauri/fonts/licenses.toml → FontLicense[] (data-model.md "Fontes"). */
 export function parseFontLicenses(tomlText) {
@@ -92,7 +96,7 @@ export function fontLicenseViolations(files, entries, allow) {
   const errors = [];
   for (const file of files.filter((f) => FONT_FILE.test(f))) {
     const e = byFile.get(file);
-    if (!e) errors.push(`${file}: sem entrada em src-tauri/fonts/licenses.toml`);
+    if (!e) errors.push(`${file}: sem entrada no licenses.toml da pasta`);
     else if (!permitted.includes(e.license)) errors.push(`${file}: licença ${e.license} não permitida`);
     else if (!e.copyright || !String(e.copyright).trim()) errors.push(`${file}: sem aviso de copyright`);
   }
@@ -161,10 +165,10 @@ function main() {
   if (!inSync) console.error("src-tauri/deny.toml [licenses].allow difere de security/licenses-allow.txt");
   results.push(["lista de licenças em sincronia", inSync]);
 
-  const fontErrors = fontLicenseViolations(
-    readdirSync("src-tauri/fonts"),
-    parseFontLicenses(read("src-tauri/fonts/licenses.toml")),
-    allow,
+  const fontErrors = FONT_DIRS.flatMap((dir) =>
+    fontLicenseViolations(readdirSync(dir), parseFontLicenses(read(`${dir}/licenses.toml`)), allow).map(
+      (e) => `${dir}/${e}`,
+    ),
   );
   const dataErrors = embeddedDataViolations(
     parseEmbeddedData(read("security/embedded-data.toml")),

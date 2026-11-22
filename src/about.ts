@@ -3,6 +3,9 @@
 // embutidas com o texto da OFL e os avisos de atribuição dos dados do `typst-assets`.
 // Tudo entra como texto, nunca como marcação.
 import oflText from "../src-tauri/fonts/OFL.txt?raw";
+import oflBricolage from "./fonts/OFL-BricolageGrotesque.txt?raw";
+import oflPlex from "./fonts/OFL-IBMPlexSans.txt?raw";
+import oflJetBrains from "./fonts/OFL-JetBrainsMono.txt?raw";
 import { toIpcError, type CompilerInfo, type FontLicense, type Ipc } from "./ipc";
 
 export interface CompilerVersions {
@@ -104,6 +107,44 @@ const FALLBACK_FONTS: FontLicense[] = [
     license: "OFL-1.1",
     copyright:
       'Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name "Linux Libertine", "Biolinum", "STIX Fonts".',
+  },
+];
+
+export interface UiFont {
+  family: string;
+  files: string;
+  license: string;
+  copyright: string;
+  /** Texto da licença distribuído com a família (OFL exige que acompanhe a fonte). */
+  licenseText: string;
+}
+
+/**
+ * Fontes da interface (as do protótipo), servidas pela webview a partir de src/fonts/. Mesma
+ * lista de src/fonts/licenses.toml, conferida em teste; a auditoria confere os arquivos.
+ */
+export const UI_FONTS: readonly UiFont[] = [
+  {
+    family: "Bricolage Grotesque",
+    files: "src/fonts/BricolageGrotesque-*.woff2",
+    license: "OFL-1.1",
+    copyright:
+      "Copyright 2022 The Bricolage Grotesque Project Authors (https://github.com/ateliertriay/bricolage)",
+    licenseText: oflBricolage,
+  },
+  {
+    family: "IBM Plex Sans",
+    files: "src/fonts/IBMPlexSans-*.woff2",
+    license: "OFL-1.1",
+    copyright: 'Copyright © 2017 IBM Corp. with Reserved Font Name "Plex"',
+    licenseText: oflPlex,
+  },
+  {
+    family: "JetBrains Mono",
+    files: "src/fonts/JetBrainsMono-*.woff2",
+    license: "OFL-1.1",
+    copyright: "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)",
+    licenseText: oflJetBrains,
   },
 ];
 
@@ -222,6 +263,24 @@ export function mountAbout(parent: HTMLElement, opts: AboutOptions): AboutHandle
     ofl.append(el("summary", "Texto da licença SIL Open Font License 1.1"), el("pre", oflText, "ws-license"));
     fonts.append(ofl);
 
+    const uiFonts = el("section");
+    uiFonts.append(el("h3", "Fontes da interface"));
+    const uiTable = el("table", undefined, "ws-fonts");
+    const uiHead = el("tr");
+    for (const h of ["Família", "Arquivos", "Licença", "Copyright"]) uiHead.append(el("th", h));
+    uiTable.append(uiHead);
+    for (const f of UI_FONTS) {
+      const tr = el("tr");
+      tr.append(el("td", f.family), el("td", f.files), el("td", f.license), el("td", f.copyright));
+      uiTable.append(tr);
+    }
+    uiFonts.append(uiTable);
+    for (const f of UI_FONTS) {
+      const d = el("details");
+      d.append(el("summary", `Texto da licença de ${f.family} (${f.license})`), el("pre", f.licenseText, "ws-license"));
+      uiFonts.append(d);
+    }
+
     const notices = el("section");
     notices.append(el("h3", "Avisos de terceiros (dados do typst-assets)"));
     for (const n of TYPST_ASSETS_NOTICES) {
@@ -236,7 +295,7 @@ export function mountAbout(parent: HTMLElement, opts: AboutOptions): AboutHandle
     const footer = el("div", undefined, "ws-modal-actions");
     footer.append(closeBtn);
 
-    dialog.replaceChildren(title, compiler, fonts, notices, footer);
+    dialog.replaceChildren(title, compiler, fonts, uiFonts, notices, footer);
   }
 
   return {

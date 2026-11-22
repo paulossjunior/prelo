@@ -17,7 +17,7 @@ function tokens(text: string, selector: RegExp): Map<string, string> {
   const start = m.index + m[0].length;
   const body = text.slice(start, text.indexOf("}", start));
   const out = new Map<string, string>();
-  for (const d of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) out.set(d[1]!, d[2]!.trim().toLowerCase());
+  for (const d of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) out.set(d[1]!, d[2]!.replace(/\s+/g, "").toLowerCase());
   return out;
 }
 
@@ -64,10 +64,10 @@ describe("fontes da interface", () => {
     const a = tokens(css, LIGHT);
     const first = (v: string) => v.split(",")[0]!.replace(/["']/g, "").trim();
     const families = ["--f-display", "--f-body", "--f-mono"].map((k) => first(a.get(k) ?? ""));
-    expect(families).toEqual(["bricolage grotesque", "ibm plex sans", "jetbrains mono"]);
-    for (const fam of families) {
-      expect(fontsCss.toLowerCase()).toContain(`font-family: "${fam}"`);
-    }
+    // `tokens` tira os espaços: "Bricolage Grotesque" vira "bricolagegrotesque".
+    expect(families).toEqual(["bricolagegrotesque", "ibmplexsans", "jetbrainsmono"]);
+    const faces = fontsCss.replace(/\s+/g, "").toLowerCase();
+    for (const fam of families) expect(faces).toContain(`font-family:"${fam}"`);
   });
 
   it("nenhuma fonte remota: só arquivos .woff2 da pasta src/fonts", () => {
