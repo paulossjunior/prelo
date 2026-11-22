@@ -49,7 +49,8 @@ fn check(rendered: &str, version: &str, elapsed_ms: u64) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{check, MAX_ELAPSED_MS};
+    use super::{check, copy_fixture, find_on_path, Scenario, MAX_ELAPSED_MS};
+    use std::path::Path;
 
     const V: &str = env!("CARGO_PKG_VERSION");
 
@@ -60,20 +61,88 @@ mod tests {
         )
     }
 
+    fn ok_scenario() -> Scenario {
+        Scenario {
+            project_opened: true,
+            preview_changed: true,
+            error_line: 30,
+            diagnostic_line: Some(30),
+            editor_marked: true,
+            compiler_shown: format!("Typst {}", crate::commands::EMBEDDED_TYPST),
+            failure: None,
+        }
+    }
+
     #[test]
     fn aceita_texto_exato_dentro_do_tempo() {
-        assert!(check(&expected(), V, MAX_ELAPSED_MS).is_ok());
+        assert!(check(&expected(), V, MAX_ELAPSED_MS, &ok_scenario(), None).is_ok());
     }
 
     #[test]
     fn recusa_texto_diferente() {
-        assert!(check("Prelo", V, 10).is_err());
-        assert!(check(&format!("{} extra", expected()), V, 10).is_err());
-        assert!(check("Carregando…", V, 10).is_err());
+        let s = ok_scenario();
+        assert!(check("Prelo", V, 10, &s, None).is_err());
+        assert!(check(&format!("{} extra", expected()), V, 10, &s, None).is_err());
+        assert!(check("Carregando…", V, 10, &s, None).is_err());
     }
 
     #[test]
     fn recusa_acima_de_3_segundos() {
-        assert!(check(&expected(), V, MAX_ELAPSED_MS + 1).is_err());
+        assert!(check(&expected(), V, MAX_ELAPSED_MS + 1, &ok_scenario(), None).is_err());
+    }
+
+    #[test]
+    fn recusa_roteiro_do_editor_incompleto() {
+        let e = expected();
+        let cases: Vec<Box<dyn Fn(&mut Scenario)>> = vec![
+            Box::new(|s| s.project_opened = false),
+            Box::new(|s| s.preview_changed = false),
+            Box::new(|s| s.diagnostic_line = None),
+            Box::new(|s| s.diagnostic_line = Some(29)),
+            Box::new(|s| s.editor_marked = false),
+            Box::new(|s| s.compiler_shown = "Typst 0.0.0".into()),
+            Box::new(|s| s.failure = Some("prévia não chegou".into())),
+        ];
+        for change in cases {
+            let mut s = ok_scenario();
+            change(&mut s);
+            assert!(check(&e, V, 10, &s, None).is_err(), "deveria recusar {s:?}");
+        }
+    }
+
+    #[test]
+    fn recusa_typst_no_path_sc_006() {
+        let err = check(&expected(), V, 10, &ok_scenario(), Some("/usr/bin/typst".into()))
+            .unwrap_err();
+        assert!(err.contains("PATH"), "{err}");
+    }
+
+    #[test]
+    fn acha_executavel_no_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let name = if cfg!(windows) { "typst.exe" } else { "typst" };
+        std::fs::write(dir.path().join(name), b"").unwrap();
+        let path = std::env::join_paths([dir.path()]).unwrap();
+        assert_eq!(
+            find_on_path("typst", Some(path)),
+            Some(dir.path().join(name))
+        );
+        let empty = tempfile::tempdir().unwrap();
+        let path = std::env::join_paths([empty.path()]).unwrap();
+        assert_eq!(find_on_path("typst", Some(path)), None);
+        assert_eq!(find_on_path("typst", None), None);
+    }
+
+    #[test]
+    fn copia_a_fixture_inteira_para_pasta_temporaria() {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/artigo-basico");
+        let dest = tempfile::tempdir().unwrap();
+        copy_fixture(&src, dest.path()).unwrap();
+        assert!(dest.path().join("main.typ").is_file());
+        assert!(dest.path().join("capitulos/metodo.typ").is_file());
+        assert_eq!(
+            std::fs::read(src.join("main.typ")).unwrap(),
+            std::fs::read(dest.path().join("main.typ")).unwrap()
+        );
     }
 }

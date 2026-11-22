@@ -269,6 +269,29 @@ describe("versão do compilador (cenário 6, FR-012)", () => {
     expect(banner.hidden).toBe(true);
   });
 
+  it("arquivo principal ausente: escolher um .typ da árvore como principal (choose_main_file)", async () => {
+    const { core, root, ws } = setup({
+      choose_main_file: (a) => ({ ...INFO, mainFile: a.path as string }),
+    });
+    await ws.ready;
+    await ws.showProject({ ...INFO, mainFile: "sumiu.typ", warnings: ["main_file_missing"] });
+    // Não tenta abrir o principal que não existe.
+    expect(core.calls("open_file")).toHaveLength(0);
+    const banner = root.querySelector<HTMLElement>(".ws-banner")!;
+    expect(banner.hidden).toBe(false);
+    expect(banner.textContent).toContain("arquivo principal");
+    const use = button(banner, /principal/)!;
+    expect(use.disabled).toBe(true);
+    root.querySelector<HTMLButtonElement>("button.pt-file[data-path='capitulos/metodo.typ']")!.click();
+    await settle();
+    expect(use.disabled).toBe(false);
+    use.click();
+    await settle();
+    expect(core.calls("choose_main_file")[0]?.args).toEqual({ path: "capitulos/metodo.typ" });
+    expect(banner.hidden).toBe(true);
+    expect(root.querySelector(".ws-project")?.textContent).toContain("capitulos/metodo.typ");
+  });
+
   it("Sobre abre o diálogo com as versões", async () => {
     const { root, ws } = setup({
       compiler_info: () => ({ embedded: "0.15.1", registered: "0.15.1", fonts: [] }),
