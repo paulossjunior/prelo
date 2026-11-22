@@ -1,6 +1,6 @@
 //! Autoteste ponta a ponta (T012, T031). Só existe com a feature `self-test`; nunca em release.
 //! Contratos: specs/001-app-skeleton/contracts/ipc.md e specs/003-editor-local/contracts/ipc.md,
-//! `self_test_report` e `self_test_open_project`.
+//! `self_test_report`, `self_test_open_project` e `self_test_write_external`.
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
@@ -68,6 +68,23 @@ pub fn self_test_open_project(
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(dir);
     Ok(info)
+}
+
+/// Grava `text` no `main.typ` da cópia temporária da fixture como outro programa faria
+/// (temporário oculto + `rename`), para o roteiro conferir a mudança externa (FR-008, T084).
+/// Só escreve dentro da cópia aberta por [`self_test_open_project`].
+#[tauri::command(async)]
+pub fn self_test_write_external(copy: State<'_, FixtureCopy>, text: String) -> Result<(), String> {
+    let guard = copy
+        .0
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let dir = guard.as_ref().ok_or("nenhuma fixture aberta")?;
+    let root = dir.path().join("artigo-basico");
+    let tmp = root.join(".prelo-self-test-external.tmp");
+    std::fs::write(&tmp, text).map_err(|e| format!("gravar a mudança externa: {e}"))?;
+    std::fs::rename(&tmp, root.join("main.typ"))
+        .map_err(|e| format!("gravar a mudança externa: {e}"))
 }
 
 /// Copia `src` (arquivos e pastas) para `dest`.
@@ -171,6 +188,19 @@ fn check(
     }
     if !scenario.editor_marked {
         return Err("o editor não marcou o erro".into());
+    }
+    // FR-008 (T084): o arquivo aberto mudou no disco sem alteração local → o editor mostra o
+    // texto novo e o diagnóstico cai numa linha que o editor tem.
+    if !scenario.external_reloaded {
+        return Err("mudança externa sem alteração local não chegou ao editor".into());
+    }
+    if scenario.external_error_line == 0
+        || scenario.external_diagnostic_line != Some(scenario.external_error_line)
+    {
+        return Err(format!(
+            "mudança externa: erro na linha {} do disco, diagnóstico na linha {:?} do editor",
+            scenario.external_error_line, scenario.external_diagnostic_line
+        ));
     }
     if !scenario.compiler_shown.contains(EMBEDDED_TYPST) {
         return Err(format!(

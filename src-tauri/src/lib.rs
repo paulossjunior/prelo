@@ -54,8 +54,8 @@ pub fn configure_with_state<R: Runtime>(
         ])
 }
 
-/// Variante de teste: acrescenta `self_test_report` e `self_test_open_project` (nunca em
-/// release).
+/// Variante de teste: acrescenta `self_test_report`, `self_test_open_project` e
+/// `self_test_write_external` (nunca em release).
 #[cfg(feature = "self-test")]
 pub fn configure_with_state<R: Runtime>(
     builder: Builder<R>,
@@ -84,7 +84,8 @@ pub fn configure_with_state<R: Runtime>(
             commands::subscribe_preview,
             commands::page_svg,
             self_test::self_test_report,
-            self_test::self_test_open_project
+            self_test::self_test_open_project,
+            self_test::self_test_write_external
         ])
         .manage(self_test::FixtureCopy::default())
 }
@@ -124,15 +125,26 @@ fn spawn_disk_changes<R: Runtime>(app: tauri::AppHandle<R>) {
         .expect("thread de mudanças externas");
 }
 
-/// Relê `path` depois de um aviso do observador e emite o evento do contrato:
-/// `external_change_conflict { path }` com alteração local pendente.
+/// Relê `path` depois de um aviso do observador e emite o evento do contrato
+/// (specs/003-editor-local/contracts/ipc.md): `external_change_conflict { path }` com alteração
+/// local pendente; `external_change_reloaded { path, version }` quando o núcleo recarregou o
+/// texto do disco sem alteração local (a interface busca o texto com `open_file`).
 fn notify_disk_change<R: Runtime>(app: &tauri::AppHandle<R>, path: &str) {
     let state = app.state::<commands::AppState>();
     let (event, payload) = match state.handle_disk_change(path) {
         commands::DiskChange::Conflict => {
             (fs::watch::CONFLICT, serde_json::json!({ "path": path }))
         }
-        _ => return,
+        commands::DiskChange::Reloaded => {
+            let Some(version) = state.file_version(path) else {
+                return;
+            };
+            (
+                fs::watch::RELOADED,
+                serde_json::json!({ "path": path, "version": version }),
+            )
+        }
+        commands::DiskChange::Ignored => return,
     };
     if let Err(e) = app.emit(event, payload) {
         eprintln!("prelo: aviso de mudança externa não entregue: {e}");

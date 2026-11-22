@@ -297,6 +297,22 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     }
   }
 
+  /**
+   * O núcleo recarregou do disco um arquivo sem alteração local (FR-008): o editor aberto com
+   * esse caminho passa a mostrar o texto novo, sem diálogo. Árvore e status não mudam. Versão
+   * que o editor já tem (evento repetido ou atrasado) não busca de novo.
+   */
+  async function externalReload(path: string, version: number) {
+    if (editor?.path !== path || editor.version() >= version) return;
+    try {
+      const r = await ipc.openFile(path);
+      const current = editor as EditorHandle | null;
+      if (current?.path === path && r.version > current.version()) current.reload(r.text, r.version);
+    } catch (err) {
+      showError(toIpcError(err));
+    }
+  }
+
   async function openFile(path: string) {
     const ticket = ++opening;
     let opened;
@@ -361,6 +377,10 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     watchExternalChanges(conflictOpts, resolveConflict).then(
       (stop) => stops.push(stop),
       (err: unknown) => console.warn("conflito externo: sem escuta de eventos", err),
+    );
+    ipc.onExternalChangeReloaded(({ path, version }) => void externalReload(path, version)).then(
+      (stop) => stops.push(stop),
+      (err: unknown) => console.warn("mudança externa: sem escuta de eventos", err),
     );
     await appReady;
   })();
