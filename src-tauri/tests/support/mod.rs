@@ -255,7 +255,9 @@ impl AccessLog {
 }
 
 /// `PathAccessModel` instrumentado: registra cada caminho pedido ao modelo de baixo, antes
-/// de delegar. Os testes de escape exigem zero registros fora da raiz.
+/// de delegar. Os testes de escape exigem zero registros fora da raiz. Clonar compartilha o
+/// registro (o VFS do Tinymist clona o modelo a cada instantâneo do World).
+#[derive(Clone)]
 pub struct RecordingAccess<M> {
     pub inner: M,
     pub log: AccessLog,

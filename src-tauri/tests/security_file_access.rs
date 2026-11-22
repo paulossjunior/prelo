@@ -343,3 +343,265 @@ fn leitura_dentro_da_raiz_abre_so_dentro() {
     );
     assert_eq!(case.opens.all(), vec![case.project.root().join("main.typ")]);
 }
+
+// ---------------------------------------------------------------------------------------
+// Nível de documento (T012 por inteiro, com T020): os mesmos escapes escritos no `.typ` e
+// compilados pelo World do Prelo. O modelo de acesso é embrulhado em `RecordingAccess`
+// (registra todo caminho que o VFS pede) e a regra de escopo conta toda abertura real.
+// ---------------------------------------------------------------------------------------
+
+use prelo_lib::diagnostic::{Diagnostic, Kind};
+use prelo_lib::fs::access_model::AccessModel;
+use prelo_lib::world::ProjectWorld;
+
+type DocWorld = ProjectWorld<RecordingAccess<AccessModel>>;
+
+/// Projeto compilado pelo World, com os dois registros de acesso.
+struct Doc {
+    case: Case,
+    requested: AccessLog,
+}
+
+impl Doc {
+    fn new() -> Self {
+        let case = Case::new();
+        case.project
+            .write("refs.bib", "@book{a, title={A}, author={B}, year={2020}}");
+        Self {
+            case,
+            requested: AccessLog::default(),
+        }
+    }
+
+    fn world(&self) -> DocWorld {
+        let access = AccessModel::new(self.case.scope.clone());
+        let log = self.requested.clone();
+        ProjectWorld::instrumented(access, "main.typ", move |model| RecordingAccess {
+            inner: model,
+            log,
+        })
+        .expect("World")
+    }
+
+    /// Compila `main` (e `cap1`, que `main` pode incluir) e devolve os diagnósticos.
+    fn compile(&self, main: &str, cap1: &str) -> (bool, Vec<Diagnostic>) {
+        self.case.project.write("main.typ", main);
+        self.case.project.write("capitulos/cap1.typ", cap1);
+        let outcome = self.world().compile();
+        (outcome.output.is_some(), outcome.diagnostics)
+    }
+
+    /// Nada aberto nem pedido fora da raiz; nenhum diagnóstico revela caminho real ou segredo.
+    fn assert_contained(&self, diagnostics: &[Diagnostic]) {
+        self.case.assert_no_open_outside();
+        let root = self.case.project.root();
+        for path in self.requested.all() {
+            assert!(path.starts_with(&root), "VFS pediu fora da raiz: {path:?}");
+        }
+        let outside = self.case.outside.root();
+        for diag in diagnostics {
+            let text = format!("{diag:?}");
+            assert!(!text.contains(outside.to_str().unwrap()), "{text}");
+            assert!(!text.contains(root.to_str().unwrap()), "{text}");
+            assert!(!text.contains(SECRET), "{text}");
+        }
+    }
+
+    /// O documento não compila e há diagnóstico de acesso com `message`, no arquivo `path`.
+    fn assert_refused(&self, main: &str, cap1: &str, path: &str, message: &str) {
+        let (compiled, diagnostics) = self.compile(main, cap1);
+        assert!(!compiled, "compilou: {main}");
+        let diag = diagnostics
+            .iter()
+            .find(|d| d.kind == Kind::Access)
+            .unwrap_or_else(|| panic!("sem diagnóstico de acesso: {diagnostics:?}"));
+        assert_eq!(diag.message, message);
+        assert_eq!(diag.path.as_deref(), Some(path));
+        assert!(diag.range.is_some() && diag.line.is_some(), "{diag:?}");
+        self.assert_contained(&diagnostics);
+    }
+
+    fn outside_msg(requested: &str) -> String {
+        format!("acesso recusado: `{requested}` fica fora da pasta do projeto")
+    }
+}
+
+const INCLUI_CAP1: &str = "= Artigo\n#include \"capitulos/cap1.typ\"\n";
+
+#[test]
+fn documento_image_subindo_alem_da_raiz() {
+    let doc = Doc::new();
+    doc.assert_refused(
+        "#image(\"../../fora.png\")",
+        "",
+        "main.typ",
+        &Doc::outside_msg("../../fora.png"),
+    );
+    let requested = doc.case.to_outside("fora.png");
+    doc.assert_refused(
+        &format!("#image(\"{requested}\")"),
+        "",
+        "main.typ",
+        &Doc::outside_msg(&requested),
+    );
+}
+
+#[test]
+fn documento_read_com_barra_seguida_de_ponto_ponto() {
+    let doc = Doc::new();
+    doc.assert_refused(
+        "#read(\"/../fora.txt\")",
+        "",
+        "main.typ",
+        &Doc::outside_msg("/../fora.txt"),
+    );
+}
+
+#[test]
+fn documento_include_alem_da_raiz() {
+    let doc = Doc::new();
+    let requested = format!("../{}", doc.case.to_outside("fora.txt"));
+    doc.assert_refused(
+        INCLUI_CAP1,
+        &format!("#include \"{requested}\""),
+        "capitulos/cap1.typ",
+        &Doc::outside_msg(&requested),
+    );
+}
+
+#[test]
+fn documento_bibliografia_estilo_e_dados_fora_da_raiz() {
+    let doc = Doc::new();
+    let bib = doc.case.to_outside("refs.bib");
+    let csl = doc.case.to_outside("abnt.csl");
+    let json = format!("/{}", doc.case.to_outside("dados.json"));
+    let csv = doc.case.to_outside("dados.csv");
+    for (call, requested) in [
+        (format!("#bibliography(\"{bib}\")"), bib.clone()),
+        (
+            format!("#bibliography(\"refs.bib\", style: \"{csl}\")"),
+            csl.clone(),
+        ),
+        (format!("#json(\"{json}\")"), json.clone()),
+        (format!("#csv(\"{csv}\")"), csv.clone()),
+    ] {
+        doc.assert_refused(&call, "", "main.typ", &Doc::outside_msg(&requested));
+    }
+}
+
+#[test]
+fn documento_link_simbolico_versionado_para_fora() {
+    let doc = Doc::new();
+    symlink(&doc.case.outside.secret(), &doc.case.project.path("dados.csv")).unwrap();
+    symlink(&doc.case.outside.root(), &doc.case.project.path("pasta-fora")).unwrap();
+    doc.assert_refused(
+        "#csv(\"dados.csv\")",
+        "",
+        "main.typ",
+        &Doc::outside_msg("dados.csv"),
+    );
+    doc.assert_refused(
+        INCLUI_CAP1,
+        "#read(\"../pasta-fora/segredo.txt\")",
+        "capitulos/cap1.typ",
+        &Doc::outside_msg("../pasta-fora/segredo.txt"),
+    );
+}
+
+#[test]
+fn documento_link_simbolico_interno_e_aceito() {
+    let doc = Doc::new();
+    symlink(
+        &doc.case.project.path("capitulos/cap1.typ"),
+        &doc.case.project.path("atalho.typ"),
+    )
+    .unwrap();
+    let (compiled, diagnostics) = doc.compile("#include \"atalho.typ\"", "== Capítulo 1");
+    assert!(compiled, "{diagnostics:?}");
+    assert_eq!(diagnostics, vec![]);
+    doc.assert_contained(&diagnostics);
+}
+
+#[cfg(unix)]
+#[test]
+fn documento_fifo_na_raiz_e_recusado_sem_bloquear() {
+    let doc = Doc::new();
+    mkfifo(&doc.case.project.path("fila")).unwrap();
+    doc.case.project.write("main.typ", "#read(\"fila\")");
+    let mut world = doc.world();
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        tx.send(world.compile().diagnostics).ok();
+    });
+    let diagnostics = rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("compilação com FIFO bloqueou");
+    let diag = diagnostics
+        .iter()
+        .find(|d| d.kind == Kind::Access)
+        .expect("diagnóstico de acesso");
+    assert_eq!(diag.message, "acesso recusado: `fila` não é um arquivo comum");
+    doc.assert_contained(&diagnostics);
+}
+
+#[cfg(windows)]
+#[test]
+fn documento_juncao_para_fora_e_recusada() {
+    let doc = Doc::new();
+    let link = doc.case.project.path("juncao");
+    let status = std::process::Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&link)
+        .arg(doc.case.outside.root())
+        .status()
+        .unwrap();
+    assert!(status.success(), "mklink /J falhou");
+    doc.assert_refused(
+        "#read(\"juncao/segredo.txt\")",
+        "",
+        "main.typ",
+        &Doc::outside_msg("juncao/segredo.txt"),
+    );
+}
+
+#[test]
+fn documento_arquivo_maior_que_256_mb_e_recusado() {
+    let doc = Doc::new();
+    let file = std::fs::File::create(doc.case.project.path("enorme.bin")).unwrap();
+    file.set_len(MAX_FILE_BYTES + 1).unwrap();
+    drop(file);
+    doc.assert_refused(
+        "#read(\"enorme.bin\", encoding: none)",
+        "",
+        "main.typ",
+        "arquivo grande demais: `enorme.bin` (limite 256 MB)",
+    );
+}
+
+#[test]
+fn documento_estilo_csl_maior_que_1_mib_e_recusado() {
+    let doc = Doc::new();
+    doc.case
+        .project
+        .write("estilos/abnt.csl", vec![b' '; MAX_CSL_BYTES as usize + 1]);
+    doc.assert_refused(
+        "#bibliography(\"refs.bib\", style: \"estilos/abnt.csl\")",
+        "",
+        "main.typ",
+        "estilo grande demais: `estilos/abnt.csl` (limite 1 MiB)",
+    );
+}
+
+#[test]
+fn documento_dentro_da_raiz_compila() {
+    let doc = Doc::new();
+    doc.case.project.write("dados.csv", "a,b\n1,2\n");
+    let (compiled, diagnostics) = doc.compile(
+        "#include \"capitulos/cap1.typ\"\n#table(columns: 2, ..csv(\"dados.csv\").flatten())",
+        "#read(\"../dados.csv\")",
+    );
+    assert!(compiled, "{diagnostics:?}");
+    assert_eq!(diagnostics, vec![]);
+    doc.assert_contained(&diagnostics);
+    assert!(!doc.case.opens.all().is_empty());
+}
