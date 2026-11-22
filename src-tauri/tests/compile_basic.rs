@@ -282,7 +282,8 @@ fn escolher_principal_grava_o_registro_e_compila_o_escolhido() {
 }
 
 // Parte de projeto de T024 (T032): vários `.typ` e nenhum `main.typ` → aviso
-// `main_file_missing` em `ProjectInfo` (a interface pede a escolha), nada compila; a escolha
+// `main_file_missing` em `ProjectInfo` (a interface pede a escolha) e a prévia só traz o
+// diagnóstico de arquivo ausente; a escolha
 // grava `ProjectRecord.main` e compila o principal escolhido.
 #[test]
 fn varios_typ_sem_main_pedem_escolha() {
@@ -301,10 +302,8 @@ fn varios_typ_sem_main_pedem_escolha() {
         project,
     };
     assert_eq!(info.warnings, ["main_file_missing"], "{:?}", info.warnings);
-    assert!(
-        s.updates.recv_timeout(Duration::from_secs(2)).is_err(),
-        "sem principal, nada compila"
-    );
+    let missing = s.next_error();
+    assert!(missing.pages.is_empty());
     let record: Value =
         serde_json::from_slice(&std::fs::read(s.project.path(".prelo/project.json")).unwrap())
             .unwrap();

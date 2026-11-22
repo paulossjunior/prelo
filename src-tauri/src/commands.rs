@@ -33,6 +33,7 @@ pub use crate::fs::save::{apply_changes, Change};
 use crate::fs::save::{format_utc, OpenFile};
 use crate::fs::scope::{Refusal, Scope};
 use crate::project::record::{self, LoadedRecord, RecordState};
+use crate::project::{CompilerInfo, MAIN_FILE_MISSING};
 
 pub use crate::project::EMBEDDED_TYPST;
 
@@ -192,12 +193,44 @@ struct OpenProject {
     scope: Scope,
     record: LoadedRecord,
     files: HashMap<String, OpenFile>,
-    /// Agenda de compilação; `None` com versão registrada ≠ embutida (FR-012): sem
-    /// compilação nem prévia até `update_project_compiler_version`.
+    /// Agenda de compilação; `None` no estado `VersaoDiferente` (versão registrada ≠
+    /// embutida, FR-012): sem compilação nem prévia até `update_project_compiler_version`.
     compiler: Option<Scheduler<ProjectCompiler>>,
+    /// O arquivo principal (registrado ou `main.typ`) não existe: aviso `main_file_missing`
+    /// até `choose_main_file` (a compilação responde com o diagnóstico de arquivo ausente).
+    main_missing: bool,
 }
 
 impl OpenProject {
+    /// Estado `VersaoDiferente` (data-model.md): registro válido com `compiler.typst` ≠
+    /// embutida. Registro ausente ou inválido usa a versão embutida.
+    fn version_differs(&self) -> bool {
+        self.record.state == RecordState::Valid
+            && self.record.record.compiler_typst() != EMBEDDED_TYPST
+    }
+
+    /// O principal em uso existe como arquivo comum dentro da raiz.
+    fn main_exists(&self) -> bool {
+        validate_path(&self.scope, self.record.record.main_or_default())
+            .is_ok_and(|path| path.absolute().is_file())
+    }
+
+    /// Registro ausente (FR-003): criado com a versão embutida e, se houver `main.typ`, com
+    /// ele como principal. Só `.prelo/project.json` é gravado; falha de gravação (pasta só de
+    /// leitura) não impede abrir o projeto, e o registro segue ausente.
+    fn create_missing_record(&mut self) {
+        if self.record.state != RecordState::Missing {
+            return;
+        }
+        if self.main_exists() {
+            let _ = self.record.record.set_main(record::DEFAULT_MAIN);
+        }
+        let root = self.scope.root().to_owned();
+        if let Err(e) = record::save(&root, &mut self.record) {
+            eprintln!("prelo: {e}");
+        }
+    }
+
     /// Põe o estado atual (principal + arquivos abertos) na fila de compilação.
     fn recompile(&self) {
         if let Some(compiler) = &self.compiler {
@@ -221,8 +254,11 @@ impl OpenProject {
         if let Some(reason) = self.record.warning() {
             warnings.push(reason.code().to_owned());
         }
-        if registered.as_deref().is_some_and(|v| v != EMBEDDED_TYPST) {
+        if self.version_differs() {
             warnings.push(VERSION_MISMATCH.to_owned());
+        }
+        if self.main_missing {
+            warnings.push(MAIN_FILE_MISSING.to_owned());
         }
         ProjectInfo {
             name: self
@@ -339,11 +375,12 @@ impl AppState {
         self.project.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// Abre o projeto em `root` (canonicalizada uma vez) e lê o registro sem regravá-lo. Chamado
-    /// pelo diálogo nativo do núcleo (T032) e pelos testes; nunca exposto à interface.
+    /// Abre o projeto em `root` (canonicalizada uma vez). Chamado pelo diálogo nativo do
+    /// núcleo (`open_project_dialog`) e pelos testes; nunca exposto à interface com caminho.
     ///
-    /// Começa a compilar o arquivo principal com o compilador embutido; o resultado chega ao
-    /// assinante da prévia. Com versão registrada ≠ embutida, não compila (FR-012).
+    /// Registro ausente é criado (FR-003); registro existente não é regravado. Começa a
+    /// compilar o arquivo principal com o compilador embutido; o resultado chega ao assinante
+    /// da prévia. Não compila no estado `VersaoDiferente` (FR-012).
     pub fn open_project(&self, root: &Path) -> std::io::Result<ProjectInfo> {
         let scope = Scope::new(root)?;
         let record = record::load(scope.root(), EMBEDDED_TYPST);
@@ -352,22 +389,30 @@ impl AppState {
             record,
             files: HashMap::new(),
             compiler: None,
+            main_missing: false,
         };
-        let info = project.info();
+        project.create_missing_record();
+        project.main_missing = !project.main_exists();
         let mut guard = self.lock();
         // A prévia do projeto anterior deixa de valer antes de qualquer compilação nova.
         let generation = self.preview.reset();
-        if !info.warnings.iter().any(|w| w == VERSION_MISMATCH) {
-            let root = project.scope.root().to_owned();
-            let main = project.record.record.main_or_default().to_owned();
-            let (scheduler, compilations) =
-                Scheduler::new(move || ProjectCompiler::new(root.clone(), &main));
-            self.preview.spawn_pump(generation, compilations);
-            project.compiler = Some(scheduler);
+        if !project.version_differs() {
+            self.start_compiler(&mut project, generation);
         }
         project.recompile();
+        let info = project.info();
         *guard = Some(project);
         Ok(info)
+    }
+
+    /// Liga a agenda de compilação do projeto à prévia da geração `generation`.
+    fn start_compiler(&self, project: &mut OpenProject, generation: u64) {
+        let root = project.scope.root().to_owned();
+        let main = project.record.record.main_or_default().to_owned();
+        let (scheduler, compilations) =
+            Scheduler::new(move || ProjectCompiler::new(root.clone(), &main));
+        self.preview.spawn_pump(generation, compilations);
+        project.compiler = Some(scheduler);
     }
 
     /// Assina a prévia: `sink` recebe cada `PreviewUpdate`, e logo a prévia atual, se houver.
@@ -513,14 +558,51 @@ impl AppState {
                 let root = project.scope.root().to_owned();
                 record::save(&root, &mut project.record).map_err(|_| "write_failed")?;
             }
+            project.main_missing = false;
             project.recompile();
             Ok(project.info())
         })
     }
 
-    /// "Atualizar o projeto para a versão embutida" (FR-012). T032.
+    /// "Atualizar o projeto para a versão embutida" (FR-012): regrava `compiler.typst` com a
+    /// versão embutida (campos desconhecidos preservados) e libera a compilação. Sem efeito com
+    /// registro inválido, que só "Recriar registro" sobrescreve (e que já usa a embutida).
     pub fn update_project_compiler_version(&self) -> Result<ProjectInfo, String> {
-        todo!("T032")
+        let mut guard = self.lock();
+        let project = guard.as_mut().ok_or(NO_PROJECT)?;
+        if !project.record.may_rewrite() {
+            return Ok(project.info());
+        }
+        if project.record.record.compiler_typst() != EMBEDDED_TYPST
+            || project.record.state == RecordState::Missing
+        {
+            let previous = project.record.record.compiler_typst().to_owned();
+            project.record.record.set_compiler_typst(EMBEDDED_TYPST);
+            let root = project.scope.root().to_owned();
+            if record::save(&root, &mut project.record).is_err() {
+                project.record.record.set_compiler_typst(&previous);
+                return Err("write_failed".into());
+            }
+        }
+        if project.compiler.is_none() {
+            // Nenhuma compilação aconteceu desde a abertura: a prévia (vazia) recomeça.
+            let generation = self.preview.reset();
+            self.start_compiler(project, generation);
+        }
+        project.recompile();
+        Ok(project.info())
+    }
+
+    /// Versões embutida e registrada (contracts/ipc.md `compiler_info`).
+    pub fn compiler_info(&self) -> CompilerInfo {
+        CompilerInfo {
+            embedded: EMBEDDED_TYPST.to_owned(),
+            registered: self
+                .lock()
+                .as_ref()
+                .and_then(|project| project.info().compiler.registered),
+            fonts: Vec::new(),
+        }
     }
 }
 
@@ -541,7 +623,7 @@ fn args<T: DeserializeOwned>(request: &Request<'_>) -> Result<T, String> {
 }
 
 /// Sem argumentos: só objeto vazio ou nulo.
-fn no_args(request: &Request<'_>) -> Result<(), String> {
+pub(crate) fn no_args(request: &Request<'_>) -> Result<(), String> {
     match request.body() {
         InvokeBody::Json(Value::Null) => Ok(()),
         InvokeBody::Json(Value::Object(map)) if map.is_empty() => Ok(()),
@@ -627,19 +709,6 @@ pub fn choose_main_file(
 ) -> Result<ProjectInfo, String> {
     let a: PathArgs = args(&request)?;
     state.choose_main_file(&a.path)
-}
-
-#[tauri::command(async)]
-pub fn update_project_compiler_version(
-    _state: State<'_, AppState>,
-    _request: Request<'_>,
-) -> Result<ProjectInfo, String> {
-    Err(NOT_IMPLEMENTED.into())
-}
-
-#[tauri::command(async)]
-pub fn compiler_info(_state: State<'_, AppState>, _request: Request<'_>) -> Result<Value, String> {
-    Err(NOT_IMPLEMENTED.into())
 }
 
 #[tauri::command(async)]
@@ -896,7 +965,8 @@ mod tests {
         std::fs::write(dir.path().join(".prelo/project.json"), "{ quebrado").unwrap();
         let state = AppState::default();
         let info = state.open_project(dir.path()).unwrap();
-        assert_eq!(info.warnings, vec!["project_json_invalid".to_string()]);
+        // Sem main.typ: o padrão não existe e a interface pede a escolha.
+        assert_eq!(info.warnings, ["project_json_invalid", "main_file_missing"]);
         assert_eq!(info.main_file, "main.typ");
         let info = state.choose_main_file("a.typ").unwrap();
         assert_eq!(info.main_file, "a.typ");
