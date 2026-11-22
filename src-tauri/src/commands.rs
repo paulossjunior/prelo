@@ -34,7 +34,7 @@ use typst_layout::PagedDocument;
 use crate::compile::preview::{render_svg, PreviewHub, PreviewUpdate};
 use crate::compile::project::{CompileInput, ProjectCompiler};
 use crate::compile::scheduler::Scheduler;
-use crate::fs::create::NewItem;
+use crate::fs::create::{self, NewItem};
 pub use crate::fs::save::{apply_changes, Change};
 use crate::fs::save::{format_utc, OpenFile};
 use crate::fs::scope::{Refusal, Scope};
@@ -768,9 +768,17 @@ impl AppState {
         self.create(requested, NewItem::Dir)
     }
 
+    /// Regra de escopo e criação exclusiva em [`crate::fs::create`]. Recompila: um `#include`
+    /// ou `#image` que pedia o arquivo novo deixa de acusar arquivo não encontrado.
     fn create(&self, requested: &str, item: NewItem) -> Result<String, String> {
-        let _ = (requested, item);
-        Err(NOT_IMPLEMENTED.into())
+        let guard = self.lock();
+        let project = guard.as_ref().ok_or(NO_PROJECT)?;
+        if is_absolute(requested) {
+            return Err(OUTSIDE.into());
+        }
+        let path = create::create(&project.scope, requested, item).map_err(|e| e.code())?;
+        project.recompile();
+        Ok(path)
     }
 
     /// Versões embutida e registrada (contracts/ipc.md `compiler_info`).
@@ -1370,7 +1378,7 @@ mod tests {
         for create in [AppState::create_file, AppState::create_dir] {
             assert_eq!(create(&state, "main.typ"), Err("already_exists".into()));
             assert_eq!(create(&state, ".oculto"), Err("invalid_name".into()));
-            assert_eq!(create(&state, "a:b"), Err("invalid_name".into()));
+            assert_eq!(create(&state, "ab:c"), Err("invalid_name".into()));
             assert_eq!(create(&state, "../fora"), Err(OUTSIDE.into()));
             assert_eq!(create(&state, "/fora"), Err(OUTSIDE.into()));
             let absolute = dir.path().join("novo-abs").to_string_lossy().into_owned();

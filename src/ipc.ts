@@ -140,6 +140,9 @@ export const ERROR_MESSAGES = {
   no_project: "Nenhum projeto aberto. Abra ou crie um projeto.",
   not_implemented: "Recurso ainda não disponível nesta versão do Prelo.",
   invalid_arguments: "Pedido inválido da interface ao núcleo do Prelo.",
+  already_exists: "Já existe um arquivo ou pasta com esse nome.",
+  invalid_name:
+    'Nome inválido. Use um nome que não comece com ponto, sem caracteres como \\ : * ? " < > | e sem espaço ou ponto no fim.',
 } as const;
 
 export type ErrorCode = keyof typeof ERROR_MESSAGES;
@@ -201,6 +204,10 @@ export interface Ipc {
   chooseMainFile(path: string): Promise<ProjectInfo>;
   listTree(): Promise<TreeNode[]>;
   updateProjectCompilerVersion(): Promise<ProjectInfo>;
+  /** Arquivo vazio novo, sem sobrescrever (FR-034); devolve o caminho normalizado. */
+  createFile(path: string): Promise<{ path: string }>;
+  /** Pasta vazia nova, sem sobrescrever (FR-034); devolve o caminho normalizado. */
+  createDir(path: string): Promise<{ path: string }>;
   openFile(path: string): Promise<OpenedFile>;
   editFile(path: string, version: number, changes: Change[]): Promise<{ version: number }>;
   saveFile(path: string): Promise<{ savedAt: string }>;
@@ -243,6 +250,8 @@ export function createIpc(transport: Transport): Ipc {
     chooseMainFile: (path) => call("choose_main_file", { path }),
     listTree: () => call("list_tree"),
     updateProjectCompilerVersion: () => call("update_project_compiler_version"),
+    createFile: (path) => call("create_file", { path }),
+    createDir: (path) => call("create_dir", { path }),
     openFile: (path) => call("open_file", { path }),
     editFile: (path, version, changes) => call("edit_file", { path, version, changes }),
     saveFile: (path) => call("save_file", { path }),
