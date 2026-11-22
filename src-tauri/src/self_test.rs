@@ -32,6 +32,15 @@ pub struct Scenario {
     /// Problemas de layout e violações da CSP medidos na webview real (src/layout-check.ts).
     #[serde(default)]
     pub layout_problems: Vec<String>,
+    /// Mudança externa sem alteração local (FR-008, T084): o editor passou a mostrar o texto
+    /// gravado no disco por "outro programa" (`self_test_write_external`).
+    #[serde(default)]
+    pub external_reloaded: bool,
+    /// Linha (1-based) do erro no texto externo e linha do diagnóstico no editor recarregado.
+    #[serde(default)]
+    pub external_error_line: u32,
+    #[serde(default)]
+    pub external_diagnostic_line: Option<u32>,
 }
 
 /// Cópia temporária da fixture: o roteiro edita e o salvamento automático grava nela, nunca
@@ -203,7 +212,18 @@ mod tests {
             compiler_shown: format!("Typst {}", crate::commands::EMBEDDED_TYPST),
             failure: None,
             layout_problems: Vec::new(),
+            external_reloaded: true,
+            external_error_line: 131,
+            external_diagnostic_line: Some(131),
         }
+    }
+
+    #[test]
+    fn mudanca_externa_que_nao_chegou_ao_editor_e_recusada_com_a_descricao() {
+        let mut s = ok_scenario();
+        s.external_reloaded = false;
+        let err = check(&expected(), V, 10, &s, None).unwrap_err();
+        assert!(err.contains("mudança externa"), "{err}");
     }
 
     #[test]
@@ -255,6 +275,13 @@ mod tests {
             Box::new(|s| s.compiler_shown = "Typst 0.0.0".into()),
             Box::new(|s| s.failure = Some("prévia não chegou".into())),
             Box::new(|s| s.layout_problems = vec!["números de linha não estão numa coluna".into()]),
+            Box::new(|s| s.external_reloaded = false),
+            Box::new(|s| s.external_diagnostic_line = None),
+            Box::new(|s| s.external_diagnostic_line = Some(16)),
+            Box::new(|s| {
+                s.external_error_line = 0;
+                s.external_diagnostic_line = Some(0);
+            }),
         ];
         for change in cases {
             let mut s = ok_scenario();
