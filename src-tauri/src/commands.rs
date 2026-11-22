@@ -757,6 +757,14 @@ impl AppState {
         Ok(project.info())
     }
 
+    /// Exporta o PDF da última prévia `Ok` para `path` (esboço).
+    pub fn export_pdf(
+        &self,
+        _path: &Path,
+    ) -> Result<crate::compile::export::Exported, crate::compile::export::ExportError> {
+        Err(crate::compile::export::ExportError::NoProject)
+    }
+
     /// Versões embutida e registrada (contracts/ipc.md `compiler_info`).
     pub fn compiler_info(&self) -> CompilerInfo {
         CompilerInfo {
