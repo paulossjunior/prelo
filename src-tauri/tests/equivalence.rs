@@ -14,8 +14,9 @@
 //! renderizados com `typst-render` e comparados página a página: mesmo número de páginas, mesmo
 //! tamanho e os mesmos pixels.
 //!
-//! Só roda com a feature `equivalence` (job "equivalence" do CI, que instala o `typst` 0.15.1
-//! e aponta `PRELO_TYPST_CLI` para ele). Sem `PRELO_TYPST_CLI` o teste avisa e não compara: a
+//! Só roda com a feature `equivalence` (job "equivalence" do CI, que instala o `typst` 0.15.1,
+//! aponta `PRELO_TYPST_CLI` para ele e define `PRELO_EQUIVALENCE_REQUIRED`). Fora do CI, sem
+//! `PRELO_TYPST_CLI` o teste avisa e não compara: a
 //! suíte normal (`npm run verify`) não compila este arquivo e não depende de `typst` instalado
 //! (FR-010, SC-006).
 #![cfg(feature = "equivalence")]
@@ -184,6 +185,12 @@ fn keep_for_inspection(fixture: &str, prelo: &[u8], cli: &[u8]) {
 #[test]
 fn pdf_do_prelo_e_igual_ao_do_typst_cli() {
     let Some(cli) = typst_cli() else {
+        // No CI o job define `PRELO_EQUIVALENCE_REQUIRED=1`: sem o CLI, falha em vez de passar
+        // sem comparar.
+        assert!(
+            std::env::var_os("PRELO_EQUIVALENCE_REQUIRED").is_none(),
+            "PRELO_EQUIVALENCE_REQUIRED definido, mas PRELO_TYPST_CLI não"
+        );
         eprintln!(
             "equivalence: PRELO_TYPST_CLI não definido; comparação não executada \
              (o job \"equivalence\" do CI define)"
