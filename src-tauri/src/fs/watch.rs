@@ -15,14 +15,17 @@
 //!   por cima do disco nem descartado até `resolve_external_change` (manter a minha / usar a do
 //!   disco).
 
-use std::path::Path;
+use std::path::{Component, Path};
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
-use super::save::OpenFile;
+use super::save::{sha256, OpenFile};
+use super::scope::MAX_FILE_BYTES;
 
 /// Código de erro de gravar um arquivo com conflito pendente (e nome do evento do contrato).
 pub const CONFLICT: &str = "external_change_conflict";
+const NOT_UTF8: &str = "not_utf8";
+const TOO_LARGE: &str = "too_large";
 
 /// O que a leitura do disco depois de um evento fez com o arquivo aberto.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -50,30 +53,92 @@ impl OpenFile {
         self.conflict
     }
 
-    /// Esqueleto (T034).
-    pub fn disk_changed(&mut self, _bytes: Vec<u8>) -> DiskChange {
-        DiskChange::Ignored
+    /// Decide o que fazer com `bytes`, o conteúdo atual do disco.
+    pub fn disk_changed(&mut self, bytes: Vec<u8>) -> DiskChange {
+        if self.conflict {
+            return DiskChange::Ignored;
+        }
+        let hash = sha256(&bytes);
+        if hash == self.last_saved_hash {
+            return DiskChange::Ignored;
+        }
+        if hash == sha256(self.text.as_bytes()) {
+            // O disco ficou igual ao texto em memória: nada a perder dos dois lados.
+            self.last_saved_hash = hash;
+            self.dirty = false;
+            return DiskChange::Ignored;
+        }
+        if self.dirty {
+            self.conflict = true;
+            return DiskChange::Conflict;
+        }
+        match self.replace_with_disk(bytes) {
+            Ok(_) => DiskChange::Reloaded,
+            Err(_) => self.mark_conflict(),
+        }
     }
 
-    /// Esqueleto (T034).
+    /// O disco mudou para algo que não dá para mostrar (grande demais): nunca gravar por cima
+    /// sem a escolha da pessoa.
     pub fn mark_conflict(&mut self) -> DiskChange {
-        DiskChange::Ignored
+        if self.conflict {
+            return DiskChange::Ignored;
+        }
+        self.conflict = true;
+        DiskChange::Conflict
     }
 
-    /// Esqueleto (T034).
-    pub fn keep_mine(&mut self) {}
+    /// "Manter a minha": o texto em memória fica e volta a ser gravado (sujo, inclusive pelo
+    /// salvamento automático), substituindo a versão externa.
+    pub fn keep_mine(&mut self) {
+        if self.conflict {
+            self.conflict = false;
+            self.dirty = true;
+        }
+    }
 
-    /// Esqueleto (T034).
-    pub fn keep_disk(&mut self, _bytes: Vec<u8>) -> Result<u64, &'static str> {
-        Err("not_implemented")
+    /// "Usar a do disco": o texto passa a ser `bytes`, limpo, numa versão nova. Erro
+    /// (`not_utf8`, `too_large`) → nada muda, conflito mantido.
+    pub fn keep_disk(&mut self, bytes: Vec<u8>) -> Result<u64, &'static str> {
+        self.replace_with_disk(bytes)?;
+        self.conflict = false;
+        Ok(self.version)
+    }
+
+    fn replace_with_disk(&mut self, bytes: Vec<u8>) -> Result<(), &'static str> {
+        if bytes.len() as u64 > MAX_FILE_BYTES {
+            return Err(TOO_LARGE);
+        }
+        let hash = sha256(&bytes);
+        let text = String::from_utf8(bytes).map_err(|_| NOT_UTF8)?;
+        self.text = text.into();
+        // Versão nova: edição ainda baseada no texto anterior vira `version_mismatch`.
+        self.version += 1;
+        self.dirty = false;
+        self.last_saved_hash = hash;
+        Ok(())
     }
 }
 
 /// Caminho relativo à raiz (com `/`) de um caminho de evento, ou `None` se estiver fora da
 /// raiz, tiver `.`/`..`, não for UTF-8 ou passar por algo oculto (temporário da gravação,
 /// `.prelo/`, `.git/`).
-pub fn relative_event_path(_root: &Path, _path: &Path) -> Option<String> {
-    None
+pub fn relative_event_path(root: &Path, path: &Path) -> Option<String> {
+    let inside = path.strip_prefix(root).ok()?;
+    let mut parts = Vec::new();
+    for component in inside.components() {
+        match component {
+            Component::Normal(name) => {
+                let name = name.to_str()?;
+                if name.starts_with('.') {
+                    return None;
+                }
+                parts.push(name);
+            }
+            _ => return None,
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
 }
 
 /// Eventos que podem ter mudado o conteúdo de um arquivo (acesso e remoção não mudam o que dá
@@ -127,7 +192,6 @@ pub fn watch(
 mod tests {
     use super::*;
     use crate::commands::AppState;
-    use crate::fs::save::sha256;
     use crate::fs::save::{write_atomic, Change};
     use std::path::PathBuf;
     use std::sync::mpsc;
