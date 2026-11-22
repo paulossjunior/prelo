@@ -208,14 +208,14 @@ com o `typst` CLI; tentar exportar com erro.
 
 ### Testes para User Story 5
 
-- [ ] T065 [P] [US5] Testes em `src-tauri/tests/compile_export.rs`: PDF com o mesmo número de páginas e tamanhos da prévia e gerado do mesmo `compileId` da última prévia `Ok` (FR-011); com erro de compilação → `compile_errors` com a lista; falha de gravação não deixa arquivo parcial (FR-028, FR-029)
-- [ ] T066 [P] [US5] Teste de equivalência em `src-tauri/tests/equivalence.rs` (feature `equivalence`, `PRELO_TYPST_CLI`): para `artigo-basico`, `bibliografia`, `imagens`, `fontes`, PDF do Prelo e do `typst` CLI 0.15.1 com `--ignore-system-fonts --ignore-embedded-fonts --font-path src-tauri/fonts --font-path <projeto>/fonts`, renderizados com `typst-render` e comparados página a página (FR-031, SC-005)
+- [x] T065 [P] [US5] Testes em `src-tauri/tests/compile_export.rs`: PDF com o mesmo número de páginas e tamanhos da prévia e gerado do mesmo `compileId` da última prévia `Ok` (FR-011); com erro de compilação → `compile_errors` com a lista; falha de gravação não deixa arquivo parcial (FR-028, FR-029)
+- [x] T066 [P] [US5] Teste de equivalência em `src-tauri/tests/equivalence.rs` (feature `equivalence`, `PRELO_TYPST_CLI`): para `artigo-basico`, `bibliografia`, `imagens`, `fontes`, PDF do Prelo e do `typst` CLI 0.15.1 com `--ignore-system-fonts --ignore-embedded-fonts --font-path src-tauri/fonts --font-path <projeto>/fonts`, renderizados com `typst-render` e comparados página a página (FR-031, SC-005)
 
 ### Implementação para User Story 5
 
-- [ ] T067 [US5] Implementar `src-tauri/src/compile/export.rs` (`typst-pdf`, gravação atômica) e `export_pdf_dialog` até T065 passar
-- [ ] T068 [P] [US5] Escrever teste em `src/export.test.ts`: ação "Exportar PDF" chama `export_pdf_dialog`; `compile_errors` mostra a lista; desativada com versão diferente. Confirmar que falha
-- [ ] T069 [US5] Adicionar a ação "Exportar PDF" com lista de erros em `src/main.ts` até T068 passar
+- [x] T067 [US5] Implementar `src-tauri/src/compile/export.rs` (`typst-pdf`, gravação atômica) e `export_pdf_dialog` até T065 passar
+- [x] T068 [P] [US5] Escrever teste em `src/export.test.ts`: ação "Exportar PDF" chama `export_pdf_dialog`; `compile_errors` mostra a lista; desativada com versão diferente. Confirmar que falha
+- [x] T069 [US5] Adicionar a ação "Exportar PDF" com lista de erros em `src/main.ts` até T068 passar
 - [ ] T070 [US5] Adicionar job de equivalência ao CI em `.github/workflows/ci.yml` (instala `typst` 0.15.1 só nesse job) até T066 passar nos três sistemas
 
 **Checkpoint**: US5 funciona com US1; QA valida.

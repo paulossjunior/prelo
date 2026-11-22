@@ -117,9 +117,14 @@ html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
 #app { height: 100%; }
 .ws {
-  height: 100%; display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+  height: 100%; display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
   background: var(--surface); min-width: 720px;
 }
+/* Barra, mensagem, erros da exportação e aviso ocupam as linhas de cima na ordem (os ocultos
+   não ocupam nenhuma); corpo e status ficam sempre nas duas últimas. */
+.ws > .ws-body { grid-row: 5; }
+.ws > .ws-status { grid-row: 6; }
+.ws-export-errors ul { margin: 4px 0 0; padding-left: 18px; }
 .ws-top {
   display: flex; align-items: center; gap: 10px; padding: 8px 12px;
   background: var(--surface-2); border-bottom: 1px solid var(--line);
