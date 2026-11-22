@@ -3,6 +3,7 @@ pub mod commands;
 pub mod compile;
 pub mod diagnostic;
 pub mod fs;
+pub mod lang_service;
 pub mod project;
 #[cfg(feature = "self-test")]
 mod self_test;

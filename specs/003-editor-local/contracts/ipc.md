@@ -31,6 +31,16 @@ O núcleo mostra o diálogo nativo; a webview não tem permissão de diálogo ne
 | `complete` | `{ path, offset }` | `Completion[]` | — |
 | `semantic_tokens` | `{ path }` | `Token[]` | — |
 
+`offset` de `complete`, e `from`/`to` de `Token`, são **unidades UTF-16** do texto atual do
+arquivo (as de `edit_file` e do CodeMirror); o núcleo converte os bytes do Typst. Formatos:
+`Completion = { label, kind?, detail?, info?, apply? }` (`kind` no vocabulário do CodeMirror:
+`function`, `variable`, `label`, `keyword`, `type`, `property`, `constant`, `namespace`, `text`;
+`apply` é texto puro, sem sintaxe de *snippet*) e `Token = { from, to, kind }` (`kind` é a
+classe do `typst-syntax` sem o prefixo `typ-`: `heading`, `strong`, `key`, `func`, `math-delim`…;
+*tokens* podem se aninhar). Deslocamento fora do texto, ou arquivo que não é `.typ`, responde
+lista vazia. Ambos leem o mesmo estado que a prévia compila, inclusive texto não salvo; rótulos
+vêm da última prévia `Ok`.
+
 ## Compilação e prévia
 
 | Comando / evento | Conteúdo |
