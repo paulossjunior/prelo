@@ -30,41 +30,7 @@ pub fn configure_with_state<R: Runtime>(
     state: commands::AppState,
 ) -> Builder<R> {
     builder
-        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`). Os comandos
-        // `plugin:dialog|*` ficam fora do alcance da webview: nenhuma capability concede
-        // `dialog:` (tests/security_config.rs, tests/security_ipc.rs).
-        .plugin(tauri_plugin_dialog::init())
-        .manage(state)
-        .invoke_handler(tauri::generate_handler![
-            app_info::get_app_info,
-            commands::list_tree,
-            commands::choose_main_file,
-            commands::create_file,
-            commands::create_dir,
-            project::open_project_dialog,
-            project::update_project_compiler_version,
-            project::compiler_info,
-            commands::open_file,
-            commands::edit_file,
-            commands::save_file,
-            commands::resolve_external_change,
-            commands::complete,
-            commands::semantic_tokens,
-            commands::jump_from_cursor,
-            commands::subscribe_preview,
-            commands::page_svg
-        ])
-}
-
-/// Variante de teste: acrescenta `self_test_report` e `self_test_open_project` (nunca em
-/// release).
-#[cfg(feature = "self-test")]
-pub fn configure_with_state<R: Runtime>(
-    builder: Builder<R>,
-    state: commands::AppState,
-) -> Builder<R> {
-    builder
-        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`). Os comandos
+        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`, `export_pdf_dialog`). Os comandos
         // `plugin:dialog|*` ficam fora do alcance da webview: nenhuma capability concede
         // `dialog:` (tests/security_config.rs, tests/security_ipc.rs).
         .plugin(tauri_plugin_dialog::init())
@@ -87,6 +53,42 @@ pub fn configure_with_state<R: Runtime>(
             commands::jump_from_cursor,
             commands::subscribe_preview,
             commands::page_svg,
+            compile::export::export_pdf_dialog
+        ])
+}
+
+/// Variante de teste: acrescenta `self_test_report` e `self_test_open_project` (nunca em
+/// release).
+#[cfg(feature = "self-test")]
+pub fn configure_with_state<R: Runtime>(
+    builder: Builder<R>,
+    state: commands::AppState,
+) -> Builder<R> {
+    builder
+        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`, `export_pdf_dialog`). Os comandos
+        // `plugin:dialog|*` ficam fora do alcance da webview: nenhuma capability concede
+        // `dialog:` (tests/security_config.rs, tests/security_ipc.rs).
+        .plugin(tauri_plugin_dialog::init())
+        .manage(state)
+        .invoke_handler(tauri::generate_handler![
+            app_info::get_app_info,
+            commands::list_tree,
+            commands::choose_main_file,
+            commands::create_file,
+            commands::create_dir,
+            project::open_project_dialog,
+            project::update_project_compiler_version,
+            project::compiler_info,
+            commands::open_file,
+            commands::edit_file,
+            commands::save_file,
+            commands::resolve_external_change,
+            commands::complete,
+            commands::semantic_tokens,
+            commands::jump_from_cursor,
+            commands::subscribe_preview,
+            commands::page_svg,
+            compile::export::export_pdf_dialog,
             self_test::self_test_report,
             self_test::self_test_open_project
         ])
