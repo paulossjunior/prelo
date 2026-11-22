@@ -7,13 +7,16 @@
 //! para fora vira `path_outside_project` sem tocar o disco fora do projeto nem chegar ao motor.
 //!
 //! O que depende do World (T020) e dos serviços de prévia e linguagem (T035, T036) passa pelo
-//! trait [`Engine`]; até lá, [`Unavailable`] responde `not_implemented`. Gravação
-//! (`save_file`, T033) e mudança externa (`resolve_external_change`, T034) já validam o
-//! caminho e respondem `not_implemented`.
+//! trait [`Engine`]; até lá, [`Unavailable`] responde `not_implemented`. Mudança externa
+//! (`resolve_external_change`, T034) já valida o caminho e responde `not_implemented`.
+//! Arquivo aberto e gravação (`open_file`, `edit_file`, `save_file`, salvamento automático e
+//! último Salvar ao fechar; T033) moram em [`crate::fs::save`].
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::time::{Instant, SystemTime};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -21,7 +24,10 @@ use serde_json::Value;
 use tauri::ipc::{InvokeBody, Request};
 use tauri::State;
 
-use crate::fs::scope::{Refusal, Scope, MAX_FILE_BYTES};
+pub use crate::fs::save::{apply_changes, Change};
+#[allow(unused_imports)] // AUTOSAVE_DELAY citado na documentação
+use crate::fs::save::{format_utc, OpenFile, AUTOSAVE_DELAY};
+use crate::fs::scope::{Refusal, Scope};
 use crate::project::record::{self, LoadedRecord, RecordState};
 
 /// Versão do compilador embutido (`typst` no Cargo.toml; T026 confere contra o Cargo.lock).
@@ -178,57 +184,6 @@ pub enum TreeKind {
     Dir,
 }
 
-/// `{ from, to, insert }` de `edit_file`, em unidades UTF-16 (as do CodeMirror) do texto
-/// anterior à edição; mudanças em ordem crescente e sem sobreposição.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Change {
-    pub from: usize,
-    pub to: usize,
-    pub insert: String,
-}
-
-/// Aplica as mudanças de uma vez; qualquer intervalo inválido (fora do texto, invertido, fora de
-/// ordem, sobreposto ou no meio de um par substituto UTF-16) → `bad_range` sem aplicar nada.
-pub fn apply_changes(text: &str, changes: &[Change]) -> Result<String, &'static str> {
-    const BAD: &str = "bad_range";
-    let mut out = String::with_capacity(text.len());
-    // Cursor de conversão UTF-16 → byte, só avança (mudanças em ordem crescente).
-    let mut chars = text.char_indices().peekable();
-    let mut units = 0usize;
-    let mut to_byte = |target: usize| -> Result<usize, &'static str> {
-        while units < target {
-            let (_, c) = chars.next().ok_or(BAD)?;
-            units += c.len_utf16();
-        }
-        if units != target {
-            return Err(BAD);
-        }
-        Ok(chars.peek().map_or(text.len(), |&(i, _)| i))
-    };
-    let mut last_units = 0usize;
-    let mut last_byte = 0usize;
-    for change in changes {
-        if change.from > change.to || change.from < last_units {
-            return Err(BAD);
-        }
-        let from = to_byte(change.from)?;
-        let to = to_byte(change.to)?;
-        out.push_str(&text[last_byte..from]);
-        out.push_str(&change.insert);
-        last_units = change.to;
-        last_byte = to;
-    }
-    out.push_str(&text[last_byte..]);
-    Ok(out)
-}
-
-/// Arquivo aberto no editor (overlay em memória). Gravação e `dirty` completos entram com T033.
-struct OpenFile {
-    text: String,
-    version: u64,
-}
-
 struct OpenProject {
     scope: Scope,
     record: LoadedRecord,
@@ -338,6 +293,8 @@ impl OpenProject {
 pub struct AppState {
     project: Mutex<Option<OpenProject>>,
     engine: Arc<dyn Engine>,
+    /// Um pedido de fechar já foi recusado por falha de gravação (o próximo é aceito).
+    close_refused: AtomicBool,
 }
 
 impl Default for AppState {
@@ -351,6 +308,7 @@ impl AppState {
         Self {
             project: Mutex::new(None),
             engine,
+            close_refused: AtomicBool::new(false),
         }
     }
 
@@ -400,23 +358,21 @@ impl AppState {
         self.with_path(requested, |project, path| {
             if let Some(file) = project.files.get(path.relative()) {
                 return Ok(OpenedFile {
-                    text: file.text.clone(),
-                    version: file.version,
+                    text: file.text().to_owned(),
+                    version: file.version(),
                 });
             }
             let bytes = project
                 .scope
                 .read(path.relative())
                 .map_err(|r| refusal_code(&r))?;
-            let text = String::from_utf8(bytes).map_err(|_| "not_utf8")?;
-            project.files.insert(
-                path.relative().to_owned(),
-                OpenFile {
-                    text: text.clone(),
-                    version: 0,
-                },
-            );
-            Ok(OpenedFile { text, version: 0 })
+            let file = OpenFile::from_bytes(bytes)?;
+            let opened = OpenedFile {
+                text: file.text().to_owned(),
+                version: file.version(),
+            };
+            project.files.insert(path.relative().to_owned(), file);
+            Ok(opened)
         })
     }
 
@@ -428,17 +384,29 @@ impl AppState {
     ) -> Result<u64, String> {
         self.with_path(requested, |project, path| {
             let file = project.files.get_mut(path.relative()).ok_or(NOT_FOUND)?;
-            if file.version != version {
-                return Err("version_mismatch".into());
-            }
-            let text = apply_changes(&file.text, changes)?;
-            if text.len() as u64 > MAX_FILE_BYTES {
-                return Err("too_large".into());
-            }
-            file.text = text;
-            file.version += 1;
-            Ok(file.version)
+            Ok(file.edit(version, changes)?)
         })
+    }
+
+    /// Grava o arquivo aberto (⌘S) de forma atômica e devolve `savedAt`. Falha →
+    /// `write_failed`, com o texto ainda em memória e o arquivo sujo.
+    pub fn save_file(&self, requested: &str) -> Result<String, String> {
+        let _ = requested;
+        todo!()
+    }
+
+    /// Salvamento automático: grava os arquivos sujos e ociosos há [`AUTOSAVE_DELAY`] em `now`.
+    /// Devolve os caminhos que falharam (continuam sujos e são tentados de novo mais tarde).
+    pub fn autosave(&self, now: Instant) -> Vec<String> {
+        let _ = now;
+        todo!()
+    }
+
+    /// Último Salvar antes de fechar (Princípio III): grava todo arquivo sujo. Devolve se a
+    /// janela pode fechar: sim se tudo foi gravado; se algo falhou, recusa o primeiro pedido
+    /// (o texto continua em memória) e aceita o seguinte, para a pessoa nunca ficar presa.
+    pub fn flush_for_close(&self) -> bool {
+        todo!()
     }
 
     pub fn choose_main_file(&self, requested: &str) -> Result<ProjectInfo, String> {
@@ -530,6 +498,12 @@ pub struct EditResult {
     version: u64,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveResult {
+    saved_at: String,
+}
+
 #[tauri::command(async)]
 pub fn list_tree(
     state: State<'_, AppState>,
@@ -561,12 +535,11 @@ pub fn edit_file(state: State<'_, AppState>, request: Request<'_>) -> Result<Edi
     Ok(EditResult { version })
 }
 
-/// Gravação atômica entra com T033; aqui só a validação.
 #[tauri::command(async)]
-pub fn save_file(state: State<'_, AppState>, request: Request<'_>) -> Result<Value, String> {
+pub fn save_file(state: State<'_, AppState>, request: Request<'_>) -> Result<SaveResult, String> {
     let a: PathArgs = args(&request)?;
-    state.validated(&a.path)?;
-    Err(NOT_IMPLEMENTED.into())
+    let saved_at = state.save_file(&a.path)?;
+    Ok(SaveResult { saved_at })
 }
 
 /// Conflito com mudança externa entra com T034; aqui só a validação.
@@ -787,6 +760,128 @@ mod tests {
         assert_eq!(
             std::fs::read_to_string(dir.path().join(".prelo/project.json")).unwrap(),
             "{ quebrado"
+        );
+    }
+
+    #[test]
+    fn save_file_grava_o_texto_em_memoria_e_devolve_saved_at() {
+        let (dir, state) = project();
+        state.open_file("main.typ").unwrap();
+        state
+            .edit_file("main.typ", 0, &[change(0, 0, "x")])
+            .unwrap();
+        let saved_at = state.save_file("./main.typ").unwrap();
+        assert!(
+            saved_at.ends_with('Z') && saved_at.contains('T'),
+            "{saved_at}"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("main.typ")).unwrap(),
+            "x= Título\n"
+        );
+        // A versão continua; a edição seguinte parte dela.
+        assert_eq!(state.edit_file("main.typ", 1, &[change(0, 1, "")]), Ok(2));
+    }
+
+    #[test]
+    fn save_file_de_arquivo_nao_aberto_e_not_found() {
+        let (_dir, state) = project();
+        assert_eq!(state.save_file("main.typ"), Err("not_found".into()));
+        assert_eq!(state.save_file("../fora.typ"), Err(OUTSIDE.into()));
+    }
+
+    #[test]
+    fn salvamento_automatico_grava_so_o_que_esta_ocioso() {
+        let (dir, state) = project();
+        state.open_file("main.typ").unwrap();
+        state.open_file("capitulos/intro.typ").unwrap();
+        let before = Instant::now();
+        state
+            .edit_file("main.typ", 0, &[change(0, 0, "x")])
+            .unwrap();
+        assert!(state.autosave(before + AUTOSAVE_DELAY / 2).is_empty());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("main.typ")).unwrap(),
+            "= Título\n",
+            "antes de 2 s não grava"
+        );
+        assert!(state.autosave(Instant::now() + AUTOSAVE_DELAY).is_empty());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("main.typ")).unwrap(),
+            "x= Título\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("capitulos/intro.typ")).unwrap(),
+            "intro",
+            "arquivo limpo não é regravado"
+        );
+    }
+
+    #[test]
+    fn fechar_grava_todos_os_arquivos_sujos() {
+        let (dir, state) = project();
+        state.open_file("main.typ").unwrap();
+        state.open_file("capitulos/intro.typ").unwrap();
+        state
+            .edit_file("main.typ", 0, &[change(0, 0, "a")])
+            .unwrap();
+        state
+            .edit_file("capitulos/intro.typ", 0, &[change(5, 5, "!")])
+            .unwrap();
+        assert!(state.flush_for_close());
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("main.typ")).unwrap(),
+            "a= Título\n"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("capitulos/intro.typ")).unwrap(),
+            "intro!"
+        );
+    }
+
+    #[test]
+    fn fechar_sem_projeto_aberto_e_permitido() {
+        assert!(AppState::default().flush_for_close());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn falha_ao_gravar_recusa_o_primeiro_pedido_de_fechar_e_mantem_o_texto() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, state) = project();
+        state.open_file("capitulos/intro.typ").unwrap();
+        state
+            .edit_file("capitulos/intro.typ", 0, &[change(0, 0, "novo ")])
+            .unwrap();
+        let sub = dir.path().join("capitulos");
+        std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o555)).unwrap();
+        assert_eq!(
+            state.save_file("capitulos/intro.typ"),
+            Err("write_failed".into())
+        );
+        assert_eq!(
+            state.autosave(Instant::now() + AUTOSAVE_DELAY * 10),
+            ["capitulos/intro.typ"]
+        );
+        let first = state.flush_for_close();
+        let second = state.flush_for_close();
+        std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(!first, "falha recusa o fechamento");
+        assert!(second, "o segundo pedido fecha (a pessoa não fica presa)");
+        assert_eq!(
+            std::fs::read_to_string(sub.join("intro.typ")).unwrap(),
+            "intro"
+        );
+        assert_eq!(
+            state.open_file("capitulos/intro.typ").unwrap().text,
+            "novo intro",
+            "o texto continua em memória"
+        );
+        // Com o disco de volta, salvar funciona.
+        state.save_file("capitulos/intro.typ").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(sub.join("intro.typ")).unwrap(),
+            "novo intro"
         );
     }
 
