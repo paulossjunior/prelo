@@ -19,7 +19,9 @@ use serde::Serialize;
 use typst_layout::{Page, PagedDocument};
 use typst_svg::SvgOptions;
 
+use super::project::Compiled;
 use super::scheduler::{Compilation, Status};
+use super::sync::Synced;
 use crate::diagnostic::Diagnostic;
 
 /// Erro de `page_svg` com hash que não é o da página atual (ou página inexistente).
@@ -67,6 +69,9 @@ pub type LastCompilation = Result<(u64, Arc<PagedDocument>), Vec<Diagnostic>>;
 #[derive(Default)]
 pub struct Preview {
     document: Option<Arc<PagedDocument>>,
+    /// O documento de `document` com o instantâneo do World que o compilou (saltos e
+    /// estrutura, US4). `None` quando o documento veio sem World ([`Preview::apply`]).
+    synced: Option<Arc<Synced>>,
     pages: Vec<PageInfo>,
     /// Último evento entregue, para quem assinar depois.
     last: Option<PreviewUpdate>,
@@ -102,6 +107,7 @@ impl Preview {
                     .collect();
                 self.pages = pages;
                 self.document = Some(Arc::new(doc));
+                self.synced = None;
                 (true, changed)
             }
             // `ComErros` e `Abandonada`: mantém as páginas da última `Ok` (FR-014).
@@ -117,6 +123,30 @@ impl Preview {
         };
         self.last = Some(update.clone());
         update
+    }
+
+    /// Como [`Preview::apply`], guardando o World que compilou o documento junto com ele.
+    pub fn apply_compiled(&mut self, compilation: Compilation<Compiled>) -> PreviewUpdate {
+        let (output, world) = match compilation.output {
+            Some(Compiled { document, world }) => (Some(document), Some(world)),
+            None => (None, None),
+        };
+        let update = self.apply(Compilation {
+            compile_id: compilation.compile_id,
+            status: compilation.status,
+            output,
+            diagnostics: compilation.diagnostics,
+            duration_ms: compilation.duration_ms,
+        });
+        if let (true, Some(world), Some(doc)) = (update.ok, world, &self.document) {
+            self.synced = Some(Arc::new(Synced::new(Arc::clone(doc), world)));
+        }
+        update
+    }
+
+    /// Último documento bom com o World que o compilou.
+    pub fn synced(&self) -> Option<&Arc<Synced>> {
+        self.synced.as_ref()
     }
 
     /// Último documento compilado com sucesso.
@@ -201,12 +231,12 @@ impl PreviewHub {
     }
 
     /// Aplica a compilação da geração `generation` e entrega o evento ao assinante.
-    pub fn deliver(&self, generation: u64, compilation: Compilation<PagedDocument>) {
+    pub fn deliver(&self, generation: u64, compilation: Compilation<Compiled>) {
         let mut state = self.lock();
         if state.generation != generation {
             return;
         }
-        let update = state.preview.apply(compilation);
+        let update = state.preview.apply_compiled(compilation);
         if let Some(sink) = &state.sink {
             sink(&update);
         }
@@ -217,9 +247,14 @@ impl PreviewHub {
         self.lock().preview.page(index, hash)
     }
 
-    /// Último documento compilado com sucesso (saltos e estrutura, fases seguintes).
+    /// Último documento compilado com sucesso.
     pub fn document(&self) -> Option<Arc<PagedDocument>> {
         self.lock().preview.document().cloned()
+    }
+
+    /// Último documento bom com o World que o compilou (saltos e estrutura, US4).
+    pub fn synced(&self) -> Option<Arc<Synced>> {
+        self.lock().preview.synced().cloned()
     }
 
     /// Ver [`Preview::export_source`].
@@ -231,7 +266,7 @@ impl PreviewHub {
     pub fn spawn_pump(
         self: &Arc<Self>,
         generation: u64,
-        compilations: Receiver<Compilation<PagedDocument>>,
+        compilations: Receiver<Compilation<Compiled>>,
     ) {
         let hub = Arc::clone(self);
         thread::Builder::new()
