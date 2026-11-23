@@ -97,6 +97,13 @@ diagnóstico na linha certa e que a versão do compilador aparece no app.
     editor mostra a mesma explicação; clicar no item abre o arquivo com o cursor no trecho; e a
     contagem de erros na barra de status ou na faixa vermelha da prévia abre o painel (FR-006a;
     emenda de 2026-11-23).
+14. **Given** o projeto aberto, **When** a pessoa clica em "Compilar" na barra da prévia ou
+    aperta ⌘⇧B (Ctrl+Shift+B), **Then** as edições ainda não enviadas chegam ao núcleo, os
+    arquivos não abertos no editor (figuras, `.bib`/`.yml`, `.csl`, fontes, `.typ` incluídos)
+    são relidos do disco pela regra de escopo, o arquivo principal compila na hora, o botão
+    mostra "Compilando…" e fica desativado até a prévia dessa compilação chegar, e a barra de
+    status mostra "Compilado em N ms"; plugins e pacotes recusados continuam recusados, sem
+    pedir confirmação de novo (FR-014a; emenda de 2026-11-23).
 
 ---
 
@@ -293,6 +300,19 @@ comando.
   continua respondendo; a compilação é abandonada por limite de tempo e vira diagnóstico.
 - **Edições rápidas seguidas**: compilações obsoletas são descartadas; a prévia sempre
   converge para o texto mais recente.
+- **"Compilar" com uma compilação em andamento** (FR-014a): a compilação em andamento é
+  abandonada (o resultado dela é descartado) e a forçada começa numa thread nova, sem esperar o
+  limite de tempo; o total de threads de compilação vivas continua limitado (T078). Com o
+  limite atingido por compilações presas, "Compilar" é recusado com `compile_suspended` e a
+  mensagem diz que a prévia volta quando uma delas terminar; nenhuma thread nova é criada.
+- **"Compilar" sem projeto aberto ou com versão do compilador diferente** (FR-014a, FR-012): o
+  botão fica desativado; pelo atalho ou pelo IPC, a resposta é `no_project` ou
+  `compiler_version_mismatch`, e nada compila.
+- **"Compilar" repetido** (FR-014a): enquanto a compilação forçada não chega, o botão e o
+  atalho não fazem nada; uma edição durante a espera não deixa o botão preso (qualquer prévia
+  igual ou mais nova que a pedida o libera).
+- **⌘⇧B dentro do editor** (FR-014a): o mapa de teclas do CodeMirror não usa a combinação; o
+  atalho vale com o foco em qualquer lugar da janela.
 - **Link simbólico trocado entre a verificação e a leitura**: a leitura não escapa da raiz
   (docs/arquitetura.md §6.2, passo 6).
 - **`..` que continua dentro da raiz** (como `../utils.typ` a partir de `capitulos/`):
@@ -497,6 +517,22 @@ comando.
   MUST NOT quebrar o editor. Só interface: o núcleo e o contrato IPC não mudam (RF-01).
 - **FR-014**: Quando o texto não compila, a prévia MUST manter a última versão bem-sucedida e
   indicar que há erro (RF-02).
+- **FR-014a**: A pessoa MUST poder forçar a compilação (emenda de 2026-11-23, pedido do dono:
+  "adicione um botão de compilar arquivo, para o usuário forçar a compilação"). A barra da prévia
+  MUST ter o botão "Compilar" (símbolo SVG desenhado pelo DOM em `currentColor`, sem estilo
+  embutido, e o nome "Compilar" visível quando couber; o nome acessível e a dica dizem
+  "Compilar agora (⌘⇧B / Ctrl+Shift+B)"), e ⌘⇧B (Ctrl+Shift+B fora do macOS) MUST fazer o
+  mesmo, sem tomar atalho do editor. Antes de pedir, a interface MUST enviar as edições
+  pendentes; o núcleo (`compile_now`) MUST descartar o conteúdo guardado dos arquivos não
+  abertos no editor, para relê-los do disco pela regra de escopo (FR-021, FR-025), e pôr o
+  arquivo principal na fila na hora, abandonando a compilação em andamento sem passar do limite
+  de threads de FR-015 (T078); no limite, MUST recusar com `compile_suspended` sem criar thread.
+  Decisões de segurança MUST NOT mudar: plugin ou pacote recusado continua recusado, sem novo
+  pedido de confirmação, e a regra de escopo é a mesma. Sem projeto, `no_project`; com versão
+  diferente (FR-012), `compiler_version_mismatch`. Enquanto a compilação pedida não chega, o
+  botão MUST mostrar "Compilando…" com um símbolo de progresso (parado com
+  `prefers-reduced-motion`) e ficar desativado; a prévia e a barra de status seguem como em
+  qualquer compilação ("Compilado em N ms") (RF-02, RF-06).
 - **FR-015**: Uma compilação lenta, que não termina ou que excede o limite de tempo MUST NOT
   travar o editor; ela MUST ser abandonada, virar diagnóstico, e a prévia MUST voltar a
   compilar na edição seguinte (Princípio VI, entrada não confiável).
