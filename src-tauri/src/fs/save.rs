@@ -4,8 +4,11 @@
 //! O núcleo guarda o texto de cada arquivo aberto ([`OpenFile`]). Gravar é atômico: o texto vai
 //! para um arquivo temporário na mesma pasta, passa por `fsync` e só então substitui o original
 //! por `rename`; qualquer falha deixa o original intacto e o arquivo continua `dirty`, com o
-//! texto em memória. O salvamento automático vale [`AUTOSAVE_DELAY`] depois da última edição
-//! (ou da última tentativa que falhou, para não insistir sem pausa num disco cheio).
+//! texto em memória. O salvamento automático vale [`AUTOSAVE_DELAY`] depois da primeira edição
+//! ainda não gravada (ou da última tentativa que falhou, para não insistir sem pausa num disco
+//! cheio), mesmo que a pessoa continue digitando: assim um encerramento forçado perde no máximo
+//! os últimos [`MAX_UNSAVED`] de digitação (SC-009, T077), e não tudo o que foi digitado desde a
+//! última pausa.
 
 use std::fs::File;
 use std::io;
@@ -18,8 +21,15 @@ use sha2::{Digest, Sha256};
 
 use super::scope::MAX_FILE_BYTES;
 
-/// Ociosidade depois da última edição que dispara o salvamento automático (FR-007, SC-009).
-pub const AUTOSAVE_DELAY: Duration = Duration::from_secs(2);
+/// Idade da edição não gravada mais antiga que dispara o salvamento automático (FR-007).
+pub const AUTOSAVE_DELAY: Duration = Duration::from_millis(1500);
+
+/// Intervalo em que o núcleo confere se há arquivo para o salvamento automático.
+pub const AUTOSAVE_TICK: Duration = Duration::from_millis(250);
+
+/// Digitação que um encerramento forçado pode perder (SC-009): toda edição chega ao disco em
+/// até [`AUTOSAVE_DELAY`] + [`AUTOSAVE_TICK`], com folga para a gravação.
+pub const MAX_UNSAVED: Duration = Duration::from_secs(2);
 
 const BAD_RANGE: &str = "bad_range";
 const VERSION_MISMATCH: &str = "version_mismatch";
@@ -73,8 +83,8 @@ pub fn apply_changes(text: &str, changes: &[Change]) -> Result<String, &'static 
 
 /// Arquivo aberto no editor: overlay em memória do que está no disco.
 ///
-/// Estados (data-model.md): `Limpo → (edição) → Sujo → (2 s ociosos, ⌘S ou fechar) → Gravando →
-/// Limpo`; `Gravando → (falha) → Sujo`.
+/// Estados (data-model.md): `Limpo → (edição) → Sujo → (1,5 s desde a primeira edição não
+/// gravada, ⌘S ou fechar) → Gravando → Limpo`; `Gravando → (falha) → Sujo`.
 #[derive(Debug)]
 pub struct OpenFile {
     /// Compartilhado com a compilação sem cópia.
@@ -82,8 +92,9 @@ pub struct OpenFile {
     pub(super) version: u64,
     pub(super) dirty: bool,
     pub(super) last_saved_hash: [u8; 32],
-    /// Desde quando o arquivo está ocioso: última edição ou última gravação que falhou.
-    idle_since: Instant,
+    /// Desde quando há texto por gravar: primeira edição depois da última gravação, ou última
+    /// gravação que falhou.
+    unsaved_since: Instant,
     /// Mudança externa à espera da escolha da pessoa ([`super::watch`]): enquanto `true`, nada
     /// é gravado por cima do disco.
     pub(super) conflict: bool,
@@ -99,7 +110,7 @@ impl OpenFile {
             version: 0,
             dirty: false,
             last_saved_hash,
-            idle_since: Instant::now(),
+            unsaved_since: Instant::now(),
             conflict: false,
         })
     }
@@ -141,17 +152,19 @@ impl OpenFile {
         }
         self.text = text.into();
         self.version += 1;
+        if !self.dirty {
+            self.unsaved_since = Instant::now();
+        }
         self.dirty = true;
-        self.idle_since = Instant::now();
         Ok(self.version)
     }
 
-    /// Hora de salvar sozinho: sujo, sem conflito com o disco e ocioso há pelo menos
-    /// [`AUTOSAVE_DELAY`] em `now`.
+    /// Hora de salvar sozinho: sujo, sem conflito com o disco e com texto por gravar há pelo
+    /// menos [`AUTOSAVE_DELAY`] em `now`. Continuar digitando não adia a gravação.
     pub fn autosave_due(&self, now: Instant) -> bool {
         self.dirty
             && !self.conflict
-            && now.saturating_duration_since(self.idle_since) >= AUTOSAVE_DELAY
+            && now.saturating_duration_since(self.unsaved_since) >= AUTOSAVE_DELAY
     }
 
     /// Grava o texto em `path` de forma atômica. Limpo → nada a gravar. Falha → `write_failed`,
@@ -182,7 +195,7 @@ impl OpenFile {
             }
             Err(_) => {
                 // Continua sujo; o salvamento automático espera outra pausa antes de tentar.
-                self.idle_since = Instant::now();
+                self.unsaved_since = Instant::now();
                 Err(WRITE_FAILED)
             }
         }
@@ -409,7 +422,7 @@ mod tests {
     }
 
     #[test]
-    fn salvamento_automatico_dois_segundos_depois_da_ultima_edicao() {
+    fn salvamento_automatico_depois_da_primeira_edicao_nao_gravada() {
         let (_dir, path, mut file) = opened();
         let before = Instant::now();
         file.edit(0, &[change(0, 0, "x")]).unwrap();
@@ -417,14 +430,52 @@ mod tests {
         assert!(!file.autosave_due(before + AUTOSAVE_DELAY / 2));
         assert!(!file.autosave_due(before + AUTOSAVE_DELAY - Duration::from_millis(1)));
         assert!(file.autosave_due(after + AUTOSAVE_DELAY));
-        // Nova edição reinicia a contagem.
-        let t1 = Instant::now();
+        // Continuar digitando não adia: a primeira edição não gravada é que conta (SC-009).
         file.edit(1, &[change(0, 0, "y")]).unwrap();
-        assert!(!file.autosave_due(t1 + AUTOSAVE_DELAY - Duration::from_millis(1)));
-        assert!(file.autosave_due(Instant::now() + AUTOSAVE_DELAY));
-        // Depois de salvar não há o que salvar.
+        assert!(file.autosave_due(after + AUTOSAVE_DELAY));
+        // Depois de salvar não há o que salvar; a próxima edição recomeça a contagem.
         file.save(&path).unwrap();
         assert!(!file.autosave_due(Instant::now() + AUTOSAVE_DELAY * 10));
+        let t1 = Instant::now();
+        file.edit(2, &[change(0, 0, "z")]).unwrap();
+        assert!(!file.autosave_due(t1 + AUTOSAVE_DELAY - Duration::from_millis(1)));
+        assert!(file.autosave_due(Instant::now() + AUTOSAVE_DELAY));
+    }
+
+    /// SC-009 (T077): digitando sem parar, a cada 100 ms, com o salvamento automático
+    /// conferido a cada [`AUTOSAVE_TICK`], nenhuma edição fica mais de [`MAX_UNSAVED`] sem
+    /// chegar ao disco. Com a regra antiga (2 s ociosos) nada era gravado enquanto se digitava.
+    #[test]
+    fn digitando_sem_parar_nenhuma_edicao_fica_mais_de_2_s_sem_gravar() {
+        assert!(AUTOSAVE_DELAY + AUTOSAVE_TICK < MAX_UNSAVED);
+        let (_dir, path, mut file) = opened();
+        let start = Instant::now();
+        let step = Duration::from_millis(100);
+        // Relógio simulado: edições em `start + k·step`, conferência a cada tick.
+        let mut oldest_unsaved: Option<Duration> = None;
+        let mut worst = Duration::ZERO;
+        let mut next_tick = AUTOSAVE_TICK;
+        for k in 0..100u32 {
+            let t = step * k;
+            while next_tick <= t {
+                if file.autosave_due(start + next_tick) {
+                    file.save(&path).unwrap();
+                    worst = worst.max(next_tick - oldest_unsaved.take().unwrap());
+                }
+                next_tick += AUTOSAVE_TICK;
+            }
+            file.edit(u64::from(k), &[change(0, 0, "x")]).unwrap();
+            // `edit` usa o relógio real; aqui a contagem começa no instante simulado.
+            if oldest_unsaved.is_none() {
+                file.unsaved_since = start + t;
+                oldest_unsaved = Some(t);
+            }
+        }
+        assert!(
+            worst > Duration::ZERO,
+            "nada foi gravado enquanto se digitava"
+        );
+        assert!(worst < MAX_UNSAVED, "edição ficou {worst:?} sem gravar");
     }
 
     #[test]

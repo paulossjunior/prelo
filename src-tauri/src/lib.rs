@@ -110,7 +110,10 @@ pub fn configure_with_state<R: Runtime>(
             compile::export::export_pdf_dialog,
             self_test::self_test_report,
             self_test::self_test_open_project,
-            self_test::self_test_write_external
+            self_test::self_test_write_external,
+            self_test::self_test_crash_mode,
+            self_test::self_test_mark,
+            self_test::self_test_reopened
         ])
         .manage(self_test::FixtureCopy::default())
 }
@@ -126,15 +129,14 @@ fn asset_protocol<R: Runtime>(
         .preview_asset_response(&request)
 }
 
-/// Intervalo em que o núcleo confere se há arquivo para o salvamento automático.
-const AUTOSAVE_TICK: std::time::Duration = std::time::Duration::from_millis(250);
-
-/// Salvamento automático (FR-007): confere a cada [`AUTOSAVE_TICK`] os arquivos ociosos há 2 s.
+/// Salvamento automático (FR-007, SC-009): confere a cada
+/// [`AUTOSAVE_TICK`](crate::fs::save::AUTOSAVE_TICK) os arquivos com
+/// texto por gravar há [`AUTOSAVE_DELAY`](crate::fs::save::AUTOSAVE_DELAY).
 fn spawn_autosave<R: Runtime>(app: tauri::AppHandle<R>) {
     std::thread::Builder::new()
         .name("prelo-autosave".into())
         .spawn(move || loop {
-            std::thread::sleep(AUTOSAVE_TICK);
+            std::thread::sleep(fs::save::AUTOSAVE_TICK);
             for path in app
                 .state::<commands::AppState>()
                 .autosave(std::time::Instant::now())

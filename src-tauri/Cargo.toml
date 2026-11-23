@@ -66,3 +66,6 @@ typst-render = "=0.15.1"
 self-test = []
 # Teste de equivalência com o `typst` de linha de comando (FR-031); só no job do CI.
 equivalence = []
+# Medição de desempenho da prévia (tests/perf_preview.rs, SC-001/SC-002); só no job "perf" do
+# CI, em `--release`.
+perf = []

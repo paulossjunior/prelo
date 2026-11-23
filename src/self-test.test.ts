@@ -2,7 +2,7 @@
 // prévia mudar e o erro aparecer no editor, e devolve o que observou para o núcleo conferir.
 import { afterEach, describe, expect, it } from "vitest";
 import type { Change, ProjectInfo } from "./ipc";
-import { ERROR_SNIPPET, runEditorScenario } from "./self-test";
+import { CRASH_MARKS, ERROR_SNIPPET, runCrashReopen, runCrashWrite, runEditorScenario } from "./self-test";
 import { fakeCore } from "./testing/fake-core";
 import { mountWorkspace, type WorkspaceHandle } from "./workspace";
 
@@ -205,5 +205,42 @@ describe("conferência de layout no app real", () => {
     await ws.ready;
     const r = await runEditorScenario(ws, openWithFirstCompile(core), { timeoutMs: 2000 });
     expect(r.layoutProblems).toEqual([]);
+  });
+});
+
+describe("encerramento forçado (T077)", () => {
+  it("digita uma marca por linha e só segue depois de o núcleo confirmar cada uma", async () => {
+    const ws = mount(compilingCore());
+    await ws.ready;
+    const seen: number[] = [];
+    let editorText = "";
+    await runCrashWrite(
+      ws,
+      async () => INFO,
+      async (path, n) => {
+        expect(path).toBe("main.typ");
+        editorText = ws.editor()!.view.state.doc.toString();
+        // A marca já está no editor quando o núcleo é consultado.
+        expect(editorText.split("\n")).toContain(`marca-${n}`);
+        seen.push(n);
+      },
+      0,
+    );
+    expect(seen).toEqual(Array.from({ length: CRASH_MARKS }, (_, i) => i + 1));
+    expect(editorText.split("\n").filter((l) => l.startsWith("marca-"))).toHaveLength(CRASH_MARKS);
+  });
+
+  it("falha do núcleo ao confirmar a marca interrompe o roteiro", async () => {
+    const ws = mount(compilingCore());
+    await ws.ready;
+    await expect(
+      runCrashWrite(ws, async () => INFO, async () => Promise.reject(new Error("marca-1 não chegou")), 0),
+    ).rejects.toThrow("marca-1 não chegou");
+  });
+
+  it("reabre e devolve o texto que o editor mostra", async () => {
+    const ws = mount(compilingCore());
+    await ws.ready;
+    expect(await runCrashReopen(ws, async () => INFO)).toBe("= Introdução\n\nOlá.");
   });
 });

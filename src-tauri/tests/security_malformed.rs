@@ -19,7 +19,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use prelo_lib::compile::project::{CompileInput, Compiled, ProjectCompiler};
-use prelo_lib::compile::scheduler::{Compilation, Scheduler, Status, COMPILE_TIMEOUT};
+use prelo_lib::compile::scheduler::{
+    Compilation, Scheduler, Status, COMPILE_TIMEOUT, MAX_COMPILE_THREADS,
+};
 use prelo_lib::diagnostic::{Diagnostic, Kind};
 use prelo_lib::fs::access_model::AccessModel;
 use prelo_lib::fs::scope::{Scope, MAX_CSL_BYTES};
@@ -379,15 +381,12 @@ fn laco_infinito() {
     );
 }
 
-#[test]
-fn plugin_aprovado_que_nao_retorna_e_abandonado() {
-    // Plugin aprovado pelo mecanismo de T047 (decisão nos dados locais do app, FR-019).
+/// Projeto cujo `main.typ` chama um plugin aprovado (mecanismo de T047, decisão nos dados
+/// locais do app, FR-019) que nunca retorna.
+fn forever_plugin(timeout: Duration) -> Live {
     let wasm = std::fs::read(fixtures_dir().join("plugin/teste.wasm")).unwrap();
     let project = TempProject::empty();
-    project.write(
-        "main.typ",
-        b"#let p = plugin(\"teste.wasm\")\n#p.forever()\n",
-    );
+    project.write("main.typ", FOREVER);
     project.write("teste.wasm", &wasm);
     let data = tempfile::tempdir().unwrap();
     let approvals = Arc::new(PluginApprovals::load(data.path()));
@@ -403,7 +402,14 @@ fn plugin_aprovado_que_nao_retorna_e_abandonado() {
         approvals: Some(approvals),
         ..WorldEnv::default()
     };
-    let live = Live::with_env(project, SHORT_TIMEOUT, env);
+    Live::with_env(project, timeout, env)
+}
+
+const FOREVER: &str = "#let p = plugin(\"teste.wasm\")\n#p.forever()\n";
+
+#[test]
+fn plugin_aprovado_que_nao_retorna_e_abandonado() {
+    let live = forever_plugin(SHORT_TIMEOUT);
     let compilation = live.compile_disk();
     assert_eq!(compilation.status, Status::Abandonada);
     let diag = compilation
@@ -413,6 +419,48 @@ fn plugin_aprovado_que_nao_retorna_e_abandonado() {
         .expect("diagnóstico de abandono");
     assert!(diag.message.contains("excedeu"), "{diag:?}");
     live.assert_responds();
+}
+
+/// T078 (research R9): cada edição sobre o plugin que não retorna prende uma thread. Depois
+/// de 3 compilações abandonadas o número de threads de compilação vivas fica no limite, e o
+/// editor continua respondendo a cada edição em até 1 s (com diagnóstico, sem compilar).
+#[test]
+fn tres_compilacoes_abandonadas_nao_acumulam_threads() {
+    let live = forever_plugin(Duration::from_millis(500));
+    for i in 0..3 {
+        let id = live.scheduler.submit(CompileInput {
+            main: "main.typ".into(),
+            files: vec![("main.typ".into(), Arc::from(format!("{FOREVER}// {i}\n")))],
+        });
+        let compilation = live.wait(id, DELIVERY);
+        assert_eq!(compilation.status, Status::Abandonada, "edição {i}");
+        assert!(live.scheduler.compile_threads() <= MAX_COMPILE_THREADS);
+    }
+    assert!(
+        live.scheduler.compile_threads() <= MAX_COMPILE_THREADS,
+        "{} threads de compilação vivas",
+        live.scheduler.compile_threads()
+    );
+    // Mais edições, inclusive a que tira o plugin: resposta em até 1 s, sem thread nova.
+    for text in [FOREVER, EDIT] {
+        let started = Instant::now();
+        let id = live.scheduler.submit(CompileInput {
+            main: "main.typ".into(),
+            files: vec![("main.typ".into(), Arc::from(text))],
+        });
+        let compilation = live.wait(id, RESPONSIVE);
+        assert!(started.elapsed() < RESPONSIVE);
+        assert_eq!(compilation.status, Status::ComErros);
+        assert!(
+            compilation
+                .diagnostics
+                .iter()
+                .any(|d| d.kind == Kind::Typst && d.message.contains("suspensa")),
+            "{:?}",
+            compilation.diagnostics
+        );
+    }
+    assert!(live.scheduler.compile_threads() <= MAX_COMPILE_THREADS);
 }
 
 #[test]

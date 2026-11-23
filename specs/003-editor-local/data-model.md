@@ -38,7 +38,8 @@
 | `dirty` | bool | `true` desde a última edição até gravar |
 | `lastSavedHash` | sha256 | Para ignorar o próprio evento do observador de arquivos |
 
-Estados: `Limpo → (edição) → Sujo → (2 s ociosos, ⌘S ou fechar) → Gravando → Limpo`;
+Estados: `Limpo → (edição) → Sujo → (1,5 s desde a primeira edição não gravada, ⌘S ou
+fechar) → Gravando → Limpo`;
 `Gravando → (falha) → Sujo` + aviso. Mudança externa: `Limpo → recarrega`; `Sujo →
 Conflito → (escolha) → Limpo/Sujo`.
 
