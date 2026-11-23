@@ -3,10 +3,17 @@
 // onde não há WebDriver. Compila o app com a feature `self-test`, abre o binário real e
 // espera que ele se encerre sozinho com código 0 depois que a interface reportar ao núcleo.
 // Depois confirma que nenhum processo do app sobrou (FR-005).
+//
+// Encerramento forçado (T077; SC-009): roda o app de novo em modo `write`, que digita marcas
+// sem pausa; 2 s depois da última marca o processo é morto (SIGKILL). Reaberto em modo
+// `reopen`, o editor tem de mostrar toda marca digitada 2 s ou mais antes da morte
+// (scripts/forced-kill.mjs).
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { KILL_AFTER_MS, checkReopened, parseMark, parseReopened } from "./forced-kill.mjs";
 import { pathWithoutTypst } from "./no-typst-path.mjs";
 
 // Inclui o roteiro do editor (T031): abrir a fixture, compilar, editar e esperar o erro.
@@ -32,11 +39,15 @@ function build() {
   if (!existsSync(binary)) fail(`binário não encontrado em ${binary}`);
 }
 
+// SC-006: o app roda sem `typst` no PATH; o núcleo confere de novo ao receber o relatório.
+function appEnv(extra = {}) {
+  return { ...process.env, PATH: pathWithoutTypst(process.env.PATH), ...extra };
+}
+
 function run() {
   return new Promise((resolve) => {
     const started = Date.now();
-    // SC-006: o app roda sem `typst` no PATH; o núcleo confere de novo ao receber o relatório.
-    const env = { ...process.env, PATH: pathWithoutTypst(process.env.PATH) };
+    const env = appEnv();
     const child = spawn(binary, [], { cwd: root, env, stdio: ["ignore", "inherit", "pipe"] });
     let stderr = "";
     child.stderr.on("data", (chunk) => {
@@ -100,6 +111,89 @@ function lingering() {
   }
 }
 
+/** Chama `onLine` para cada linha completa de `stream`, repassando tudo para o stderr. */
+function lines(stream, onLine) {
+  let buffer = "";
+  stream.on("data", (chunk) => {
+    process.stderr.write(chunk);
+    buffer += chunk;
+    const parts = buffer.split(/\r?\n/);
+    buffer = parts.pop() ?? "";
+    for (const line of parts) onLine(line);
+  });
+}
+
+/** Fase 1: digita marcas e é morto KILL_AFTER_MS depois da última. */
+function crashWrite(dir) {
+  return new Promise((resolve) => {
+    const env = appEnv({ PRELO_SELF_TEST_CRASH: "write", PRELO_SELF_TEST_CRASH_DIR: dir });
+    const child = spawn(binary, [], { cwd: root, env, stdio: ["ignore", "inherit", "pipe"] });
+    const marks = [];
+    let killedAt = null;
+    let killTimer = null;
+    const overall = setTimeout(() => {
+      diagnose(child.pid);
+      child.kill("SIGKILL");
+    }, TIMEOUT_MS);
+    lines(child.stderr, (line) => {
+      const n = parseMark(line);
+      if (n === null) return;
+      marks.push({ n, at: Date.now() });
+      // A próxima marca vem em 250 ms; 2 s sem marca nova = a última foi digitada.
+      clearTimeout(killTimer);
+      killTimer = setTimeout(() => {
+        killedAt = Date.now();
+        child.kill("SIGKILL");
+      }, KILL_AFTER_MS);
+    });
+    child.on("exit", (code, signal) => {
+      clearTimeout(overall);
+      clearTimeout(killTimer);
+      resolve({ marks, killedAt, code, signal });
+    });
+  });
+}
+
+/** Fase 2: reabre a cópia e devolve o texto que o editor mostrou. */
+function crashReopen(dir) {
+  return new Promise((resolve) => {
+    const env = appEnv({ PRELO_SELF_TEST_CRASH: "reopen", PRELO_SELF_TEST_CRASH_DIR: dir });
+    const child = spawn(binary, [], { cwd: root, env, stdio: ["ignore", "inherit", "pipe"] });
+    let reopened = null;
+    const timer = setTimeout(() => {
+      diagnose(child.pid);
+      child.kill("SIGKILL");
+    }, TIMEOUT_MS);
+    lines(child.stderr, (line) => {
+      reopened ??= parseReopened(line);
+    });
+    child.on("exit", (code) => {
+      clearTimeout(timer);
+      resolve({ reopened, code });
+    });
+  });
+}
+
+async function forcedKill() {
+  const dir = mkdtempSync(join(tmpdir(), "prelo-forced-kill-"));
+  try {
+    const original = readFileSync(join(root, "src-tauri", "tests", "fixtures", "artigo-basico", "main.typ"), "utf8");
+    const written = await crashWrite(dir);
+    if (written.killedAt === null) {
+      fail(`encerramento forçado: o app saiu sozinho (código ${written.code}) antes de ser morto`);
+    }
+    console.log(`self-test: ${written.marks.length} marcas digitadas; processo morto ${KILL_AFTER_MS} ms depois da última`);
+    const { reopened, code } = await crashReopen(dir);
+    if (code !== 0) fail(`encerramento forçado: o app reaberto saiu com código ${code}`);
+    const failures = checkReopened({ marks: written.marks, killedAt: written.killedAt, original, reopened });
+    if (failures.length > 0) fail(`encerramento forçado (SC-009): ${failures.join("; ")}`);
+    if (lingering()) fail("processo do app continua em execução depois do encerramento forçado");
+    console.log("self-test: encerramento forçado ok: nada digitado há 2 s ou mais se perdeu");
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 build();
 const result = await run();
 if (result.timedOut) fail(`o app não se encerrou em ${TIMEOUT_MS / 1000} s`);
@@ -111,3 +205,4 @@ if (/panicked|self-test: FALHA/.test(result.stderr)) {
 }
 if (lingering()) fail("processo do app continua em execução depois de fechar a janela");
 console.log(`self-test: ok em ${result.ms} ms`);
+await forcedKill();

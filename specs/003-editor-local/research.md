@@ -192,8 +192,11 @@ levantar licenças antes do plano; o resultado está em R12.
 
 - **Decision**: o núcleo guarda o texto dos arquivos abertos. Gravação: `tempfile` 3.27 na
   mesma pasta + `fsync` + `persist` (rename atômico); erro mantém o texto em memória e avisa.
-  Salvamento automático 2 s após a última edição, em ⌘S/Ctrl+S e no fechamento (o fechamento
-  espera a gravação, com limite). Mudanças externas: `notify` 8 (CC0-1.0) observa a raiz; o
+  Salvamento automático 1,5 s após a primeira edição ainda não gravada (conferido a cada
+  250 ms; continuar digitando não adia, para que um encerramento forçado perca no máximo os
+  últimos 2 s, SC-009; T077 trocou a regra antiga de "2 s ociosos", que perdia tudo o que foi
+  digitado sem pausa), em ⌘S/Ctrl+S e no fechamento (o fechamento espera a gravação, com
+  limite). Mudanças externas: `notify` 8 (CC0-1.0) observa a raiz; o
   núcleo ignora eventos cujo hash é igual ao último que ele mesmo gravou; sem alteração local
   pendente → recarrega; com alteração pendente → evento `external_change_conflict` e a pessoa
   escolhe (manter a minha / usar a do disco); nada é descartado sem escolha.
@@ -299,6 +302,82 @@ de E2E (SC-006).
   tamanho reduz o custo máximo, e o limite de tempo garante que o app não trava.
 - **Revisão**: em 2027-02-17 ou na próxima versão do `typst`, o que vier primeiro.
 
+## Medições de desempenho
+
+T075/T076 (SC-001, SC-002). Medido por `src-tauri/tests/perf_preview.rs` (feature `perf`,
+`cargo test --release`): 5 edições de aquecimento e 60 medidas, uma palavra a mais por edição
+no parágrafo da página 1 de `artigo-40p` (40 páginas), passando pela agenda de produção, pela
+prévia e pelo `page_svg` das páginas alteradas que a interface pediria (visíveis ± 2, R4). O
+caso com imagens põe duas imagens PNG de ruído geradas no teste, 4000×3000 px e ~36 MB cada,
+uma na página editada e outra no fim.
+
+| Data | Máquina | Caso | Edição → `PreviewUpdate` p95 | Edição → SVG pronto p95 |
+|---|---|---|---|---|
+| 2026-11-22 | Apple M4, 10 núcleos, 16 GB, carga ~10 | `artigo-40p` | 10,8 ms | 13,2 ms |
+| 2026-11-22 | idem | `artigo-40p` + 2 imagens 4000×3000 | 10,1 ms | 18,0 ms |
+| 2026-11-22 | idem, carga ~44 (outros builds) | `artigo-40p` | 99,7 ms | 107,2 ms |
+
+**Antes de T076**, o caso com imagens não terminava: `page_svg` gerava o SVG com a `data:` URL
+da imagem (~48 MB em base64) e depois a trocava com `str::replace`, usando a URL inteira como
+padrão de busca; uma só página levou mais de 2 minutos. Duas mudanças em
+`compile/preview.rs`: (1) a troca virou uma varredura linear que delimita cada valor
+`"data:…"` pelas aspas e compara por igualdade (`replace_data_urls`); (2) o SVG passa a ser
+gerado com cada imagem trocada por um SVG de 1×1 px que só leva o sha256 (`stand_in`), então
+o `typst-svg` nem escreve os 48 MB. Só com (1), o p95 com imagens ficou em 298 ms (sob carga);
+com (1) e (2), 18 ms. A compilação incremental e o diff de páginas já atendiam a meta e não
+mudaram.
+
+O computador de referência do plano (Apple M1 ou x64 de 4 núcleos, 8 GB) é mais lento que o
+M4; a folga (p95 ≤ 18 ms contra 100 ms) cobre a diferença. O job `perf` do CI roda nos três
+sistemas com limite de 250 ms; a meta de 100 ms se confere localmente com
+`PRELO_PERF_LIMIT_MS=100`.
+
+### Diff de páginas sem hashear o documento inteiro (T076, #141)
+
+O job `perf (macos-latest)` do PR #66 falhou duas vezes no caso `artigo-40p` (p95 edição → SVG
+pronto 297 ms e 284 ms, contra o limite de 250 ms; Ubuntu 63–68 ms, Windows 48–50 ms). Em
+todos os sistemas o SVG das páginas visíveis soma só 3–5 ms ao `PreviewUpdate`: o custo está
+antes do evento. Medido por fase (`PRELO_PERF_TRACE=1` e instrumentação local):
+
+- **A maioria das edições muda 1 página** em `changed`; uma em cada ~10 (quando o parágrafo
+  ganha uma linha) empurra o texto e muda as 40. Isso é do documento, não da prévia.
+- **Mas toda edição hasheava as 40 páginas.** O Typst refaz o quadro de cada página da
+  sequência editada (`finalize`) e achata nele as linhas de texto (~40 `Text` e ~15 `Tag` por
+  página); só fórmulas e cabeçalhos voltam do cache como o mesmo `Arc`. O `LazyHash` de cada
+  quadro novo começa vazio, então `page_hash` passava o SipHash por todo o texto do documento
+  a cada edição: 4,5 ms no M4 livre (um terço do `PreviewUpdate`), 14 ms em média e 25 ms no
+  pior caso nos núcleos de eficiência (`taskpolicy -c background`).
+- O despejo do comemo (`evict(30)`, PR #211) custa 0,1–2 ms e não provoca recompilação: a
+  compilação incremental fica em 5–9 ms do começo ao fim (M4) e sem picos periódicos.
+- `refresh_trust`/`refresh_fonts`/instantâneo do World: < 0,3 ms.
+
+Correção em `compile/preview.rs` (`same_page`): a página igual à da última `Ok` no mesmo
+índice reaproveita o hash dela. A comparação desce pelos dois quadros juntos, para no
+primeiro quadro compartilhado (mesmo `Arc`) e compara os itens pela igualdade derivada (campo
+a campo, sem SipHash); `Tag` continua por hash porque a igualdade de `Content` ignora a
+localização. Só as páginas alteradas são hasheadas (teste `so_paginas_alteradas_sao_hasheadas`:
+3 → 1). O diff caiu de 4,5 ms para 0,7 ms por edição (M4).
+
+| Máquina (2026-11-23) | Caso | `PreviewUpdate` p50 / p95 antes | depois | SVG pronto p95 antes | depois |
+|---|---|---|---|---|---|
+| M4, livre | `artigo-40p` | 9,4 / 11,0 ms | 6,3 / 8,2 ms | 13,4 ms | 10,6 ms |
+| M4, livre | + 2 imagens | 9,1 / 10,3 ms | 6,1 / 7,2 ms | 18,0 ms | 15,2 ms |
+| M4, núcleos de eficiência | `artigo-40p` | 53,1 / 61,0 ms | 37,6 / 44,6 ms | 72,6 ms | 56,3 ms |
+| M4, núcleos de eficiência | + 2 imagens | 52,6 / 56,1 ms | 36,9 / 40,9 ms | 88,9 ms | 75,7 ms |
+
+O que este diff não explica é a variação do runner macOS. Com o **mesmo código** (o
+`7449cfc` só muda `tasks.md` em relação ao `f478437`), o `artigo-40p` no macOS deu p95
+edição → SVG pronto de 297 ms (run 45106446687), 284 ms (45108437906) e **105,5 ms**
+(45111099397, aprovado). Nas três, só o **primeiro** teste do processo sofre (p50 30–67 ms,
+máx 155–547 ms); o segundo, com mais trabalho (imagens), fica em p95 61–103 ms. O teste roda
+logo depois de um build release de ~10 min sem cache numa máquina de 3 núcleos, e a lentidão
+some em segundos: é ruído do runner compartilhado, não custo que cresce com o documento. Não
+se reproduz no M4, nem limitado aos núcleos de eficiência. Por isso o limite de 250 ms
+continua igual nos três sistemas: o diff tira um terço do trabalho de cada edição e aumenta a
+folga, e o relatório passa a separar compilação e entrega para a próxima falha mostrar a fase.
+Só se o macOS voltar a passar do limite com isso, com a fase que pesa em mãos, cabe discutir
+um limite por sistema.
+
 ## Riscos
 
 - **API do `typst-ide`** muda entre versões do Typst. Mitigação: versão travada (`=0.15.1`),
@@ -315,6 +394,10 @@ de E2E (SC-006).
   de saída do `typst-svg`; se não for estável, alternativa é renderizar a imagem à parte e
   posicioná-la por cima. Medido pela tarefa de desempenho com imagens grandes.
 - **Threads abandonadas** (R9) podem acumular CPU; o teste de compilação sem fim conta
-  threads vivas.
+  threads vivas. **T078**: a agenda mantém no máximo 3 threads de compilação vivas por
+  projeto aberto (`MAX_COMPILE_THREADS`), contando as presas; atingido o limite, cada edição
+  recebe na hora o diagnóstico "compilação suspensa" e a mais nova compila quando uma thread
+  presa terminar. Um plugin que nunca retorna ainda prende até 3 núcleos até o app fechar;
+  compilar em processo filho continua sendo a alternativa se isso aparecer no uso real.
 - **Diferenças de fonte** entre Prelo e `typst` CLI padrão (R6) podem surpreender quem compila
   fora do Prelo; o README e a tela "Sobre" explicam.

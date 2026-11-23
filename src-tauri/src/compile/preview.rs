@@ -10,16 +10,31 @@
 //! [`PreviewHub`] liga a agenda à interface: guarda a prévia do projeto aberto, entrega cada
 //! evento ao assinante (o `tauri::ipc::Channel` de `subscribe_preview`) e descarta o que vier
 //! da agenda de um projeto já fechado.
+//!
+//! Imagens (T058; RF-51, research R4): o `typst-svg` embute cada imagem como `data:` URL. Para
+//! não reenviar uma imagem grande a cada edição na mesma página, o SVG de `page_svg` cita cada
+//! uma por `prelo-asset://<sha256>` (sha256 dos bytes servidos). O conteúdo de cada hash sai
+//! pelo protocolo `prelo-asset` ([`asset_response`]) e por `preview_asset` (como `data:` URL,
+//! que a interface devolve ao SVG: um SVG mostrado como `<img>` não carrega recurso de fora).
+//! Só respondem os hashes de imagens do documento atual cujo SVG já foi pedido; o resto é 404.
 
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
 
 use serde::Serialize;
+use sha2::{Digest, Sha256};
+use tauri::http::{header, Method, Request, Response, StatusCode};
+use typst::foundations::{Bytes, Smart};
+use typst::layout::{Frame, FrameItem};
+use typst::visualize::{Image, ImageScaling, SvgImage};
 use typst_layout::{Page, PagedDocument};
-use typst_svg::SvgOptions;
+use typst_svg::{SvgOptions, WebImage};
 
+use super::project::Compiled;
 use super::scheduler::{Compilation, Status};
+use super::sync::Synced;
 use crate::diagnostic::Diagnostic;
 
 /// Erro de `page_svg` com hash que não é o da página atual (ou página inexistente).
@@ -53,6 +68,70 @@ pub fn page_hash(page: &Page) -> String {
     format!("{:032x}", typst::utils::hash128(page))
 }
 
+/// A página `new` desenha exatamente o mesmo que `old`? Equivale a comparar os dois
+/// [`page_hash`] (os mesmos campos), sem calcular o hash dos quadros que a compilação refez.
+///
+/// T076 (#141): numa edição, o Typst refaz o quadro de **toda** página da sequência editada:
+/// `finalize` monta um quadro novo por página e o fluxo achata nele as linhas de texto (cerca
+/// de 40 `Text` e 15 `Tag` por página de `artigo-40p`). Só os grupos de dentro (fórmulas,
+/// cabeçalhos) voltam do cache, os mesmos `Arc` de antes. O `LazyHash` de cada quadro novo
+/// começa vazio, então hashear as 40 páginas a cada edição passava o SipHash por todo o texto
+/// do documento: 4,5 ms no M4 livre, 14 ms em média (25 ms no pior caso) nos núcleos de
+/// eficiência, um terço do tempo até o `PreviewUpdate`. Aqui os dois quadros são percorridos
+/// juntos: quadro compartilhado (mesmo `Arc`) é igual sem olhar dentro, e os itens são
+/// comparados pela igualdade derivada (campo a campo, sem hash); só `Tag` usa o hash, porque a
+/// igualdade de `Content` ignora a localização. A página que muda é hasheada como antes.
+fn same_page(old: &Page, new: &Page) -> bool {
+    old.bleed == new.bleed
+        && old.number == new.number
+        && typst::utils::hash128(&(&old.fill, &old.numbering, &old.supplement))
+            == typst::utils::hash128(&(&new.fill, &new.numbering, &new.supplement))
+        && same_frame(&old.frame, &new.frame)
+}
+
+fn same_frame(old: &Frame, new: &Frame) -> bool {
+    if old.size() != new.size()
+        || old.kind() != new.kind()
+        || old.has_baseline() != new.has_baseline()
+        || old.baseline() != new.baseline()
+    {
+        return false;
+    }
+    let (a, b) = (old.items().as_slice(), new.items().as_slice());
+    // Mesmo `Arc` de itens: o mesmo quadro.
+    if std::ptr::eq(a, b) {
+        return true;
+    }
+    a.len() == b.len()
+        && a.iter().zip(b).all(|((pa, ia), (pb, ib))| {
+            pa == pb
+                && match (ia, ib) {
+                    (FrameItem::Group(ga), FrameItem::Group(gb)) => {
+                        typst::utils::hash128(&(&ga.transform, &ga.clip, &ga.label, &ga.parent))
+                            == typst::utils::hash128(&(
+                                &gb.transform,
+                                &gb.clip,
+                                &gb.label,
+                                &gb.parent,
+                            ))
+                            && same_frame(&ga.frame, &gb.frame)
+                    }
+                    // Igualdade derivada, campo a campo: o que o hash olharia, sem o SipHash.
+                    (FrameItem::Text(ta), FrameItem::Text(tb)) => ta == tb,
+                    (FrameItem::Shape(sa, xa), FrameItem::Shape(sb, xb)) => sa == sb && xa == xb,
+                    (FrameItem::Image(ia, za, xa), FrameItem::Image(ib, zb, xb)) => {
+                        ia == ib && za == zb && xa == xb
+                    }
+                    (FrameItem::Link(da, za), FrameItem::Link(db, zb)) => da == db && za == zb,
+                    // A igualdade de `Content` ignora a localização; o hash não.
+                    (FrameItem::Tag(ta), FrameItem::Tag(tb)) => {
+                        typst::utils::hash128(ta) == typst::utils::hash128(tb)
+                    }
+                    _ => false,
+                }
+        })
+}
+
 /// SVG de uma página (`typst-svg`). Imagens vêm embutidas como `data:` URL; a interface mostra
 /// o SVG como `<img>`, nunca como marcação no DOM (research R4).
 pub fn render_svg(page: &Page) -> String {
@@ -67,9 +146,131 @@ pub type LastCompilation = Result<(u64, Arc<PagedDocument>), Vec<Diagnostic>>;
 #[derive(Default)]
 pub struct Preview {
     document: Option<Arc<PagedDocument>>,
+    /// O documento de `document` com o instantâneo do World que o compilou (saltos e
+    /// estrutura, US4). `None` quando o documento veio sem World ([`Preview::apply`]).
+    synced: Option<Arc<Synced>>,
     pages: Vec<PageInfo>,
     /// Último evento entregue, para quem assinar depois.
     last: Option<PreviewUpdate>,
+    /// Imagens do documento atual servidas por hash.
+    assets: Assets,
+    /// Páginas cujo hash a última compilação `Ok` calculou (as outras reaproveitaram o da
+    /// anterior). Para testes e medição.
+    hashed: usize,
+}
+
+/// Imagem servida por `prelo-asset`: o conteúdo como o `typst-svg` o embutiria.
+struct Asset {
+    sha256: String,
+    image: WebImage,
+}
+
+impl Asset {
+    fn mime(&self) -> &'static str {
+        self.image.format.mime()
+    }
+}
+
+/// Imagens que a prévia pode servir: só as do documento `Ok` atual (`live`, pelo hash do
+/// Typst de cada imagem) cujo SVG já foi pedido.
+#[derive(Default)]
+struct Assets {
+    live: HashSet<u128>,
+    by_image: HashMap<u128, Arc<Asset>>,
+    by_sha: HashMap<String, Arc<Asset>>,
+}
+
+impl Assets {
+    /// Documento novo: esquece as imagens que saíram dele.
+    fn track(&mut self, doc: &PagedDocument) {
+        self.live.clear();
+        for page in doc.pages() {
+            for_each_image(&page.frame, &mut |image| {
+                self.live.insert(typst::utils::hash128(image));
+            });
+        }
+        let live = &self.live;
+        self.by_image.retain(|key, _| live.contains(key));
+        self.by_sha = self
+            .by_image
+            .values()
+            .map(|asset| (asset.sha256.clone(), Arc::clone(asset)))
+            .collect();
+    }
+
+    /// Guarda a imagem `key` se ela ainda está no documento atual.
+    fn insert(&mut self, key: u128, asset: &Arc<Asset>) {
+        if self.live.contains(&key) {
+            self.by_image.insert(key, Arc::clone(asset));
+            self.by_sha.insert(asset.sha256.clone(), Arc::clone(asset));
+        }
+    }
+}
+
+/// Imagem SVG minúscula que ocupa o lugar da imagem `sha256` na geração do SVG da página: a
+/// `data:` URL dela é única por imagem e curta, e vira `prelo-asset://<sha256>`. O tamanho na
+/// página vem do item do quadro, não da imagem; `scaling` é mantido porque vira estilo no SVG.
+fn stand_in(sha256: &str, scaling: Smart<ImageScaling>) -> Option<Image> {
+    let data = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\" id=\"prelo-{sha256}\"/>"
+    );
+    let svg = SvgImage::new(Bytes::from_string(data)).ok()?;
+    Some(Image::new(svg, None, scaling))
+}
+
+/// Troca, no quadro e nos grupos dentro dele, cada imagem com substituta em `stand_ins`
+/// (chave: `hash128` da imagem). Só os quadros com imagem são copiados.
+fn swap_images(frame: &mut Frame, stand_ins: &HashMap<u128, Image>) {
+    if !has_image(frame) {
+        return;
+    }
+    frame.retain(|item| {
+        match item {
+            FrameItem::Group(group) => swap_images(&mut group.frame, stand_ins),
+            FrameItem::Image(image, _, _) => {
+                if let Some(small) = stand_ins.get(&typst::utils::hash128(&*image)) {
+                    *image = small.clone();
+                }
+            }
+            _ => {}
+        }
+        true
+    });
+}
+
+fn has_image(frame: &Frame) -> bool {
+    frame.items().any(|(_, item)| match item {
+        FrameItem::Group(group) => has_image(&group.frame),
+        FrameItem::Image(..) => true,
+        _ => false,
+    })
+}
+
+/// Chama `f` para cada imagem do quadro, inclusive dentro de grupos.
+fn for_each_image(frame: &Frame, f: &mut impl FnMut(&Image)) {
+    for (_, item) in frame.items() {
+        match item {
+            FrameItem::Group(group) => for_each_image(&group.frame, f),
+            FrameItem::Image(image, _, _) => f(image),
+            _ => {}
+        }
+    }
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    Sha256::digest(bytes)
+        .iter()
+        .fold(String::with_capacity(64), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        })
+}
+
+/// `sha256` em hexadecimal minúsculo (64 dígitos)? Qualquer outra coisa é recusada sem
+/// consultar nada.
+fn is_sha256(text: &str) -> bool {
+    text.len() == 64 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 impl Preview {
@@ -84,24 +285,42 @@ impl Preview {
         } = compilation;
         let (ok, changed) = match output {
             Some(doc) if status == Status::Ok => {
+                let previous = self.document.as_deref().map(PagedDocument::pages);
+                let mut hashed = 0;
                 let pages: Vec<PageInfo> = doc
                     .pages()
                     .iter()
                     .enumerate()
-                    .map(|(index, page)| PageInfo {
-                        index,
-                        hash: page_hash(page),
-                        width_pt: page.frame.width().to_pt(),
-                        height_pt: page.frame.height().to_pt(),
+                    .map(|(index, page)| {
+                        // Página igual à da última `Ok` no mesmo índice: mesmo hash, sem
+                        // percorrer os quadros refeitos (T076).
+                        let reused = previous
+                            .and_then(|old| old.get(index))
+                            .zip(self.pages.get(index))
+                            .filter(|(old, _)| same_page(old, page))
+                            .map(|(_, info)| info.hash.clone());
+                        let hash = reused.unwrap_or_else(|| {
+                            hashed += 1;
+                            page_hash(page)
+                        });
+                        PageInfo {
+                            index,
+                            hash,
+                            width_pt: page.frame.width().to_pt(),
+                            height_pt: page.frame.height().to_pt(),
+                        }
                     })
                     .collect();
+                self.hashed = hashed;
                 let changed = pages
                     .iter()
                     .filter(|p| self.pages.get(p.index).is_none_or(|old| old.hash != p.hash))
                     .map(|p| p.index)
                     .collect();
                 self.pages = pages;
+                self.assets.track(&doc);
                 self.document = Some(Arc::new(doc));
+                self.synced = None;
                 (true, changed)
             }
             // `ComErros` e `Abandonada`: mantém as páginas da última `Ok` (FR-014).
@@ -117,6 +336,35 @@ impl Preview {
         };
         self.last = Some(update.clone());
         update
+    }
+
+    /// Como [`Preview::apply`], guardando o World que compilou o documento junto com ele.
+    pub fn apply_compiled(&mut self, compilation: Compilation<Compiled>) -> PreviewUpdate {
+        let (output, world) = match compilation.output {
+            Some(Compiled { document, world }) => (Some(document), Some(world)),
+            None => (None, None),
+        };
+        let update = self.apply(Compilation {
+            compile_id: compilation.compile_id,
+            status: compilation.status,
+            output,
+            diagnostics: compilation.diagnostics,
+            duration_ms: compilation.duration_ms,
+        });
+        if let (true, Some(world), Some(doc)) = (update.ok, world, &self.document) {
+            self.synced = Some(Arc::new(Synced::new(Arc::clone(doc), world)));
+        }
+        update
+    }
+
+    /// Páginas hasheadas na última compilação `Ok` ([`same_page`]).
+    pub fn hashed_pages(&self) -> usize {
+        self.hashed
+    }
+
+    /// Último documento bom com o World que o compilou.
+    pub fn synced(&self) -> Option<&Arc<Synced>> {
+        self.synced.as_ref()
     }
 
     /// Último documento compilado com sucesso.
@@ -201,12 +449,12 @@ impl PreviewHub {
     }
 
     /// Aplica a compilação da geração `generation` e entrega o evento ao assinante.
-    pub fn deliver(&self, generation: u64, compilation: Compilation<PagedDocument>) {
+    pub fn deliver(&self, generation: u64, compilation: Compilation<Compiled>) {
         let mut state = self.lock();
         if state.generation != generation {
             return;
         }
-        let update = state.preview.apply(compilation);
+        let update = state.preview.apply_compiled(compilation);
         if let Some(sink) = &state.sink {
             sink(&update);
         }
@@ -217,9 +465,77 @@ impl PreviewHub {
         self.lock().preview.page(index, hash)
     }
 
-    /// Último documento compilado com sucesso (saltos e estrutura, fases seguintes).
+    /// SVG da página atual `index` com o hash `hash`, com cada imagem citada por
+    /// `prelo-asset://<sha256>` em vez da `data:` URL. O SVG e o sha256 de uma imagem nova são
+    /// calculados fora da trava; o sha256 fica guardado enquanto a imagem estiver no documento.
+    ///
+    /// T076 (SC-002): o SVG é gerado com cada imagem trocada por uma substituta minúscula
+    /// ([`stand_in`]) do mesmo tamanho na página. Com a imagem original, o `typst-svg` escreveria
+    /// a `data:` URL inteira (dezenas de MB para uma foto de 4000×3000 px) só para ela ser
+    /// trocada em seguida, e isso custava mais que a compilação a cada edição na página.
+    pub fn page_svg(&self, index: usize, hash: &str) -> Result<String, &'static str> {
+        let mut page = self.page(index, hash)?;
+        let mut done = HashSet::new();
+        let mut images = Vec::new();
+        for_each_image(&page.frame, &mut |image| {
+            if done.insert(typst::utils::hash128(image)) {
+                images.push(image.clone());
+            }
+        });
+        let mut urls = Vec::with_capacity(images.len());
+        let mut stand_ins = HashMap::with_capacity(images.len());
+        for image in images {
+            let key = typst::utils::hash128(&image);
+            let known = self.lock().preview.assets.by_image.get(&key).cloned();
+            let asset = known.unwrap_or_else(|| {
+                let image = WebImage::new(&image);
+                let asset = Arc::new(Asset {
+                    sha256: sha256_hex(&image.data),
+                    image,
+                });
+                self.lock().preview.assets.insert(key, &asset);
+                asset
+            });
+            let reference = format!("{ASSET_PREFIX}{}", asset.sha256);
+            match stand_in(&asset.sha256, image.scaling()) {
+                Some(small) => {
+                    // Memorizado pelo Typst: é a mesma `data:` URL que o `typst-svg` escreve.
+                    urls.push((WebImage::new(&small).to_base64_url(), reference));
+                    stand_ins.insert(key, small);
+                }
+                // Sem substituta (não acontece com o SVG fixo de `stand_in`): a imagem
+                // original vai para o SVG e a `data:` URL dela é trocada.
+                None => urls.push((asset.image.to_base64_url(), reference)),
+            }
+        }
+        if !stand_ins.is_empty() {
+            swap_images(&mut page.frame, &stand_ins);
+        }
+        Ok(replace_data_urls(&render_svg(&page), &urls))
+    }
+
+    fn asset(&self, sha256: &str) -> Option<Arc<Asset>> {
+        if !is_sha256(sha256) {
+            return None;
+        }
+        self.lock().preview.assets.by_sha.get(sha256).cloned()
+    }
+
+    /// Conteúdo `sha256` como `data:` URL, para a interface devolver ao SVG da página
+    /// (`preview_asset`). `None` se o hash não é de uma imagem servida da prévia atual.
+    pub fn asset_data_url(&self, sha256: &str) -> Option<String> {
+        self.asset(sha256)
+            .map(|asset| asset.image.to_base64_url().to_string())
+    }
+
+    /// Último documento compilado com sucesso.
     pub fn document(&self) -> Option<Arc<PagedDocument>> {
         self.lock().preview.document().cloned()
+    }
+
+    /// Último documento bom com o World que o compilou (saltos e estrutura, US4).
+    pub fn synced(&self) -> Option<Arc<Synced>> {
+        self.lock().preview.synced().cloned()
     }
 
     /// Ver [`Preview::export_source`].
@@ -231,7 +547,7 @@ impl PreviewHub {
     pub fn spawn_pump(
         self: &Arc<Self>,
         generation: u64,
-        compilations: Receiver<Compilation<PagedDocument>>,
+        compilations: Receiver<Compilation<Compiled>>,
     ) {
         let hub = Arc::clone(self);
         thread::Builder::new()
@@ -243,6 +559,83 @@ impl PreviewHub {
             })
             .expect("falha ao criar a thread da prévia");
     }
+}
+
+/// Troca, num passo só, cada valor de atributo `"data:…"` do SVG que seja exatamente uma das
+/// `urls` pelo substituto dela; o resto do SVG fica igual.
+///
+/// T076: `str::replace` com a `data:` URL inteira como padrão (dezenas de MB para uma imagem de
+/// 4000×3000 px) levava minutos por página: o buscador de substring prepara o padrão inteiro e
+/// varre o SVG com ele. Aqui cada valor `data:` é delimitado pelas aspas (busca de um byte) e
+/// comparado por tamanho e conteúdo, sem preparar nada.
+fn replace_data_urls(svg: &str, urls: &[(impl AsRef<str>, String)]) -> String {
+    const START: &str = "\"data:";
+    if urls.is_empty() {
+        return svg.to_owned();
+    }
+    let mut out = String::with_capacity(svg.len());
+    let mut rest = svg;
+    while let Some(at) = rest.find(START) {
+        let value = at + 1;
+        let Some(len) = rest[value..].find('"') else {
+            break;
+        };
+        let candidate = &rest[value..value + len];
+        out.push_str(&rest[..value]);
+        match urls.iter().find(|(url, _)| url.as_ref() == candidate) {
+            Some((_, replacement)) => out.push_str(replacement),
+            None => out.push_str(candidate),
+        }
+        rest = &rest[value + len..];
+    }
+    out.push_str(rest);
+    out
+}
+
+/// Nome do protocolo próprio das imagens da prévia (contracts/ipc.md).
+pub const ASSET_SCHEME: &str = "prelo-asset";
+
+/// Prefixo das referências a imagem no SVG da prévia: `prelo-asset://<sha256>`.
+pub const ASSET_PREFIX: &str = "prelo-asset://";
+
+/// CSP da resposta: se o conteúdo (um SVG, por exemplo) for aberto como documento, não roda
+/// script nem carrega nada.
+const ASSET_CSP: &str = "default-src 'none'; sandbox";
+
+/// Protocolo `prelo-asset` (contracts/ipc.md): `GET` de `/<sha256>` (macOS e Linux:
+/// `prelo-asset://localhost/<sha256>`; Windows: `http://prelo-asset.localhost/<sha256>`; ou o
+/// próprio `prelo-asset://<sha256>`) devolve os bytes da imagem. Só hashes de imagens da prévia
+/// atual; qualquer outro pedido (hash desconhecido, caminho, `..`, hexadecimal maiúsculo) é
+/// 404 sem consultar nada, e o que não for leitura é 405. Nenhum caminho de arquivo é aceito.
+pub fn asset_response(hub: &PreviewHub, request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
+    let status = |code: StatusCode| {
+        Response::builder()
+            .status(code)
+            .header(header::CACHE_CONTROL, "no-store")
+            .body(Vec::new())
+            .unwrap_or_default()
+    };
+    if request.method() != Method::GET {
+        return status(StatusCode::METHOD_NOT_ALLOWED);
+    }
+    let uri = request.uri();
+    let path = uri.path().strip_prefix('/').unwrap_or(uri.path());
+    let sha256 = if path.is_empty() {
+        uri.host().unwrap_or_default()
+    } else {
+        path
+    };
+    let Some(asset) = hub.asset(sha256) else {
+        return status(StatusCode::NOT_FOUND);
+    };
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, asset.mime())
+        .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
+        .header(header::CONTENT_SECURITY_POLICY, ASSET_CSP)
+        .header(header::CACHE_CONTROL, "no-store")
+        .body(asset.image.data.to_vec())
+        .unwrap_or_else(|_| status(StatusCode::NOT_FOUND))
 }
 
 #[cfg(test)]
@@ -270,6 +663,8 @@ mod tests {
             let (_, world) = slot.get_or_insert_with(|| {
                 let dir = tempfile::tempdir().expect("pasta temporária");
                 std::fs::write(dir.path().join("main.typ"), "").unwrap();
+                std::fs::write(dir.path().join("figura.png"), PNG).unwrap();
+                std::fs::write(dir.path().join("outra.webp"), OTHER_IMAGE).unwrap();
                 let world = ProjectWorld::open(dir.path(), "main.typ").expect("World");
                 (dir, world)
             });
@@ -369,6 +764,21 @@ mod tests {
         let fewer = preview.apply(ok(5, compile("#set page(width: 100pt, height: 80pt)\nA\n")));
         assert_eq!(fewer.pages.len(), 1);
         assert!(fewer.changed.is_empty(), "{:?}", fewer.changed);
+    }
+
+    /// T076 (#141): o hash completo de uma página percorre todos os quadros que a compilação
+    /// refez. Página igual à da última `Ok` reaproveita o hash dela; só as alteradas são
+    /// hasheadas.
+    #[test]
+    fn so_paginas_alteradas_sao_hasheadas() {
+        let mut preview = Preview::default();
+        preview.apply(ok(1, compile(&three_pages("B"))));
+        assert_eq!(preview.hashed_pages(), 3, "primeira compilação: todas");
+        let second = preview.apply(ok(2, compile(&three_pages("B mudou"))));
+        assert_eq!(second.changed, vec![1]);
+        assert_eq!(preview.hashed_pages(), 1, "só a página alterada");
+        preview.apply(ok(3, compile(&three_pages("B mudou"))));
+        assert_eq!(preview.hashed_pages(), 0, "nada mudou");
     }
 
     #[test]
@@ -483,5 +893,252 @@ mod tests {
             bare,
             serde_json::json!({ "severity": "error", "message": "x", "hints": [], "kind": "access" })
         );
+    }
+
+    // ------------------------------------------------ protocolo `prelo-asset` (T055)
+
+    /// Figuras das fixtures, gravadas na pasta do World de cada teste.
+    const PNG: &[u8] = include_bytes!("../../tests/fixtures/imagens/figura.png");
+    const OTHER_IMAGE: &[u8] = include_bytes!("../../tests/fixtures/imagens/figura.webp");
+
+    fn sha256_hex(bytes: &[u8]) -> String {
+        use sha2::Digest;
+        sha2::Sha256::digest(bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
+    }
+
+    /// Duas páginas: a primeira com a figura e `text`, a segunda só com texto.
+    fn with_image(text: &str) -> String {
+        format!(
+            "#set page(width: 200pt, height: 200pt)\n#image(\"figura.png\", width: 50pt)\n{text}\n#pagebreak()\nFim\n"
+        )
+    }
+
+    fn request(uri: &str) -> tauri::http::Request<Vec<u8>> {
+        tauri::http::Request::builder()
+            .uri(uri)
+            .body(Vec::new())
+            .unwrap()
+    }
+
+    /// Hub com a compilação `doc` entregue; devolve o evento.
+    /// Como [`PreviewHub::deliver`], para um documento sem o World que o compilou.
+    fn deliver_doc(hub: &PreviewHub, generation: u64, compilation: Compilation<PagedDocument>) {
+        let mut state = hub.lock();
+        assert_eq!(state.generation, generation);
+        let update = state.preview.apply(compilation);
+        if let Some(sink) = &state.sink {
+            sink(&update);
+        }
+    }
+
+    fn hub_with(doc: PagedDocument) -> (PreviewHub, u64, PreviewUpdate) {
+        let hub = PreviewHub::default();
+        let generation = hub.reset();
+        let (tx, rx) = std::sync::mpsc::channel();
+        hub.subscribe(Arc::new(move |u: &PreviewUpdate| {
+            let _ = tx.send(u.clone());
+        }));
+        deliver_doc(&hub, generation, ok(1, doc));
+        let update = rx.try_recv().expect("evento entregue");
+        (hub, generation, update)
+    }
+
+    fn current_hash(hub: &PreviewHub, index: usize) -> String {
+        hub.lock().preview.pages[index].hash.clone()
+    }
+
+    fn asset_tokens(svg: &str) -> Vec<String> {
+        svg.match_indices(ASSET_PREFIX)
+            .map(|(i, _)| svg[i + ASSET_PREFIX.len()..][..64].to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn data_url_de_imagem_vira_prelo_asset_com_o_sha256_dos_bytes() {
+        let (hub, _, update) = hub_with(compile(&with_image("Legenda")));
+        let svg = hub.page_svg(0, &update.pages[0].hash).expect("SVG");
+        assert!(svg.contains("<image"), "{svg:.200}");
+        assert!(
+            !svg.contains("data:image/"),
+            "imagem continua embutida no SVG"
+        );
+        assert_eq!(asset_tokens(&svg), vec![sha256_hex(PNG)]);
+        // A referência é o atributo inteiro, sem sobra do `data:`.
+        assert!(svg.contains(&format!("\"{ASSET_PREFIX}{}\"", sha256_hex(PNG))));
+
+        // Página sem figura: nenhuma referência.
+        let text_only = hub.page_svg(1, &update.pages[1].hash).expect("SVG");
+        assert!(asset_tokens(&text_only).is_empty());
+    }
+
+    #[test]
+    fn protocolo_serve_os_bytes_do_hash_conhecido() {
+        let (hub, _, update) = hub_with(compile(&with_image("Legenda")));
+        hub.page_svg(0, &update.pages[0].hash).expect("SVG");
+        let sha = sha256_hex(PNG);
+        // macOS/Linux (`prelo-asset://localhost/<sha>`) e Windows
+        // (`http://prelo-asset.localhost/<sha>`).
+        for uri in [
+            format!("prelo-asset://localhost/{sha}"),
+            format!("http://prelo-asset.localhost/{sha}"),
+        ] {
+            let response = asset_response(&hub, &request(&uri));
+            assert_eq!(response.status(), 200, "{uri}");
+            assert_eq!(response.body().as_slice(), PNG);
+            let header = |name: &str| {
+                response
+                    .headers()
+                    .get(name)
+                    .and_then(|v| v.to_str().ok())
+                    .map(str::to_owned)
+            };
+            assert_eq!(header("content-type").as_deref(), Some("image/png"));
+            assert_eq!(header("x-content-type-options").as_deref(), Some("nosniff"));
+            assert!(
+                header("content-security-policy").is_some_and(|c| c.contains("default-src 'none'")),
+                "resposta sem CSP própria"
+            );
+        }
+        // O mesmo conteúdo como `data:` URL, para a interface embutir no SVG da página.
+        let url = hub.asset_data_url(&sha).expect("data URL");
+        assert!(url.starts_with("data:image/png;base64,"), "{url:.40}");
+    }
+
+    #[test]
+    fn hash_desconhecido_ou_pedido_malformado_responde_404() {
+        let (hub, _, update) = hub_with(compile(&with_image("Legenda")));
+        hub.page_svg(0, &update.pages[0].hash).expect("SVG");
+        let sha = sha256_hex(PNG);
+        let unknown = sha256_hex(b"outra coisa");
+        for uri in [
+            format!("prelo-asset://localhost/{unknown}"),
+            // Bytes que existem no projeto mas não foram para a prévia.
+            format!("prelo-asset://localhost/{}", sha256_hex(OTHER_IMAGE)),
+            format!("prelo-asset://localhost/{}", sha.to_uppercase()),
+            format!("prelo-asset://localhost/{}", &sha[..63]),
+            format!("prelo-asset://localhost/{sha}/x"),
+            format!("prelo-asset://localhost/../{sha}"),
+            "prelo-asset://localhost/..%2F..%2Fetc%2Fpasswd".to_owned(),
+            "prelo-asset://localhost/main.typ".to_owned(),
+            "prelo-asset://localhost/".to_owned(),
+        ] {
+            let response = asset_response(&hub, &request(&uri));
+            assert_eq!(response.status(), 404, "{uri}");
+            assert!(response.body().is_empty(), "{uri}");
+        }
+        assert!(hub.asset_data_url(&unknown).is_none());
+
+        // Só leitura.
+        let post = tauri::http::Request::builder()
+            .method("POST")
+            .uri(format!("prelo-asset://localhost/{sha}"))
+            .body(Vec::new())
+            .unwrap();
+        assert_eq!(asset_response(&hub, &post).status(), 405);
+    }
+
+    #[test]
+    fn hash_so_vale_enquanto_a_imagem_esta_na_compilacao_atual() {
+        let hub = PreviewHub::default();
+        let generation = hub.reset();
+        deliver_doc(&hub, generation, ok(1, compile(&with_image("Legenda"))));
+        let page = current_hash(&hub, 0);
+        hub.page_svg(0, &page).expect("SVG");
+        let sha = sha256_hex(PNG);
+        assert!(hub.asset_data_url(&sha).is_some());
+
+        // Compilação nova sem a figura: o hash some.
+        deliver_doc(&hub, generation, ok(2, compile(&three_pages("B"))));
+        assert!(hub.asset_data_url(&sha).is_none());
+        let response = asset_response(&hub, &request(&format!("prelo-asset://localhost/{sha}")));
+        assert_eq!(response.status(), 404);
+
+        // Projeto novo (reset): nada da prévia anterior.
+        deliver_doc(&hub, generation, ok(3, compile(&with_image("Legenda"))));
+        let page = current_hash(&hub, 0);
+        hub.page_svg(0, &page).expect("SVG");
+        assert!(hub.asset_data_url(&sha).is_some());
+        hub.reset();
+        assert!(hub.asset_data_url(&sha).is_none());
+    }
+
+    #[test]
+    fn editar_texto_na_pagina_da_imagem_nao_reenvia_os_bytes() {
+        let hub = PreviewHub::default();
+        let generation = hub.reset();
+        deliver_doc(&hub, generation, ok(1, compile(&with_image("Legenda"))));
+        let first_hash = current_hash(&hub, 0);
+        let first = hub.page_svg(0, &first_hash).expect("SVG");
+
+        deliver_doc(
+            &hub,
+            generation,
+            ok(2, compile(&with_image("Legenda editada"))),
+        );
+        let second_hash = current_hash(&hub, 0);
+        assert_ne!(second_hash, first_hash, "a página da figura mudou");
+        let second = hub.page_svg(0, &second_hash).expect("SVG");
+
+        // O SVG da página editada só cita o hash: os bytes da figura não vão de novo.
+        assert_eq!(asset_tokens(&second), asset_tokens(&first));
+        assert!(!second.contains("data:image/"));
+        // Comparado ao SVG com a imagem embutida, fica menor pelo menos o tamanho dela.
+        let inline = render_svg(&hub.page(0, &second_hash).unwrap());
+        assert!(
+            inline.len() >= second.len() + PNG.len(),
+            "SVG leva a imagem: {} com, {} sem",
+            inline.len(),
+            second.len()
+        );
+        assert!(hub.asset_data_url(&sha256_hex(PNG)).is_some());
+    }
+
+    #[test]
+    fn troca_so_valores_data_que_sao_exatamente_uma_das_urls() {
+        let urls = [
+            ("data:image/png;base64,AAAA", "prelo-asset://a".to_owned()),
+            ("data:image/png;base64,AAAAB", "prelo-asset://b".to_owned()),
+        ];
+        let svg = concat!(
+            r#"<svg><image xlink:href="data:image/png;base64,AAAA" width="1"/>"#,
+            r#"<image xlink:href="data:image/png;base64,AAAAB"/>"#,
+            r#"<image xlink:href="data:image/png;base64,AAA"/>"#,
+            r#"<image xlink:href="data:image/png;base64,AAAA"/>"#,
+            r#"<text>data:image/png;base64,AAAA</text></svg>"#,
+        );
+        assert_eq!(
+            replace_data_urls(svg, &urls),
+            concat!(
+                r#"<svg><image xlink:href="prelo-asset://a" width="1"/>"#,
+                r#"<image xlink:href="prelo-asset://b"/>"#,
+                r#"<image xlink:href="data:image/png;base64,AAA"/>"#,
+                r#"<image xlink:href="prelo-asset://a"/>"#,
+                r#"<text>data:image/png;base64,AAAA</text></svg>"#,
+            )
+        );
+        // Sem urls, ou com valor `data:` sem aspas de fechamento, nada muda.
+        let none: [(&str, String); 0] = [];
+        assert_eq!(replace_data_urls(svg, &none), svg);
+        let open = r#"<image xlink:href="data:image/png;base64,AAAA"#;
+        assert_eq!(replace_data_urls(open, &urls), open);
+    }
+
+    /// T076: imagem grande (dezenas de MB em base64) na página editada. Com `str::replace`, a
+    /// troca da `data:` URL levava minutos; agora é uma varredura linear.
+    #[test]
+    fn troca_data_url_grande_sem_custo_quadratico() {
+        let big = format!("data:image/png;base64,{}", "QUJD".repeat(2_000_000));
+        let svg = format!(r#"<svg><image xlink:href="{big}"/><path d="M0 0"/></svg>"#);
+        let started = std::time::Instant::now();
+        let out = replace_data_urls(&svg, &[(big.as_str(), "prelo-asset://x".to_owned())]);
+        assert_eq!(
+            out,
+            r#"<svg><image xlink:href="prelo-asset://x"/><path d="M0 0"/></svg>"#
+        );
+        // Folga larga para build de depuração em CI lento; o problema antigo levava minutos.
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
     }
 }

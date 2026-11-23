@@ -20,6 +20,8 @@ const INFO: ProjectInfo = {
   warnings: [],
 };
 
+const NEW_INFO: ProjectInfo = { ...INFO, name: "artigo-novo" };
+
 const TREE = [
   { name: "capitulos", path: "capitulos", kind: "dir", children: [{ name: "metodo.typ", path: "capitulos/metodo.typ", kind: "file" }] },
   { name: "main.typ", path: "main.typ", kind: "file" },
@@ -48,6 +50,7 @@ function setup(extra: Parameters<typeof fakeCore>[0] = {}) {
     get_app_info: () => ({ version: "0.1.0", os: "macos", arch: "aarch64" }),
     subscribe_preview: () => null,
     open_project_dialog: () => INFO,
+    create_project_dialog: () => NEW_INFO,
     list_tree: () => TREE,
     open_file: (a) => ({ text: FILES[a.path as string] ?? "", version: 1 }),
     edit_file: () => ({ version: ++version }),
@@ -209,6 +212,62 @@ describe("prévia e diagnósticos (cenários 2 e 4)", () => {
     ws.onPreviewUpdate((u) => seen.push(u.compileId));
     core.push(update({ compileId: 7 }));
     expect(seen).toEqual([7]);
+  });
+});
+
+describe("novo projeto (US6)", () => {
+  it("botão na barra chama create_project_dialog e abre o projeto criado", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    const novo = root.querySelector<HTMLButtonElement>(".ws-top button[data-action='new-project']");
+    expect(novo?.textContent).toMatch(/Novo projeto/);
+    novo!.click();
+    await settle();
+    expect(core.calls("create_project_dialog")).toHaveLength(1);
+    expect(core.calls("create_project_dialog")[0]?.args).toEqual({});
+    expect(core.calls("open_project_dialog")).toHaveLength(0);
+    expect(root.querySelector(".ws-project")?.textContent).toContain("artigo-novo");
+    expect(core.calls("open_file")[0]?.args).toEqual({ path: "main.typ" });
+    expect(ws.project()?.name).toBe("artigo-novo");
+  });
+
+  it("sem projeto, o convite do editor também oferece criar um", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    const novo = root.querySelector<HTMLButtonElement>(".ws-editor button[data-action='new-project']");
+    expect(novo).not.toBeNull();
+    novo!.click();
+    await settle();
+    expect(core.calls("create_project_dialog")).toHaveLength(1);
+  });
+
+  it("cancelar o diálogo não muda nada", async () => {
+    const { core, root, ws } = setup({ create_project_dialog: () => null });
+    await ws.ready;
+    button(root, /Novo projeto/)!.click();
+    await settle();
+    expect(core.calls("list_tree")).toHaveLength(0);
+    expect(ws.project()).toBeNull();
+    expect(root.querySelector<HTMLElement>(".ws-message")!.hidden).toBe(true);
+  });
+
+  it("folder_not_empty mostra o aviso em português e mantém o projeto aberto", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    await settle();
+    const opened = core.calls("open_file").length;
+    core.on("create_project_dialog", () => {
+      throw "folder_not_empty";
+    });
+    button(root, /Novo projeto/)!.click();
+    await settle();
+    const msg = root.querySelector<HTMLElement>(".ws-message")!;
+    expect(msg.hidden).toBe(false);
+    expect(msg.textContent).toBe("A pasta escolhida não está vazia. Escolha uma pasta vazia.");
+    expect(ws.project()?.name).toBe("artigo-basico");
+    expect(core.calls("open_file")).toHaveLength(opened);
+    expect(ws.editor()?.path).toBe("main.typ");
   });
 });
 

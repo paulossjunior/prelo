@@ -195,6 +195,61 @@ const nextFrame = () =>
     requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
   });
 
+/** Marcas digitadas no roteiro de encerramento forçado (T077; SC-009). */
+export const CRASH_MARKS = 12;
+/** Intervalo entre as marcas: digitação contínua, sem a pausa de 2 s. */
+export const CRASH_INTERVAL_MS = 250;
+
+/**
+ * Encerramento forçado, fase 1 (T077): abre a cópia, digita `marca-<n>` (uma por linha, no fim
+ * do arquivo principal) a cada {@link CRASH_INTERVAL_MS} e chama `mark` depois de cada uma (no
+ * app real, `self_test_mark` espera o núcleo ter o texto e avisa o roteiro). Depois fica
+ * parada: o roteiro (scripts/self-test.mjs) mata o processo 2 s após a última marca.
+ */
+export async function runCrashWrite(
+  ws: WorkspaceHandle,
+  open: () => Promise<ProjectInfo>,
+  mark: (path: string, n: number) => Promise<void>,
+  intervalMs = CRASH_INTERVAL_MS,
+): Promise<void> {
+  const info = await open();
+  await ws.showProject(info);
+  const editor = ws.editor();
+  if (!editor || editor.path !== info.mainFile) throw new Error("o arquivo principal não abriu no editor");
+  for (let n = 1; n <= CRASH_MARKS; n++) {
+    const view = editor.view;
+    view.dispatch({ changes: { from: view.state.doc.length, insert: `\nmarca-${n}` }, userEvent: "input.type" });
+    await mark(info.mainFile, n);
+    if (n < CRASH_MARKS) await new Promise((r) => setTimeout(r, intervalMs));
+  }
+}
+
+/** Encerramento forçado, fase 2 (T077): reabre a cópia e devolve o texto que o editor mostra. */
+export async function runCrashReopen(ws: WorkspaceHandle, open: () => Promise<ProjectInfo>): Promise<string> {
+  const info = await open();
+  await ws.showProject(info);
+  const editor = ws.editor();
+  if (!editor || editor.path !== info.mainFile) throw new Error("o arquivo principal não abriu ao reabrir");
+  return editor.view.state.doc.toString();
+}
+
+/** Resultado vazio com a falha, para o núcleo encerrar o app com código 1. */
+function failed(err: unknown): ScenarioResult {
+  return {
+    projectOpened: false,
+    previewChanged: false,
+    errorLine: 0,
+    diagnosticLine: null,
+    editorMarked: false,
+    compilerShown: "",
+    layoutProblems: [],
+    externalReloaded: false,
+    externalErrorLine: 0,
+    externalDiagnosticLine: null,
+    failure: `encerramento forçado: ${err instanceof Error ? err.message : String(err)}`,
+  };
+}
+
 /** Roda o autoteste no app real e entrega o resultado ao núcleo. */
 export async function reportSelfTest(
   ws: WorkspaceHandle,
@@ -205,6 +260,21 @@ export async function reportSelfTest(
   // SC-002: versão e sistema visíveis em até 3 s desde o início da página.
   const elapsedMs = Math.round(performance.now());
   const rendered = ws.appInfoElement.textContent?.trim() ?? "";
+  // T077: roteiro de encerramento forçado no lugar do autoteste normal.
+  const crash = await invoke<"write" | "reopen" | null>("self_test_crash_mode");
+  if (crash) {
+    const open = () => invoke<ProjectInfo>("self_test_open_project");
+    try {
+      if (crash === "write") {
+        await runCrashWrite(ws, open, (path, n) => invoke("self_test_mark", { path, n }));
+      } else {
+        await invoke("self_test_reopened", { text: await runCrashReopen(ws, open) });
+      }
+    } catch (err) {
+      await invoke("self_test_report", { rendered, elapsedMs, scenario: failed(err) });
+    }
+    return;
+  }
   const scenario = await runEditorScenario(ws, () => invoke<ProjectInfo>("self_test_open_project"), {
     checkLayout: async () => {
       const restore = openAllPanes(document);

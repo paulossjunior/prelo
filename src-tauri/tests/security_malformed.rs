@@ -18,15 +18,18 @@ use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use prelo_lib::compile::project::{CompileInput, ProjectCompiler};
-use prelo_lib::compile::scheduler::{Compilation, Scheduler, Status, COMPILE_TIMEOUT};
+use prelo_lib::compile::project::{CompileInput, Compiled, ProjectCompiler};
+use prelo_lib::compile::scheduler::{
+    Compilation, Scheduler, Status, COMPILE_TIMEOUT, MAX_COMPILE_THREADS,
+};
 use prelo_lib::diagnostic::{Diagnostic, Kind};
 use prelo_lib::fs::access_model::AccessModel;
 use prelo_lib::fs::scope::{Scope, MAX_CSL_BYTES};
 use prelo_lib::project::record::{self, RecordState, RECORD_PATH};
+use prelo_lib::world::plugins::{sha256_hex, Decision, PluginApprovals};
+use prelo_lib::world::WorldEnv;
 use support::{fixtures_dir, TempProject};
 use tinymist_vfs::PathAccessModel;
-use typst_layout::PagedDocument;
 
 /// Prazo para a resposta a uma edição depois de entrada malformada (SC-004).
 const RESPONSIVE: Duration = Duration::from_secs(1);
@@ -44,14 +47,19 @@ const EDIT: &str = "= Editado\n\nTexto válido.\n";
 struct Live {
     project: TempProject,
     scheduler: Scheduler<ProjectCompiler>,
-    results: Receiver<Compilation<PagedDocument>>,
+    results: Receiver<Compilation<Compiled>>,
 }
 
 impl Live {
     fn new(project: TempProject, timeout: Duration) -> Self {
+        Self::with_env(project, timeout, WorldEnv::default())
+    }
+
+    /// Com decisões de plugin (e cache de pacotes) dados.
+    fn with_env(project: TempProject, timeout: Duration, env: WorldEnv) -> Self {
         let root: PathBuf = project.root();
         let (scheduler, results) = Scheduler::with_timeout(
-            move || ProjectCompiler::new(root.clone(), "main.typ"),
+            move || ProjectCompiler::with_env(root.clone(), "main.typ", env.clone()),
             timeout,
         );
         Self {
@@ -75,7 +83,7 @@ impl Live {
     }
 
     /// Compila o que está no disco e devolve o resultado, dentro de [`DELIVERY`].
-    fn compile_disk(&self) -> Compilation<PagedDocument> {
+    fn compile_disk(&self) -> Compilation<Compiled> {
         let id = self.scheduler.submit(CompileInput {
             main: "main.typ".into(),
             files: Vec::new(),
@@ -83,7 +91,7 @@ impl Live {
         self.wait(id, DELIVERY)
     }
 
-    fn wait(&self, id: u64, limit: Duration) -> Compilation<PagedDocument> {
+    fn wait(&self, id: u64, limit: Duration) -> Compilation<Compiled> {
         let deadline = Instant::now() + limit;
         loop {
             let left = deadline.saturating_duration_since(Instant::now());
@@ -373,20 +381,35 @@ fn laco_infinito() {
     );
 }
 
+/// Projeto cujo `main.typ` chama um plugin aprovado (mecanismo de T047, decisão nos dados
+/// locais do app, FR-019) que nunca retorna.
+fn forever_plugin(timeout: Duration) -> Live {
+    let wasm = std::fs::read(fixtures_dir().join("plugin/teste.wasm")).unwrap();
+    let project = TempProject::empty();
+    project.write("main.typ", FOREVER);
+    project.write("teste.wasm", &wasm);
+    let data = tempfile::tempdir().unwrap();
+    let approvals = Arc::new(PluginApprovals::load(data.path()));
+    approvals
+        .decide(
+            &project.root(),
+            &sha256_hex(&wasm),
+            "teste.wasm",
+            Decision::Approved,
+        )
+        .unwrap();
+    let env = WorldEnv {
+        approvals: Some(approvals),
+        ..WorldEnv::default()
+    };
+    Live::with_env(project, timeout, env)
+}
+
+const FOREVER: &str = "#let p = plugin(\"teste.wasm\")\n#p.forever()\n";
+
 #[test]
 fn plugin_aprovado_que_nao_retorna_e_abandonado() {
-    // Até T047, todo plugin roda sem pedir confirmação; este é o caso do plugin aprovado.
-    let wasm = std::fs::read(fixtures_dir().join("plugin/teste.wasm")).unwrap();
-    let live = Live::with_timeout(
-        &[
-            (
-                "main.typ",
-                b"#let p = plugin(\"teste.wasm\")\n#p.forever()\n",
-            ),
-            ("teste.wasm", &wasm),
-        ],
-        SHORT_TIMEOUT,
-    );
+    let live = forever_plugin(SHORT_TIMEOUT);
     let compilation = live.compile_disk();
     assert_eq!(compilation.status, Status::Abandonada);
     let diag = compilation
@@ -396,6 +419,48 @@ fn plugin_aprovado_que_nao_retorna_e_abandonado() {
         .expect("diagnóstico de abandono");
     assert!(diag.message.contains("excedeu"), "{diag:?}");
     live.assert_responds();
+}
+
+/// T078 (research R9): cada edição sobre o plugin que não retorna prende uma thread. Depois
+/// de 3 compilações abandonadas o número de threads de compilação vivas fica no limite, e o
+/// editor continua respondendo a cada edição em até 1 s (com diagnóstico, sem compilar).
+#[test]
+fn tres_compilacoes_abandonadas_nao_acumulam_threads() {
+    let live = forever_plugin(Duration::from_millis(500));
+    for i in 0..3 {
+        let id = live.scheduler.submit(CompileInput {
+            main: "main.typ".into(),
+            files: vec![("main.typ".into(), Arc::from(format!("{FOREVER}// {i}\n")))],
+        });
+        let compilation = live.wait(id, DELIVERY);
+        assert_eq!(compilation.status, Status::Abandonada, "edição {i}");
+        assert!(live.scheduler.compile_threads() <= MAX_COMPILE_THREADS);
+    }
+    assert!(
+        live.scheduler.compile_threads() <= MAX_COMPILE_THREADS,
+        "{} threads de compilação vivas",
+        live.scheduler.compile_threads()
+    );
+    // Mais edições, inclusive a que tira o plugin: resposta em até 1 s, sem thread nova.
+    for text in [FOREVER, EDIT] {
+        let started = Instant::now();
+        let id = live.scheduler.submit(CompileInput {
+            main: "main.typ".into(),
+            files: vec![("main.typ".into(), Arc::from(text))],
+        });
+        let compilation = live.wait(id, RESPONSIVE);
+        assert!(started.elapsed() < RESPONSIVE);
+        assert_eq!(compilation.status, Status::ComErros);
+        assert!(
+            compilation
+                .diagnostics
+                .iter()
+                .any(|d| d.kind == Kind::Typst && d.message.contains("suspensa")),
+            "{:?}",
+            compilation.diagnostics
+        );
+    }
+    assert!(live.scheduler.compile_threads() <= MAX_COMPILE_THREADS);
 }
 
 #[test]

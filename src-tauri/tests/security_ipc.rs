@@ -433,6 +433,16 @@ fn argumentos_malformados_sao_recusados_sem_derrubar_o_nucleo() {
             "jump_from_cursor",
             json!({ "path": "main.typ", "offset": "0" }),
         ),
+        ("jump_from_click", json!({ "page": -1, "xPt": 1, "yPt": 1 })),
+        (
+            "jump_from_click",
+            json!({ "page": 0, "xPt": "1", "yPt": 1 }),
+        ),
+        ("jump_from_click", json!({ "page": 0, "xPt": 1 })),
+        (
+            "jump_from_click",
+            json!({ "page": 0, "xPt": 1, "yPt": 1, "path": "main.typ" }),
+        ),
     ];
     for (cmd, args) in specific {
         let shown = args.to_string();
@@ -445,7 +455,8 @@ fn argumentos_malformados_sao_recusados_sem_derrubar_o_nucleo() {
         InvokeBody::Json(json!("x")),
         InvokeBody::Raw(vec![1, 2, 3]),
     ] {
-        assert!(h.invoke("list_tree", body).is_err());
+        assert!(h.invoke("list_tree", body.clone()).is_err());
+        assert!(h.invoke("outline", body).is_err());
     }
     assert!(
         h.engine.calls().is_empty(),
@@ -613,4 +624,103 @@ fn criar_dentro_do_projeto_devolve_caminho_normalizado_sem_sobrescrever() {
     assert!(tree.contains("capitulos/anexos"), "{tree}");
     let opened = h.call("open_file", json!({ "path": "novo.typ" })).unwrap();
     assert_eq!(opened["text"], json!(""));
+}
+
+/// `decide_plugin` e `redownload_package` não recebem caminho: só um hash pedido pelo núcleo
+/// e um `@preview/<nome>:<versão>`. Caminho, hash inventado ou spec fora do formato são
+/// recusados sem tocar disco nem rede.
+#[test]
+fn plugins_e_pacotes_nao_aceitam_caminho_nem_hash_inventado() {
+    let h = Harness::new();
+    let secret = h.outside.secret().to_string_lossy().into_owned();
+    let upper = "A".repeat(64);
+    for sha in [
+        "../../etc/passwd",
+        "/etc/passwd",
+        secret.as_str(),
+        "",
+        upper.as_str(),
+    ] {
+        assert_eq!(
+            h.call("decide_plugin", json!({ "sha256": sha, "approve": true })),
+            Err(json!("invalid_arguments")),
+            "{sha:?}"
+        );
+    }
+    assert_eq!(
+        h.call(
+            "decide_plugin",
+            json!({ "sha256": "a".repeat(64), "approve": true })
+        ),
+        Err(json!("not_found")),
+        "hash que o núcleo não pediu"
+    );
+    assert_eq!(
+        h.call(
+            "decide_plugin",
+            json!({ "sha256": "a".repeat(64), "approve": true, "path": "main.typ" })
+        ),
+        Err(json!("invalid_arguments"))
+    );
+    for spec in [
+        "/etc/passwd",
+        "../x",
+        secret.as_str(),
+        "@preview/../x:1.0.0",
+        "@preview/x:1.0.0/../../y",
+        "@local/x:1.0.0",
+        "https://exemplo.com/x.tar.gz",
+    ] {
+        let res = h.call("redownload_package", json!({ "spec": spec }));
+        assert_eq!(res, Err(json!("invalid_arguments")), "{spec:?}");
+    }
+    assert_eq!(
+        h.call(
+            "redownload_package",
+            json!({ "spec": "@preview/x:1.0.0", "path": "a" })
+        ),
+        Err(json!("invalid_arguments"))
+    );
+    // Sem dados locais (app de teste), nada é baixado.
+    assert_eq!(
+        h.call("redownload_package", json!({ "spec": "@preview/x:1.0.0" })),
+        Err(json!("network_unavailable"))
+    );
+    h.still_alive();
+}
+
+/// `copy_into_project` (D-13, FR-023) recebe só `{ requested }`: o arquivo de origem é escolhido
+/// no diálogo nativo do núcleo, nunca enviado pela webview. `source` (ou qualquer campo a
+/// mais) é recusado, e pedido que o núcleo não ofereceu é recusado antes de qualquer diálogo,
+/// sem gravar nada no projeto.
+#[test]
+fn copy_into_project_nao_aceita_origem_da_webview_nem_pedido_nao_oferecido() {
+    let h = Harness::new();
+    let secret = h.outside.secret().to_string_lossy().into_owned();
+    let before = std::fs::read_dir(h.project.root()).unwrap().count();
+    for args in [
+        json!({ "requested": "../x/refs.bib", "source": secret }),
+        json!({ "source": secret }),
+        json!({ "requested": 1 }),
+        json!({}),
+    ] {
+        assert_eq!(
+            h.call("copy_into_project", args.clone()),
+            Err(json!("invalid_arguments")),
+            "{args}"
+        );
+    }
+    for requested in ["../x/refs.bib", secret.as_str(), "/etc/passwd", "main.typ"] {
+        assert_eq!(
+            h.call("copy_into_project", json!({ "requested": requested })),
+            Err(json!("not_offered")),
+            "{requested:?}"
+        );
+    }
+    assert_eq!(
+        std::fs::read_dir(h.project.root()).unwrap().count(),
+        before,
+        "nada gravado no projeto"
+    );
+    h.still_alive();
 }

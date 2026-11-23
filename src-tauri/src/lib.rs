@@ -7,6 +7,7 @@ pub mod lang_service;
 pub mod project;
 #[cfg(feature = "self-test")]
 mod self_test;
+pub mod trust;
 
 // O autoteste encerra o app pelo IPC; nunca pode ir para uma build de release.
 #[cfg(all(feature = "self-test", not(debug_assertions)))]
@@ -30,11 +31,13 @@ pub fn configure_with_state<R: Runtime>(
     state: commands::AppState,
 ) -> Builder<R> {
     builder
-        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`, `export_pdf_dialog`). Os comandos
+        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`,
+        // `create_project_dialog`, `export_pdf_dialog`, `copy_into_project`). Os comandos
         // `plugin:dialog|*` ficam fora do alcance da webview: nenhuma capability concede
         // `dialog:` (tests/security_config.rs, tests/security_ipc.rs).
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
+        .register_uri_scheme_protocol(compile::preview::ASSET_SCHEME, asset_protocol)
         .invoke_handler(tauri::generate_handler![
             app_info::get_app_info,
             commands::list_tree,
@@ -42,6 +45,7 @@ pub fn configure_with_state<R: Runtime>(
             commands::create_file,
             commands::create_dir,
             project::open_project_dialog,
+            project::create_project_dialog,
             project::update_project_compiler_version,
             project::compiler_info,
             commands::open_file,
@@ -51,8 +55,14 @@ pub fn configure_with_state<R: Runtime>(
             commands::complete,
             commands::semantic_tokens,
             commands::jump_from_cursor,
+            commands::jump_from_click,
+            commands::outline,
             commands::subscribe_preview,
             commands::page_svg,
+            commands::preview_asset,
+            commands::decide_plugin,
+            commands::redownload_package,
+            commands::copy_into_project,
             compile::export::export_pdf_dialog
         ])
 }
@@ -65,11 +75,13 @@ pub fn configure_with_state<R: Runtime>(
     state: commands::AppState,
 ) -> Builder<R> {
     builder
-        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`, `export_pdf_dialog`). Os comandos
-        // `plugin:dialog|*` ficam fora do alcance da webview: nenhuma capability concede
-        // `dialog:` (tests/security_config.rs, tests/security_ipc.rs).
+        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`,
+        // `create_project_dialog`, `export_pdf_dialog`). Os comandos `plugin:dialog|*` ficam
+        // fora do alcance da webview: nenhuma capability concede `dialog:`
+        // (tests/security_config.rs, tests/security_ipc.rs).
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
+        .register_uri_scheme_protocol(compile::preview::ASSET_SCHEME, asset_protocol)
         .invoke_handler(tauri::generate_handler![
             app_info::get_app_info,
             commands::list_tree,
@@ -77,6 +89,7 @@ pub fn configure_with_state<R: Runtime>(
             commands::create_file,
             commands::create_dir,
             project::open_project_dialog,
+            project::create_project_dialog,
             project::update_project_compiler_version,
             project::compiler_info,
             commands::open_file,
@@ -86,25 +99,44 @@ pub fn configure_with_state<R: Runtime>(
             commands::complete,
             commands::semantic_tokens,
             commands::jump_from_cursor,
+            commands::jump_from_click,
+            commands::outline,
             commands::subscribe_preview,
             commands::page_svg,
+            commands::preview_asset,
+            commands::decide_plugin,
+            commands::redownload_package,
+            commands::copy_into_project,
             compile::export::export_pdf_dialog,
             self_test::self_test_report,
             self_test::self_test_open_project,
-            self_test::self_test_write_external
+            self_test::self_test_write_external,
+            self_test::self_test_crash_mode,
+            self_test::self_test_mark,
+            self_test::self_test_reopened
         ])
         .manage(self_test::FixtureCopy::default())
 }
 
-/// Intervalo em que o núcleo confere se há arquivo para o salvamento automático.
-const AUTOSAVE_TICK: std::time::Duration = std::time::Duration::from_millis(250);
+/// Protocolo `prelo-asset` (contracts/ipc.md; T058): imagens da prévia atual por sha256,
+/// 404 para qualquer outra coisa ([`compile::preview::asset_response`]).
+fn asset_protocol<R: Runtime>(
+    ctx: tauri::UriSchemeContext<'_, R>,
+    request: tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    ctx.app_handle()
+        .state::<commands::AppState>()
+        .preview_asset_response(&request)
+}
 
-/// Salvamento automático (FR-007): confere a cada [`AUTOSAVE_TICK`] os arquivos ociosos há 2 s.
+/// Salvamento automático (FR-007, SC-009): confere a cada
+/// [`AUTOSAVE_TICK`](crate::fs::save::AUTOSAVE_TICK) os arquivos com
+/// texto por gravar há [`AUTOSAVE_DELAY`](crate::fs::save::AUTOSAVE_DELAY).
 fn spawn_autosave<R: Runtime>(app: tauri::AppHandle<R>) {
     std::thread::Builder::new()
         .name("prelo-autosave".into())
         .spawn(move || loop {
-            std::thread::sleep(AUTOSAVE_TICK);
+            std::thread::sleep(fs::save::AUTOSAVE_TICK);
             for path in app
                 .state::<commands::AppState>()
                 .autosave(std::time::Instant::now())
@@ -157,6 +189,30 @@ fn notify_disk_change<R: Runtime>(app: &tauri::AppHandle<R>, path: &str) {
     }
 }
 
+/// Decisões de plugin e cache de pacotes nos dados locais do app; pedidos de confirmação
+/// viram o evento `plugin_approval_needed` (contracts/ipc.md).
+fn connect_trust<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
+    let dir = app.path().app_local_data_dir()?;
+    let state = app.state::<commands::AppState>();
+    state.trust().set_data_dir(dir);
+    let handle = app.clone();
+    state
+        .trust()
+        .set_listener(std::sync::Arc::new(move |request| {
+            if let Err(e) = handle.emit(trust::PLUGIN_APPROVAL_NEEDED, request) {
+                eprintln!("prelo: pedido de confirmação de plugin não entregue: {e}");
+            }
+        }));
+    // Ofertas de cópia para o projeto (D-13): `copy_into_project_offer { requested }`.
+    let handle = app.clone();
+    state.set_copy_offer_listener(std::sync::Arc::new(move |offer| {
+        if let Err(e) = handle.emit(fs::copy_into::COPY_OFFER, offer) {
+            eprintln!("prelo: oferta de cópia para o projeto não entregue: {e}");
+        }
+    }));
+    Ok(())
+}
+
 /// Último Salvar antes de fechar (Princípio III). `false` → manter a janela/o app aberto.
 fn may_close<R: Runtime>(app: &tauri::AppHandle<R>) -> bool {
     let ok = app.state::<commands::AppState>().flush_for_close();
@@ -178,6 +234,7 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            connect_trust(app.handle())?;
             spawn_autosave(app.handle().clone());
             spawn_disk_changes(app.handle().clone());
             let config = app

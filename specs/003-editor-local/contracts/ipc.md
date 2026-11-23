@@ -11,7 +11,7 @@ mostra o texto em português.
 | Comando | Argumentos | Sucesso | Erros |
 |---|---|---|---|
 | `open_project_dialog` | — | `ProjectInfo` ou `null` (cancelado) | `project_json_invalid` (abre com aviso, ver data-model) |
-| `create_project_dialog` | — | `ProjectInfo` ou `null` | `folder_not_empty` |
+| `create_project_dialog` | — | `ProjectInfo` ou `null` | `folder_not_empty`, `not_found`, `path_outside_project`, `write_failed` |
 | `choose_main_file` | `{ path }` | `ProjectInfo` | `not_a_typ_file`, `path_outside_project` |
 | `list_tree` | — | `TreeNode[]` | — |
 | `update_project_compiler_version` | — | `ProjectInfo` | — (só por ação explícita, FR-012) |
@@ -25,6 +25,12 @@ raiz; o último componente segue as regras de nome de FR-035 (`invalid_name`), e
 existe, inclusive como link, é `already_exists`. A resposta traz o caminho normalizado
 (relativo, com `/`). Regras completas em
 [file-access.md](file-access.md#criação-de-arquivo-e-pasta-fr-034-fr-035).
+
+`create_project_dialog` (US6, FR-002): o núcleo mostra o diálogo de pasta; a pasta MUST estar
+vazia (só `.DS_Store` é tolerado e fica intacto), senão `folder_not_empty` e nada é escrito.
+Nela nascem, em criação exclusiva e sem seguir link, `main.typ` mínimo e `.prelo/project.json`
+com `compiler.typst` = versão embutida e `main: "main.typ"`; depois o projeto abre como em
+`open_project_dialog`. Falha no meio desfaz o que foi criado.
 
 Com versão registrada ≠ embutida, `ProjectInfo.warnings` traz `compiler_version_mismatch`, nenhum `PreviewUpdate` é emitido e `export_pdf_dialog` responde `compiler_version_mismatch` até `update_project_compiler_version`.
 
@@ -51,6 +57,10 @@ classe do `typst-syntax` sem o prefixo `typ-`: `heading`, `strong`, `key`, `func
 lista vazia. Ambos leem o mesmo estado que a prévia compila, inclusive texto não salvo; rótulos
 vêm da última prévia `Ok`.
 
+`jump_from_click`, `jump_from_cursor` e `outline` (US4) leem o documento da última prévia `Ok`
+**com o World que o compilou**: os *spans* do documento só valem nas fontes daquela compilação.
+Depois de uma edição que não compila, os saltos seguem as linhas da prévia mostrada.
+
 ## Compilação e prévia
 
 | Comando / evento | Conteúdo |
@@ -59,10 +69,11 @@ vêm da última prévia `Ok`.
 | evento `PreviewUpdate` | `{ compileId, ok, pages: {index, hash, widthPt, heightPt}[], changed: number[], diagnostics: Diagnostic[], durationMs }`. Com `ok: false`, `pages` são as da última `Ok` e `changed` vem vazio; quem assina depois recebe logo a prévia atual com todas as páginas em `changed` |
 | `page_svg` | `{ index, hash }` → SVG da página (texto). `hash` velho → `stale_page` |
 | `Diagnostic.range` | `{ from, to }` em **unidades UTF-16** do texto atual do arquivo (as mesmas de `edit_file` e do CodeMirror); o núcleo converte os bytes do Typst |
-| `prelo-asset://<sha256>` | Protocolo próprio: bytes de imagem por hash; hash desconhecido → 404 |
-| `jump_from_click` | `{ page, xPt, yPt }` → `{ path, line, column }` ou `null` (sem origem) |
-| `jump_from_cursor` | `{ path, offset }` → `{ page, xPt, yPt }[]` |
-| `outline` | → `OutlineItem[]` |
+| `prelo-asset://<sha256>` | Protocolo próprio: bytes de imagem por hash; hash desconhecido → 404. O SVG de `page_svg` cita cada imagem assim, em vez da `data:` URL. Só `GET` de hash (64 dígitos hexadecimais minúsculos) de imagem do documento atual já citada num SVG; qualquer outro pedido → 404, outro método → 405 |
+| `preview_asset` | `{ sha256 }` → `data:` URL da imagem citada no SVG da prévia. Um SVG mostrado como `<img>` não carrega recurso de fora (nem `prelo-asset:`), e `connect-src` não libera o protocolo; por isso a interface pede cada hash uma vez por aqui e devolve a `data:` URL ao SVG antes de criar o blob. Erros: `invalid_arguments` (hash malformado), `not_found` (hash fora da prévia atual) |
+| `jump_from_click` | `{ page, xPt, yPt }` → `{ path, line, column }` ou `null` (sem origem). `page` a partir de 0 (o `index` de `PreviewUpdate.pages`); `xPt`/`yPt` em pontos a partir do canto superior esquerdo da página; `line` e `column` a partir de 1, `column` em unidades UTF-16. Link interno leva à origem do destino; link externo, conteúdo de pacote e ponto sem *span* (numeração de página, margem) → `null` |
+| `jump_from_cursor` | `{ path, offset }` → `{ page, xPt, yPt }[]` (mesmas unidades; `offset` em UTF-16). Cursor fora de texto que aparece na prévia → lista vazia |
+| `outline` | → `OutlineItem[]` (vazio antes da primeira prévia `Ok`) |
 | `compiler_info` | → `{ embedded: "0.15.1", registered: string \| null, fonts: FontLicense[] }` |
 
 ## Exportação
@@ -83,10 +94,27 @@ sem recompilar, e é gravado de forma atômica.
 | evento `external_change_conflict` | `{ path }` |
 | evento `external_change_reloaded` | `{ path, version }` |
 | evento `copy_into_project_offer` | `{ requested }` (D-13; só caminho pedido) |
-| `copy_into_project` | `{ requested, source }` — `source` escolhido em diálogo nativo do núcleo |
+| `copy_into_project` | `{ requested }` → `{ path, updated: {path, version}[] }` ou `null` (diálogo cancelado); erros `not_offered`, `already_exists`, `invalid_name`, `not_found`, `too_large`, `write_failed`, `no_project` |
 | evento `plugin_approval_needed` | `{ path, origin: "project" \| "package", package?: string, sizeBytes, sha256 }` |
 | `decide_plugin` | `{ sha256, approve: boolean }` → recompila |
 | `redownload_package` | `{ spec }` → recompila; erros `network_unavailable`, `package_rejected` |
+
+Cópia para o projeto (D-13, FR-023): quando uma compilação recusa um caminho que, escrito no
+`.typ`, sai da raiz por `..` (`#bibliography("../comum/refs.bib")`), o núcleo emite
+`copy_into_project_offer` uma vez por caminho, com **só** o caminho como foi escrito (nunca o
+caminho real). Link simbólico dentro do projeto que aponta para fora não gera oferta (a cópia
+cairia no lugar do link). `copy_into_project` recebe **só** `{ requested }`: a webview nunca
+manda o arquivo de origem (`source` ou qualquer outro campo → `invalid_arguments`), porque
+isso permitiria copiar qualquer arquivo do disco para o projeto. O núcleo confere que
+`requested` é uma oferta em aberto do projeto (senão `not_offered`, antes de qualquer
+diálogo), mostra o diálogo nativo para a pessoa escolher o arquivo e o copia para a pasta do
+`.typ` que o pediu, com o nome do último componente de `requested`, em criação exclusiva
+(nunca sobrescreve: `already_exists`; regras de nome de FR-035: `invalid_name`). A origem
+precisa ser arquivo comum até 256 MB (`not_found`, `too_large`). Depois troca, em cada `.typ`
+que pedia `requested`, o literal pelo caminho da cópia (relativo ao `.typ`, ou `/` + caminho
+na raiz se o `.typ` estiver em outra pasta), como uma edição do arquivo aberto (versão nova,
+gravada pelo salvamento automático), e recompila. `updated` lista esses arquivos com a versão
+nova; a interface os recarrega como em `external_change_reloaded`.
 
 Mudança externa (FR-008): com alteração local pendente o núcleo emite
 `external_change_conflict` e espera `resolve_external_change`; sem alteração local recarrega o
@@ -96,6 +124,10 @@ diálogo e sem enviar edição; evento de arquivo que não está no editor, ou c
 editor já tem, é ignorado. O evento não leva o texto: arquivos vão até 256 MB, eventos são
 difundidos a toda a webview, e `open_file` já é a fonte única do estado do arquivo (vários
 avisos seguidos resultam numa só leitura do texto mais novo).
+Arquivo **não aberto** que muda no disco (um `.bib` exportado pelo gerenciador de referências,
+uma figura trocada) não gera evento: o núcleo descarta o conteúdo que a compilação guardava
+dele e recompila, relendo pela regra de escopo (FR-025). Itens ocultos (`.prelo/`, `.git/`)
+não disparam compilação.
 
 ## Permissões da janela
 

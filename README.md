@@ -2,7 +2,7 @@
 
 Editor desktop para escrever artigos científicos em [Typst](https://typst.app) a várias mãos: sugestões que se aceitam ou rejeitam, comentários em conversa, edição em tempo real sem servidor, trabalho offline e histórico no git.
 
-> **Estado:** esqueleto do app (feature [001](specs/001-app-skeleton/spec.md)): janela Tauri que mostra versão e sistema vindos do núcleo, suíte de testes, auditoria de dependências e trava de push. Editor, compilador e rede vêm nas próximas features.
+> **Estado:** editor local (feature [003](specs/003-editor-local/spec.md)): abrir ou criar um projeto, editar com prévia ao vivo, saltar entre código e prévia, exportar PDF, sem `typst` instalado. Colaboração, revisão e git vêm nas próximas features.
 
 ## Conteúdo
 
@@ -11,11 +11,80 @@ Editor desktop para escrever artigos científicos em [Typst](https://typst.app) 
 | [`docs/especificacao.md`](docs/especificacao.md) | Visão geral: problema, alternativas, escopo, plano e pendências |
 | [`docs/requisitos.md`](docs/requisitos.md) | Requisitos: papéis, RF e RNF, regras de revisão e sincronização, fluxos |
 | [`docs/arquitetura.md`](docs/arquitetura.md) | Arquitetura: componentes, conexão sem servidor, modelo de revisão, sincronização, acesso a arquivos, riscos técnicos |
-| [`docs/adrs.md`](docs/adrs.md) | Decisões de arquitetura D-01 a D-14 |
+| [`docs/adrs.md`](docs/adrs.md) | Decisões de arquitetura D-01 a D-18 (índice; uma ADR por arquivo em `docs/adrs/`) |
+| [`docs/backlog.md`](docs/backlog.md) | Backlog Epic → User Story → Task com links para as issues do GitHub (gerado pela skill `gestor-projeto`) |
+| [`docs/release-plan.md`](docs/release-plan.md) | Plano de releases R0–R5: funcionalidades, RFs, épicos, versão e status de cada release |
 | [`specs/`](specs/) | Features no fluxo [spec-kit](https://github.com/github/spec-kit): spec, plano, tarefas |
 | [`prototype/index.html`](prototype/index.html) | Protótipo clicável da interface. Abra no navegador |
 | `src/` | Interface (Vite + TypeScript) |
 | `src-tauri/` | Núcleo (Rust, Tauri 2) |
+
+## Usar o Prelo com um projeto Typst
+
+O Prelo abre uma pasta de projeto e compila com o Typst **0.15.1** embutido no app. Não é preciso instalar o `typst`. O `.typ` continua sendo Typst puro: o mesmo projeto compila fora do Prelo (Princípio I da [constituição](.specify/memory/constitution.md)).
+
+### Fontes
+
+O Prelo só usa duas fontes de fontes (decisão [D-15](docs/adrs/D-15-fontes-embutidas-e-do-projeto.md)). Nenhuma fonte instalada no sistema é lida.
+
+1. **Fontes embutidas:** a família [Libertinus](https://github.com/alerque/libertinus) 7.051 (Serif, Sans, Math e Mono), sob a licença SIL Open Font License 1.1. Os arquivos, o [`OFL.txt`](src-tauri/fonts/OFL.txt) e o aviso de copyright de cada um ([`licenses.toml`](src-tauri/fonts/licenses.toml)) ficam em [`src-tauri/fonts/`](src-tauri/fonts/). A tela **Sobre** lista essas fontes com a licença. A auditoria (`npm run audit`) falha se houver arquivo de fonte sem entrada no `licenses.toml` ou com licença fora da lista permitida.
+2. **Fontes do projeto:** todo `.ttf`, `.otf`, `.ttc` e `.otc` dentro de `fonts/` na raiz do projeto, inclusive em subpastas (até 16 níveis e 2 000 arquivos). Fonte malformada vira diagnóstico e não derruba a compilação.
+
+Quando o `.typ` não pede fonte, matemática usa Libertinus Math e blocos de código usam Libertinus Mono. O Prelo define esse padrão sem escrever nada no `.typ`.
+
+### Compilar fora do Prelo
+
+Com o `typst` 0.15.1 instalado, na raiz do projeto:
+
+```sh
+typst compile --font-path fonts main.typ
+```
+
+O `--font-path fonts` faz o `typst` achar as fontes do projeto. Sem as fontes embutidas do Prelo, o `typst` usa as dele (New Computer Modern Math e DejaVu Sans Mono) em matemática e código, e o PDF pode ficar diferente. Para obter o mesmo PDF do Prelo, aponte também para as fontes embutidas e ignore as outras:
+
+```sh
+typst compile --ignore-system-fonts --ignore-embedded-fonts \
+  --font-path <prelo>/src-tauri/fonts --font-path fonts main.typ
+```
+
+Num documento que escolhe todas as fontes (texto, `math.equation` e `raw`) e as traz em `fonts/`, o primeiro comando já dá o mesmo resultado. O CI confere a equivalência página a página nos três sistemas (job `equivalence`, [`src-tauri/tests/equivalence.rs`](src-tauri/tests/equivalence.rs)).
+
+### Pacotes `@preview`
+
+Um `#import "@preview/nome:versão"` baixa o pacote de `https://packages.typst.org` na primeira vez. Só nome e versão saem na URL. O download usa TLS com os certificados do sistema.
+
+- **Cache:** `<dados locais do app>/packages/preview/<nome>/<versão>/`, separado do cache do `typst` de linha de comando. O índice `packages/index.json` guarda o SHA-256 de cada pacote. Na primeira vez que um pacote é usado em cada sessão, o Prelo confere o hash; se o conteúdo mudou, o pacote é recusado como adulterado e o diagnóstico oferece **Baixar de novo**.
+- **Sem rede:** pacote já no cache funciona normalmente. Sem rede e sem cache, o diagnóstico cita o pacote.
+- **Recusados na extração:** caminho absoluto, `..`, link simbólico ou físico, dispositivo, FIFO, e arquivos acima dos limites (tabela abaixo). Qualquer recusa descarta o pacote inteiro.
+- Pacotes `@local` e outros namespaces não são aceitos nesta versão.
+
+### Plugins WASM
+
+Um arquivo WASM (do projeto ou de um pacote) só chega ao compilador depois que você aprova. Antes disso, a compilação mostra "plugin aguardando confirmação" e o app pergunta, com caminho, origem e tamanho. Aprovado, o plugin roda no sandbox do Typst, sem acesso a arquivo, rede ou relógio.
+
+- A aprovação vale para aquela pasta de projeto e aquele conteúdo (SHA-256). Se o arquivo mudar, o Prelo pergunta de novo.
+- As decisões ficam em `<dados locais do app>/plugin-approvals.json`, nunca dentro do projeto: um coautor não consegue pré-aprovar plugin para você. Para desfazer todas as decisões, feche o app e apague esse arquivo.
+
+`<dados locais do app>` é, por sistema:
+
+| Sistema | Pasta |
+|---|---|
+| macOS | `~/Library/Application Support/org.prelo.app/` |
+| Windows | `%LOCALAPPDATA%\org.prelo.app\` |
+| Linux | `~/.local/share/org.prelo.app/` |
+
+### Limites
+
+| O quê | Limite | Ao passar |
+|---|---|---|
+| Arquivos lidos pelo compilador | só dentro da pasta do projeto, sem seguir link para fora | acesso recusado, com diagnóstico e a oferta de escolher o arquivo para copiá-lo para dentro do projeto |
+| Tamanho de arquivo aberto ou lido | 256 MiB | recusado, com diagnóstico |
+| Estilo `.csl` | 1 MiB | "estilo grande demais" |
+| `.prelo/project.json` | 1 MiB | aviso; o projeto abre com os padrões |
+| Tempo de uma compilação | 10 s | compilação abandonada com diagnóstico; a prévia mantém a última versão boa |
+| Compilações presas (plugin que não retorna) | 3 threads por projeto aberto | a prévia fica suspensa, com diagnóstico, até uma delas terminar; desfaça a chamada e reabra o Prelo |
+| Pacote `@preview` | 50 MB compactado, 200 MB e 5 000 arquivos extraídos | pacote recusado |
+| Salvamento automático | até 1,5 s depois da primeira alteração não gravada | um encerramento forçado perde no máximo os últimos 2 s de digitação |
 
 ## Desenvolvimento
 

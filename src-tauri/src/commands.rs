@@ -10,31 +10,41 @@
 //! `choose_main_file` recompilam, e cada resultado chega à interface pelo canal de
 //! `subscribe_preview`; `page_svg` serve o SVG de cada página (T035). O serviço de linguagem
 //! (T036) passa pelo trait [`Engine`]: o padrão é o [`LangService`], que recebe o mesmo estado
-//! da compilação ([`EngineContext`]); `jump_from_cursor` ainda responde `not_implemented`.
+//! da compilação ([`EngineContext`]). Saltos entre prévia e código e a estrutura de seções
+//! (US4: `jump_from_click`, `jump_from_cursor`, `outline`) rodam sobre o documento da prévia e
+//! o World que o compilou ([`crate::compile::sync`]).
 //! Mudança externa (T034): o observador de [`crate::fs::watch`] repassa caminhos para
 //! [`AppState::handle_disk_change`], que recarrega ou marca conflito; `resolve_external_change`
 //! aplica a escolha da pessoa. Arquivo aberto e gravação (`open_file`, `edit_file`, `save_file`,
 //! salvamento automático e último Salvar ao fechar; T033) moram em [`crate::fs::save`].
+//! Arquivo não aberto que muda no disco (um `.bib` exportado por outro programa) é relido na
+//! compilação seguinte ([`DiskChanges`]). Cópia para o projeto (D-13, T059): a compilação que
+//! recusa um caminho de fora gera a oferta ([`crate::fs::copy_into`]); `copy_into_project`
+//! recebe só o caminho pedido e o arquivo de origem vem do diálogo nativo do núcleo.
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Instant, SystemTime};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::ipc::{Channel, InvokeBody, Request};
-use tauri::State;
+use tauri::{Runtime, State, Window};
+use tauri_plugin_dialog::DialogExt;
 
 use typst_layout::PagedDocument;
 
 use crate::compile::export::{ExportError, ExportSource, Exported};
-use crate::compile::preview::{render_svg, PreviewHub, PreviewUpdate};
-use crate::compile::project::{CompileInput, ProjectCompiler};
+use crate::compile::preview::{asset_response, PreviewHub, PreviewUpdate};
+use crate::compile::project::{CompileInput, Compiled, DiskChanges, ProjectCompiler};
 use crate::compile::scheduler::Scheduler;
+use crate::compile::sync::{OutlineItem, SourcePosition, Synced};
+use crate::fs::copy_into::{self, CopyOffers, UpdatedFile, NOT_OFFERED};
+pub use crate::fs::copy_into::{CopiedIntoProject, CopyIntoProjectOffer};
 use crate::fs::create::{self, NewItem};
 pub use crate::fs::save::{apply_changes, Change};
 use crate::fs::save::{format_utc, OpenFile};
@@ -44,6 +54,7 @@ pub use crate::fs::watch::{DiskChange, Keep};
 use crate::lang_service::{Completion, LangService, Token};
 use crate::project::record::{self, LoadedRecord, RecordState};
 use crate::project::{CompilerInfo, MAIN_FILE_MISSING};
+use crate::trust::Trust;
 
 pub use crate::project::EMBEDDED_TYPST;
 
@@ -90,7 +101,10 @@ fn is_absolute(requested: &str) -> bool {
 fn refusal_code(refusal: &Refusal) -> &'static str {
     match refusal {
         Refusal::OutsideProject { .. } => OUTSIDE,
-        Refusal::NotFound { .. } | Refusal::SpecialFile { .. } => NOT_FOUND,
+        Refusal::NotFound { .. }
+        | Refusal::SpecialFile { .. }
+        | Refusal::PluginPending { .. }
+        | Refusal::PluginRejected { .. } => NOT_FOUND,
         Refusal::TooLarge { .. } => "too_large",
     }
 }
@@ -127,12 +141,25 @@ pub struct JumpTarget {
 
 /// Estado do projeto que o motor precisa para responder como a prévia veria o texto: a raiz,
 /// o mesmo [`CompileInput`] da compilação (principal + textos abertos, ainda não salvos;
-/// FR-011) e o último documento compilado com sucesso (rótulos).
-#[derive(Debug, Clone)]
+/// FR-011) e o último documento compilado com sucesso (rótulos), também com o World que o
+/// compilou (`synced`, para os saltos da prévia).
+#[derive(Clone)]
 pub struct EngineContext {
     pub root: PathBuf,
     pub input: CompileInput,
     pub document: Option<Arc<PagedDocument>>,
+    pub synced: Option<Arc<Synced>>,
+}
+
+impl std::fmt::Debug for EngineContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EngineContext")
+            .field("root", &self.root)
+            .field("input", &self.input)
+            .field("document", &self.document.is_some())
+            .field("synced", &self.synced.is_some())
+            .finish()
+    }
 }
 
 /// Consultas que dependem do World (T020) e dos serviços de prévia e linguagem (T035, T036).
@@ -242,6 +269,8 @@ struct OpenProject {
     /// O arquivo principal (registrado ou `main.typ`) não existe: aviso `main_file_missing`
     /// até `choose_main_file` (a compilação responde com o diagnóstico de arquivo ausente).
     main_missing: bool,
+    /// Arquivos não abertos que mudaram no disco, para a próxima compilação reler.
+    disk: DiskChanges,
 }
 
 impl OpenProject {
@@ -291,6 +320,24 @@ impl OpenProject {
         if let Some(compiler) = &self.compiler {
             compiler.submit(self.input());
         }
+    }
+
+    /// Troca, no texto de `relative`, cada literal `requested` por `literal`, como uma edição
+    /// do arquivo aberto (abre se preciso; o salvamento automático grava). Devolve a versão
+    /// nova, ou `None` se o literal não está mais lá ou o arquivo não pôde ser lido.
+    fn replace_literal(&mut self, relative: &str, requested: &str, literal: &str) -> Option<u64> {
+        let path = validate_path(&self.scope, relative).ok()?;
+        if !self.files.contains_key(path.relative()) {
+            let bytes = self.scope.read(path.relative()).ok()?;
+            let file = OpenFile::from_bytes(bytes).ok()?;
+            self.files.insert(path.relative().to_owned(), file);
+        }
+        let file = self.files.get_mut(path.relative())?;
+        let changes = copy_into::literal_changes(file.text(), requested, literal);
+        if changes.is_empty() {
+            return None;
+        }
+        file.edit(file.version(), &changes).ok()
     }
 
     fn info(&self) -> ProjectInfo {
@@ -405,7 +452,15 @@ pub struct AppState {
     /// chama [`AppState::handle_disk_change`] ([`AppState::take_disk_changes`]).
     disk_tx: Mutex<Sender<String>>,
     disk_rx: Mutex<Option<Receiver<String>>>,
+    /// Decisões de plugin e cache de pacotes (dados locais do app).
+    trust: Trust,
+    /// Ofertas de cópia para o projeto (D-13) e quem as recebe (em produção, o `emit`).
+    offers: Arc<Mutex<CopyOffers>>,
+    offer_listener: Arc<RwLock<Option<CopyOfferListener>>>,
 }
+
+/// Quem recebe cada oferta nova de cópia para o projeto.
+pub type CopyOfferListener = Arc<dyn Fn(&CopyIntoProjectOffer) + Send + Sync>;
 
 impl Default for AppState {
     fn default() -> Self {
@@ -423,11 +478,120 @@ impl AppState {
             close_refused: AtomicBool::new(false),
             disk_tx: Mutex::new(disk_tx),
             disk_rx: Mutex::new(Some(disk_rx)),
+            trust: Trust::default(),
+            offers: Arc::default(),
+            offer_listener: Arc::default(),
         }
+    }
+
+    /// Quem recebe as ofertas novas de `copy_into_project_offer`.
+    pub fn set_copy_offer_listener(&self, listener: CopyOfferListener) {
+        *self
+            .offer_listener
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = Some(listener);
+    }
+
+    fn offers(&self) -> MutexGuard<'_, CopyOffers> {
+        self.offers.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Caminhos pedidos fora do projeto com oferta de cópia em aberto.
+    pub fn copy_offers(&self) -> Vec<String> {
+        self.offers().list()
+    }
+
+    /// Recusa (`not_offered`) o pedido de cópia que o núcleo não ofereceu no projeto aberto.
+    /// O comando confere antes de mostrar o diálogo.
+    pub fn check_copy_offer(&self, requested: &str) -> Result<(), String> {
+        if self.lock().is_none() {
+            return Err(NO_PROJECT.into());
+        }
+        match self.offers().referrers(requested) {
+            Some(_) => Ok(()),
+            None => Err(NOT_OFFERED.into()),
+        }
+    }
+
+    /// Copia `source` (escolhido pela pessoa no diálogo nativo de `copy_into_project`; nunca
+    /// vem da interface) para dentro do projeto como a cópia de `requested`, troca o caminho
+    /// nos `.typ` que o pediam e recompila (D-13, FR-023). Só para oferta em aberto; nunca
+    /// sobrescreve.
+    pub fn copy_into_project(
+        &self,
+        requested: &str,
+        source: &Path,
+    ) -> Result<CopiedIntoProject, String> {
+        let mut guard = self.lock();
+        let project = guard.as_mut().ok_or(NO_PROJECT)?;
+        let referrers = self
+            .offers()
+            .referrers(requested)
+            .cloned()
+            .ok_or(NOT_OFFERED)?;
+        let destination = copy_into::destination(&referrers, requested)?;
+        let bytes = copy_into::read_source(source)?;
+        let created = copy_into::write_new(&project.scope, &destination, &bytes)?;
+        let mut updated = Vec::new();
+        for referrer in &referrers {
+            let literal = copy_into::literal_for(referrer, &created);
+            if let Some(version) = project.replace_literal(referrer, requested, &literal) {
+                updated.push(UpdatedFile {
+                    path: referrer.clone(),
+                    version,
+                });
+            }
+        }
+        self.offers().remove(requested);
+        project.disk.push(created.clone());
+        project.recompile();
+        Ok(CopiedIntoProject {
+            path: created,
+            updated,
+        })
+    }
+
+    /// Decisões de plugin e cache de pacotes.
+    pub fn trust(&self) -> &Trust {
+        &self.trust
+    }
+
+    /// `decide_plugin`: grava a decisão sobre o pedido pendente `sha256` no projeto aberto e
+    /// recompila.
+    pub fn decide_plugin(&self, sha256: &str, approve: bool) -> Result<(), String> {
+        let guard = self.lock();
+        let project = guard.as_ref().ok_or(NO_PROJECT)?;
+        self.trust.decide(project.scope.root(), sha256, approve)?;
+        project.recompile();
+        Ok(())
+    }
+
+    /// `redownload_package`: baixa `spec` de novo (sem segurar a trava do projeto durante o
+    /// download) e recompila.
+    pub fn redownload_package(&self, spec: &str) -> Result<(), String> {
+        if self.lock().is_none() {
+            return Err(NO_PROJECT.into());
+        }
+        self.trust.redownload(spec)?;
+        if let Some(project) = self.lock().as_ref() {
+            project.recompile();
+        }
+        Ok(())
     }
 
     fn lock(&self) -> MutexGuard<'_, Option<OpenProject>> {
         self.project.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// "Novo projeto" (US6; FR-002): cria o projeto mínimo em `root` e o abre. Chamado pelo
+    /// diálogo nativo do núcleo (`create_project_dialog`) e pelos testes.
+    ///
+    /// Pasta não vazia → `folder_not_empty` sem escrever nada; o projeto aberto, se houver,
+    /// continua aberto em qualquer recusa.
+    pub fn create_project(&self, folder: &Path) -> Result<ProjectInfo, String> {
+        let root = crate::project::create::create_project(folder, EMBEDDED_TYPST)
+            .map_err(|e| e.code().to_owned())?;
+        self.open_project(&root).map_err(|_| "not_found".to_owned())
     }
 
     /// Abre o projeto em `root` (canonicalizada uma vez). Chamado pelo diálogo nativo do
@@ -447,10 +611,12 @@ impl AppState {
             compiler: None,
             _watcher: watcher,
             main_missing: false,
+            disk: DiskChanges::default(),
         };
         project.create_missing_record();
         project.main_missing = !project.main_exists();
         let mut guard = self.lock();
+        self.trust.reset_pending();
         // A prévia do projeto anterior deixa de valer antes de qualquer compilação nova.
         let generation = self.preview.reset();
         if !project.version_differs() {
@@ -495,7 +661,27 @@ impl AppState {
         let Some(project) = guard.as_mut() else {
             return DiskChange::Ignored;
         };
-        let Ok(path) = validate_path(&project.scope, relative) else {
+        let path = validate_path(&project.scope, relative);
+        let is_open = path
+            .as_ref()
+            .is_ok_and(|p| project.files.contains_key(p.relative()));
+        let (Ok(path), true) = (&path, is_open) else {
+            // Arquivo não aberto (ex.: `.bib` exportado pelo gerenciador de referências),
+            // removido ou trocado por link: a compilação seguinte relê o disco pela regra de
+            // escopo (FR-025). Nada a avisar à interface. Itens ocultos (`.prelo/`, `.git/`)
+            // não entram na compilação.
+            if !is_absolute(relative)
+                && !relative.split(['/', '\\']).any(|c| c.starts_with('.'))
+                && !project.files.contains_key(relative)
+            {
+                project.disk.push(relative);
+                if let Ok(path) = &path {
+                    if path.relative() != relative {
+                        project.disk.push(path.relative());
+                    }
+                }
+                project.recompile();
+            }
             return DiskChange::Ignored;
         };
         let Some(file) = project.files.get_mut(path.relative()) else {
@@ -557,10 +743,52 @@ impl AppState {
     fn start_compiler(&self, project: &mut OpenProject, generation: u64) {
         let root = project.scope.root().to_owned();
         let main = project.record.record.main_or_default().to_owned();
-        let (scheduler, compilations) =
-            Scheduler::new(move || ProjectCompiler::new(root.clone(), &main));
+        let env = self.trust.env();
+        let disk = project.disk.clone();
+        let (scheduler, compilations) = Scheduler::new(move || {
+            ProjectCompiler::with_env(root.clone(), &main, env.clone())
+                .with_disk_changes(disk.clone())
+        });
+        let compilations = self.watch_offers(generation, compilations);
         self.preview.spawn_pump(generation, compilations);
         project.compiler = Some(scheduler);
+    }
+
+    /// Repassa as compilações à prévia e, no caminho, atualiza as ofertas de cópia para o
+    /// projeto (D-13) e avisa as novas. Termina quando a agenda é largada.
+    fn watch_offers(
+        &self,
+        generation: u64,
+        compilations: Receiver<crate::compile::scheduler::Compilation<Compiled>>,
+    ) -> Receiver<crate::compile::scheduler::Compilation<Compiled>> {
+        self.offers().reset(generation);
+        let offers = self.offers.clone();
+        let listener = self.offer_listener.clone();
+        let (tx, rx) = mpsc::channel();
+        std::thread::Builder::new()
+            .name(format!("prelo-offers-{generation}"))
+            .spawn(move || {
+                for compilation in compilations {
+                    let new = offers
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .update(generation, &compilation);
+                    if tx.send(compilation).is_err() {
+                        break;
+                    }
+                    let listener = listener
+                        .read()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .clone();
+                    if let Some(listener) = listener {
+                        for offer in &new {
+                            listener(offer);
+                        }
+                    }
+                }
+            })
+            .expect("falha ao criar a thread das ofertas de cópia");
+        rx
     }
 
     /// Assina a prévia: `sink` recebe cada `PreviewUpdate`, e logo a prévia atual, se houver.
@@ -569,10 +797,33 @@ impl AppState {
     }
 
     /// SVG da página `index` da prévia atual, se `hash` for o atual; senão `stale_page`. O SVG
-    /// é gerado fora das travas.
+    /// é gerado fora das travas, com as imagens citadas por `prelo-asset://<sha256>` (T058).
     pub fn page_svg(&self, index: usize, hash: &str) -> Result<String, String> {
-        let page = self.preview.page(index, hash)?;
-        Ok(render_svg(&page))
+        Ok(self.preview.page_svg(index, hash)?)
+    }
+
+    /// `preview_asset`: imagem `sha256` citada num SVG da prévia atual, como `data:` URL.
+    /// Hash malformado → `invalid_arguments`; hash que não é de imagem da prévia atual →
+    /// `not_found`.
+    pub fn preview_asset(&self, sha256: &str) -> Result<String, String> {
+        if sha256.len() != 64
+            || !sha256
+                .bytes()
+                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        {
+            return Err(INVALID_ARGUMENTS.into());
+        }
+        self.preview
+            .asset_data_url(sha256)
+            .ok_or_else(|| NOT_FOUND.into())
+    }
+
+    /// Resposta do protocolo `prelo-asset` (ver [`asset_response`]).
+    pub fn preview_asset_response(
+        &self,
+        request: &tauri::http::Request<Vec<u8>>,
+    ) -> tauri::http::Response<Vec<u8>> {
+        asset_response(&self.preview, request)
     }
 
     /// Projeto aberto e o `path` validado.
@@ -591,11 +842,13 @@ impl AppState {
     /// consulta.
     fn engine_query(&self, requested: &str) -> Result<(EngineContext, ProjectPath), String> {
         let document = self.preview.document();
+        let synced = self.preview.synced();
         self.with_path(requested, |project, path| {
             let ctx = EngineContext {
                 root: project.scope.root().to_owned(),
                 input: project.input(),
                 document,
+                synced,
             };
             Ok((ctx, path))
         })
@@ -611,6 +864,35 @@ impl AppState {
     pub fn semantic_tokens(&self, requested: &str) -> Result<Vec<Token>, String> {
         let (ctx, path) = self.engine_query(requested)?;
         self.engine.semantic_tokens(&ctx, &path)
+    }
+
+    /// Origem no projeto do ponto `(x_pt, y_pt)` da página `page` da prévia (a partir de 0);
+    /// `None` quando o ponto não tem origem no projeto ou ainda não há prévia (US4, FR-020).
+    pub fn jump_from_click(
+        &self,
+        page: usize,
+        x_pt: f64,
+        y_pt: f64,
+    ) -> Result<Option<SourcePosition>, String> {
+        if self.lock().is_none() {
+            return Err(NO_PROJECT.into());
+        }
+        Ok(self
+            .preview
+            .synced()
+            .and_then(|synced| synced.jump_from_click(page, x_pt, y_pt)))
+    }
+
+    /// Títulos de seção do último documento bom, em ordem (US4, FR-005); vazio sem prévia.
+    pub fn outline(&self) -> Result<Vec<OutlineItem>, String> {
+        if self.lock().is_none() {
+            return Err(NO_PROJECT.into());
+        }
+        Ok(self
+            .preview
+            .synced()
+            .map(|synced| synced.outline())
+            .unwrap_or_default())
     }
 
     /// Posições na prévia do trecho em `offset` (US4).
@@ -838,7 +1120,11 @@ impl AppState {
                 .lock()
                 .as_ref()
                 .and_then(|project| project.info().compiler.registered),
-            fonts: Vec::new(),
+            // Licenças das fontes embutidas (FR-016, tela "Sobre").
+            fonts: crate::world::fonts::licenses()
+                .iter()
+                .filter_map(|font| serde_json::to_value(font).ok())
+                .collect(),
         }
     }
 }
@@ -866,6 +1152,67 @@ pub(crate) fn no_args(request: &Request<'_>) -> Result<(), String> {
         InvokeBody::Json(Value::Object(map)) if map.is_empty() => Ok(()),
         _ => Err(invalid()),
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DecidePluginArgs {
+    sha256: String,
+    approve: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SpecArgs {
+    spec: String,
+}
+
+/// Decisão sobre `plugin_approval_needed` (FR-019) → recompila.
+#[tauri::command(async)]
+pub fn decide_plugin(state: State<'_, AppState>, request: Request<'_>) -> Result<(), String> {
+    let a: DecidePluginArgs = args(&request)?;
+    state.decide_plugin(&a.sha256, a.approve)
+}
+
+/// "Baixar de novo" um pacote adulterado (FR-018) → recompila. Erros: `network_unavailable`,
+/// `package_rejected`.
+#[tauri::command(async)]
+pub fn redownload_package(state: State<'_, AppState>, request: Request<'_>) -> Result<(), String> {
+    let a: SpecArgs = args(&request)?;
+    state.redownload_package(&a.spec)
+}
+
+/// Corpo de `copy_into_project`: só o caminho pedido no `.typ`. O arquivo de origem nunca vem
+/// da interface (`source` ou outro campo → `invalid_arguments`).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RequestedArgs {
+    requested: String,
+}
+
+/// "Escolher arquivo para copiar…" da oferta `copy_into_project_offer` (D-13, FR-023): confere
+/// a oferta, mostra o diálogo nativo do núcleo para a pessoa escolher o arquivo e copia.
+/// Cancelado → `null`.
+#[tauri::command(async)]
+pub fn copy_into_project<R: Runtime>(
+    window: Window<R>,
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Option<CopiedIntoProject>, String> {
+    let a: RequestedArgs = args(&request)?;
+    state.check_copy_offer(&a.requested)?;
+    let name = a.requested.rsplit(['/', '\\']).next().unwrap_or_default();
+    let Some(file) = window
+        .dialog()
+        .file()
+        .set_parent(&window)
+        .set_title(format!("Escolher o arquivo para copiar como “{name}”"))
+        .blocking_pick_file()
+    else {
+        return Ok(None);
+    };
+    let source = file.into_path().map_err(|_| NOT_FOUND.to_owned())?;
+    state.copy_into_project(&a.requested, &source).map(Some)
 }
 
 #[derive(Deserialize)]
@@ -901,6 +1248,20 @@ struct KeepArgs {
 struct PageArgs {
     index: usize,
     hash: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AssetArgs {
+    sha256: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ClickArgs {
+    page: usize,
+    x_pt: f64,
+    y_pt: f64,
 }
 
 /// Corpo de `subscribe_preview`: só o canal (o Tauri o entrega à parte, como `Channel`).
@@ -1018,6 +1379,14 @@ pub fn page_svg(state: State<'_, AppState>, request: Request<'_>) -> Result<Stri
     state.page_svg(a.index, &a.hash)
 }
 
+/// Imagem citada no SVG da prévia (`prelo-asset://<sha256>`) como `data:` URL; a interface a
+/// devolve ao SVG antes de mostrá-lo. Erros: `invalid_arguments`, `not_found`.
+#[tauri::command(async)]
+pub fn preview_asset(state: State<'_, AppState>, request: Request<'_>) -> Result<String, String> {
+    let a: AssetArgs = args(&request)?;
+    state.preview_asset(&a.sha256)
+}
+
 #[tauri::command(async)]
 pub fn complete(
     state: State<'_, AppState>,
@@ -1043,6 +1412,24 @@ pub fn jump_from_cursor(
 ) -> Result<Vec<JumpTarget>, String> {
     let a: OffsetArgs = args(&request)?;
     state.jump_from_cursor(&a.path, a.offset)
+}
+
+#[tauri::command(async)]
+pub fn jump_from_click(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Option<SourcePosition>, String> {
+    let a: ClickArgs = args(&request)?;
+    state.jump_from_click(a.page, a.x_pt, a.y_pt)
+}
+
+#[tauri::command(async)]
+pub fn outline(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Vec<OutlineItem>, String> {
+    no_args(&request)?;
+    state.outline()
 }
 
 #[cfg(test)]
@@ -1461,6 +1848,7 @@ mod tests {
                 files: Vec::new(),
             },
             document: None,
+            synced: None,
         };
         assert_eq!(
             Unavailable.complete(&ctx, &p, 0),

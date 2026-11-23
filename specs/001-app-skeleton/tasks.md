@@ -148,7 +148,7 @@ Layout Tauri 2 do [plan.md](plan.md#source-code-repository-root): interface em `
 - [X] T028 [US5] Criar `.githooks/pre-push` (POSIX sh, executável, roda `npm run verify` e repassa o código) até T027 passar
 - [X] T029 [P] [US5] Criar `.github/workflows/ci.yml`: gatilhos `pull_request` e `push`; job `verify` com matriz `ubuntu-22.04`, `windows-latest`, `macos-latest`; instala Rust da `rust-toolchain.toml`, Node da `.nvmrc`, dependências Linux de research R8, `cargo-deny`, `tauri-driver` (Linux/Windows); roda `npm ci` e `npm run verify` (Linux sob `xvfb-run`)
 - [X] T030 [US5] Abrir PR da branch `001-app-skeleton`, esperar o CI verde nos três sistemas e então aplicar a proteção da `main` com `gh api -X PUT repos/paulossjunior/prelo/branches/main/protection` (PR obrigatório, checks `verify (ubuntu-22.04)`, `verify (windows-latest)`, `verify (macos-latest)` com `strict`, `enforce_admins: true`, sem force-push nem exclusão); registrar o comando no README (FR-012). Ação publica configuração no GitHub: confirmar com o dono antes
-- [ ] T031 [US5] Validar cenários 8–11 do [quickstart.md](quickstart.md) e registrar a saída de `gh api .../branches/main/protection` na issue #1
+- [x] T031 [US5] Validar cenários 8–11 do [quickstart.md](quickstart.md) e registrar a saída de `gh api .../branches/main/protection` na issue #1
 
 **Checkpoint**: trava de push ativa nos dois lados.
 
@@ -156,7 +156,7 @@ Layout Tauri 2 do [plan.md](plan.md#source-code-repository-root): interface em `
 
 ## Phase 8: Polish & Cross-Cutting Concerns
 
-- [ ] T032 Rodar o [quickstart.md](quickstart.md) inteiro em cada sistema disponível e corrigir divergências
+- [x] T032 Rodar o [quickstart.md](quickstart.md) inteiro em cada sistema disponível e corrigir divergências
 - [X] T033 Validação final pelo agente `qa` (modo validar): suíte completa, cobertura FR-001–FR-014, checklist de segurança, ordem TDD pelo histórico git; anexar o veredito na issue #1
 
 ---

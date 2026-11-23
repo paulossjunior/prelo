@@ -2,18 +2,21 @@
 //!
 //! `CompilerUniverse` do `tinymist-world` montado com:
 //! - o [`AccessModel`] do Prelo como único `PathAccessModel` do VFS (RF-08);
-//! - só as fontes embutidas ([`fonts`]), com os padrões de matemática e `raw` do Prelo;
-//! - registro de pacotes vazio nesta etapa (o `@preview` entra com T048).
+//! - só as fontes embutidas e as de `fonts/` do projeto, lidas pelo mesmo modelo de acesso
+//!   ([`fonts`]), com os padrões de matemática e `raw` do Prelo;
+//! - o registro de pacotes `@preview` do Prelo ([`packages`]), com cache e verificação;
+//! - plugins WASM barrados até a pessoa aprovar ([`plugins`], no modelo de acesso).
 //!
 //! Prévia, diagnósticos e, depois, autocompletar (`typst-ide`) saem do mesmo World.
 
 pub mod fonts;
+pub mod packages;
+pub mod plugins;
 
 use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::Arc;
 
-use tinymist_world::package::registry::DummyRegistry;
 use tinymist_world::package::RegistryPathMapper;
 use tinymist_world::vfs::{
     FileChangeSet, ImmutPath, PathAccessModel, Vfs, WorkspaceResolution, WorkspaceResolver,
@@ -31,6 +34,8 @@ use crate::compile::scheduler::Outcome;
 use crate::diagnostic::{Diagnostic, Kind, Severity};
 use crate::fs::access_model::{access_diagnostic, AccessModel};
 use crate::fs::scope::{Refusal, Scope};
+use packages::PreloRegistry;
+pub use plugins::WorldEnv;
 
 /// Peças do World do Prelo para o `tinymist-world`. `M` é o modelo de acesso do VFS: em
 /// produção, o [`AccessModel`]; nos testes de segurança, ele embrulhado num instrumentado.
@@ -42,7 +47,7 @@ where
 {
     type FontResolver = tinymist_world::font::FontResolverImpl;
     type AccessModel = M;
-    type Registry = DummyRegistry;
+    type Registry = PreloRegistry;
 }
 
 /// World de um projeto aberto.
@@ -53,6 +58,11 @@ where
     universe: CompilerUniverse<PreloFeat<M>>,
     access: AccessModel,
     library: Arc<LazyHash<Library>>,
+    registry: Arc<PreloRegistry>,
+    /// Contador de decisões de plugin e de "Baixar de novo" visto na última compilação.
+    seen_generation: u64,
+    /// Fontes de `fonts/` do projeto vistas na última compilação.
+    fonts: fonts::ProjectFonts,
     /// Arquivo principal como foi pedido, e como o escopo o vê (`/` + relativo à raiz).
     main: (String, String),
 }
@@ -73,9 +83,18 @@ impl ProjectWorld<AccessModel> {
     /// Abre o projeto em `root` (canonicalizada uma vez) com o arquivo principal `main`,
     /// relativo à raiz.
     pub fn open(root: impl AsRef<Path>, main: &str) -> Result<Self, Diagnostic> {
+        Self::open_with(root, main, WorldEnv::default())
+    }
+
+    /// Como [`ProjectWorld::open`], com decisões de plugin e cache de pacotes.
+    pub fn open_with(
+        root: impl AsRef<Path>,
+        main: &str,
+        env: WorldEnv,
+    ) -> Result<Self, Diagnostic> {
         let scope = Scope::new(root)
             .map_err(|_| Diagnostic::error(Kind::Project, "pasta do projeto não encontrada"))?;
-        Self::new(AccessModel::new(scope), main)
+        Self::new(AccessModel::with_env(scope, env), main)
     }
 
     /// World sobre um modelo de acesso já montado.
@@ -107,7 +126,8 @@ where
         })?;
         let vpath_str = vpath.get_without_slash().to_owned();
         let entry = EntryState::new_rooted(root, Some(vpath));
-        let registry = Arc::new(DummyRegistry);
+        let registry = Arc::new(PreloRegistry::new(access.env().packages.clone()));
+        let seen_generation = access.env().generation();
         let resolver = Arc::new(RegistryPathMapper::new(registry.clone()));
         let vfs = Vfs::new(resolver, wrap(access.clone()));
         let universe = CompilerUniverse::new_raw(
@@ -115,7 +135,7 @@ where
             Features::default(),
             None,
             vfs,
-            registry,
+            registry.clone(),
             fonts::resolver(),
             None,
         );
@@ -123,6 +143,9 @@ where
             universe,
             access,
             library: library(),
+            registry,
+            seen_generation,
+            fonts: fonts::ProjectFonts::default(),
             main: (main.to_owned(), format!("/{}", vpath_str)),
         })
     }
@@ -147,6 +170,17 @@ where
         }
     }
 
+    /// O arquivo `requested` (relativo à raiz, não aberto no editor) mudou no disco: a próxima
+    /// compilação o relê pela regra de escopo. Caminho recusado é ignorado.
+    pub fn reload_from_disk(&mut self, requested: &str) {
+        if self.access.is_open(requested) {
+            return;
+        }
+        if let Ok(path) = self.access.lexical_path(requested) {
+            self.invalidate(path.as_path());
+        }
+    }
+
     fn invalidate(&mut self, path: &Path) {
         let path: ImmutPath = path.into();
         self.universe.increment_revision(|universe| {
@@ -164,23 +198,61 @@ where
         world
     }
 
+    /// Depois de uma decisão de plugin ou de "Baixar de novo", relê arquivos e pacotes: o VFS
+    /// guardaria a recusa anterior.
+    fn refresh_trust(&mut self) {
+        let generation = self.access.env().generation();
+        if generation != self.seen_generation {
+            self.seen_generation = generation;
+            let registry = self.registry.clone();
+            self.universe
+                .increment_revision(|universe| universe.set_package(registry));
+        }
+    }
+
+    /// Confere `fonts/` do projeto e troca o resolvedor se algo mudou (FR-016).
+    fn refresh_fonts(&mut self) {
+        if let Some(resolver) = self.fonts.refresh(&self.access) {
+            self.universe
+                .increment_revision(|universe| universe.set_fonts(resolver));
+        }
+    }
+
     /// Compila o estado atual (disco + overlay). Erros e avisos viram [`Diagnostic`].
     pub fn compile(&mut self) -> Outcome<PagedDocument> {
+        self.compile_with_snapshot().0
+    }
+
+    /// Como [`ProjectWorld::compile`], e devolve também o instantâneo que compilou: os
+    /// *spans* do documento só valem nas fontes dele (sincronização com a prévia, US4).
+    pub fn compile_with_snapshot(
+        &mut self,
+    ) -> (Outcome<PagedDocument>, CompilerWorld<PreloFeat<M>>) {
+        self.refresh_trust();
+        self.refresh_fonts();
         let world = self.snapshot();
         let Warned { output, warnings } = typst::compile::<PagedDocument>(&world);
+        // Cache de memorização do Typst (comemo): sai só o que ficou sem uso por
+        // `EVICT_AFTER` compilações. Imagem que segue no documento é usada em toda compilação,
+        // então continua decodificada (FR-027); a que saiu do documento libera a memória.
+        typst::comemo::evict(EVICT_AFTER);
         let (output, errors) = match output {
             Ok(doc) => (Some(doc), Default::default()),
             Err(errors) => (None, errors),
         };
-        let diagnostics = errors
+        let mut diagnostics: Vec<Diagnostic> = errors
             .iter()
             .chain(warnings.iter())
             .map(|diag| self.convert(&world, diag))
             .collect();
-        Outcome {
-            output,
-            diagnostics,
-        }
+        diagnostics.extend_from_slice(self.fonts.diagnostics());
+        (
+            Outcome {
+                output,
+                diagnostics,
+            },
+            world,
+        )
     }
 
     /// Diagnóstico do Typst → [`Diagnostic`]. Recusas do modelo de acesso e caminhos que
@@ -219,8 +291,10 @@ where
             .access
             .refusal_for_message(&diag.message)
             .or_else(|| escape_refusal(&diag.message));
-        let (kind, message, hints) = match refusal {
-            Some(refusal) => {
+        let package = self.registry.refusal_for_message(&diag.message);
+        let (kind, message, hints) = match (refusal, package) {
+            (None, Some(package)) => (Kind::Package, package.to_string(), Vec::new()),
+            (Some(refusal), _) => {
                 let refusal = match literal {
                     Some(requested) => with_requested(refusal, requested),
                     // Sem literal (ex.: o próprio arquivo principal): cita o principal como
@@ -230,10 +304,15 @@ where
                     }
                     None => refusal,
                 };
+                let kind = if refusal.is_plugin() {
+                    Kind::Plugin
+                } else {
+                    Kind::Access
+                };
                 // As dicas do Typst para esse caso falam do `--root` do CLI.
-                (Kind::Access, refusal.to_string(), Vec::new())
+                (kind, refusal.to_string(), Vec::new())
             }
-            None => (
+            (None, None) => (
                 Kind::Typst,
                 diag.message.to_string(),
                 diag.hints.iter().map(|h| h.v.to_string()).collect(),
@@ -288,6 +367,10 @@ where
     }
 }
 
+/// Compilações sem uso depois das quais um resultado memorizado sai do cache do Typst
+/// (o `typst watch` usa 10).
+const EVICT_AFTER: usize = 30;
+
 /// Mensagem do Typst para arquivo que não é UTF-8 (`FileError::InvalidUtf8`).
 const INVALID_UTF8: &str = "file is not valid UTF-8";
 
@@ -327,10 +410,5 @@ fn escape_refusal(message: &str) -> Option<Refusal> {
 }
 
 fn with_requested(refusal: Refusal, requested: String) -> Refusal {
-    match refusal {
-        Refusal::NotFound { .. } => Refusal::NotFound { requested },
-        Refusal::OutsideProject { .. } => Refusal::OutsideProject { requested },
-        Refusal::SpecialFile { .. } => Refusal::SpecialFile { requested },
-        Refusal::TooLarge { limit, .. } => Refusal::TooLarge { requested, limit },
-    }
+    refusal.with_requested(requested)
 }

@@ -5,6 +5,14 @@
 //! `Status::Abandonada` com diagnóstico, a thread presa é largada (o Typst não tem
 //! cancelamento) e a próxima edição compila numa thread nova com um World novo. Resultado de
 //! compilação mais antiga que a última entregue é descartado (FR-015).
+//!
+//! Threads abandonadas (research R9, T078): uma thread presa só termina quando a compilação
+//! dela terminar, e um plugin aprovado que não retorna nunca termina. Para que edições
+//! seguidas sobre um projeto assim não acumulem threads (cada uma ocupando um núcleo), a agenda
+//! mantém no máximo [`MAX_COMPILE_THREADS`] threads de compilação vivas, contando as presas.
+//! Atingido o limite, a agenda fica suspensa: cada edição é respondida na hora com um
+//! diagnóstico ([`suspended_diagnostic`]) e a mais nova fica pendente; quando uma thread presa
+//! termina, uma thread nova compila essa edição.
 
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -16,6 +24,10 @@ use crate::diagnostic::{Diagnostic, Kind};
 
 /// Limite de tempo de uma compilação (FR-015, research R9).
 pub const COMPILE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Máximo de threads de compilação vivas por agenda, contando as abandonadas que seguem presas
+/// (research R9, T078): uma ativa e até duas presas.
+pub const MAX_COMPILE_THREADS: usize = 3;
 
 /// O que a agenda compila. Em produção, o World do `tinymist-world`; nos testes, um falso.
 pub trait Compiler: Send + 'static {
@@ -81,6 +93,24 @@ pub fn panic_diagnostic() -> Diagnostic {
     diag
 }
 
+/// Diagnóstico de edição que não compilou porque a agenda está suspensa: `stuck` compilações
+/// abandonadas ainda não terminaram.
+pub fn suspended_diagnostic(stuck: usize) -> Diagnostic {
+    let mut diag = Diagnostic::error(
+        Kind::Typst,
+        format!(
+            "compilação suspensa: {stuck} compilações anteriores excederam o limite de tempo e \
+             ainda não terminaram"
+        ),
+    );
+    diag.hints.push(
+        "a prévia volta a compilar quando uma delas terminar; se o projeto usa um plugin que \
+         não retorna, desfaça a chamada e reabra o Prelo"
+            .to_owned(),
+    );
+    diag
+}
+
 /// Compilação em andamento, vista pelo vigia.
 struct Running {
     id: u64,
@@ -98,6 +128,10 @@ struct State<I, O> {
     last_delivered: u64,
     /// Geração da thread de compilação válida; muda a cada abandono.
     generation: u64,
+    /// Threads de compilação vivas (a ativa e as abandonadas que seguem presas).
+    threads: usize,
+    /// Sem thread ativa: o limite de threads foi atingido e todas estão presas.
+    suspended: bool,
     shutdown: bool,
     tx: Sender<Compilation<O>>,
 }
@@ -164,6 +198,8 @@ impl<C: Compiler> Scheduler<C> {
                 last_id: 0,
                 last_delivered: 0,
                 generation: 0,
+                threads: 0,
+                suspended: false,
                 shutdown: false,
                 tx,
             }),
@@ -172,7 +208,7 @@ impl<C: Compiler> Scheduler<C> {
             new_compiler: Box::new(new_compiler),
             timeout,
         });
-        spawn_worker(&shared, 0);
+        spawn_worker(&shared, &mut shared.lock(), 0);
         let watchdog = Arc::clone(&shared);
         thread::Builder::new()
             .name("prelo-compile-watchdog".to_owned())
@@ -182,15 +218,37 @@ impl<C: Compiler> Scheduler<C> {
     }
 
     /// Põe uma edição na fila, substituindo a pendente, e devolve o `compileId` dela. Não
-    /// bloqueia, mesmo com uma compilação em andamento ou presa.
+    /// bloqueia, mesmo com uma compilação em andamento ou presa. Com a agenda suspensa, a
+    /// edição é respondida na hora com [`suspended_diagnostic`] e fica pendente.
     pub fn submit(&self, input: C::Input) -> u64 {
         let mut state = self.shared.lock();
         state.last_id += 1;
         let id = state.last_id;
         state.pending = Some((id, input));
+        if state.suspended {
+            let stuck = state.threads;
+            state.deliver(suspended(id, stuck));
+        }
         drop(state);
         self.shared.work.notify_all();
         id
+    }
+
+    /// Threads de compilação vivas: a ativa e as abandonadas que seguem presas. Nunca passa de
+    /// [`MAX_COMPILE_THREADS`].
+    pub fn compile_threads(&self) -> usize {
+        self.shared.lock().threads
+    }
+}
+
+/// Resposta a uma edição com a agenda suspensa.
+fn suspended<O>(compile_id: u64, stuck: usize) -> Compilation<O> {
+    Compilation {
+        compile_id,
+        status: Status::ComErros,
+        output: None,
+        diagnostics: vec![suspended_diagnostic(stuck)],
+        duration_ms: 0,
     }
 }
 
@@ -202,16 +260,50 @@ impl<C: Compiler> Drop for Scheduler<C> {
     }
 }
 
-/// Cria a thread de compilação da geração `generation`, com um World novo.
-fn spawn_worker<C: Compiler>(shared: &Arc<Shared<C>>, generation: u64) {
+/// Cria a thread de compilação da geração `generation`, com um World novo. `state` é o estado
+/// já travado de `shared`, onde a thread entra na conta.
+fn spawn_worker<C: Compiler>(
+    shared: &Arc<Shared<C>>,
+    state: &mut State<C::Input, C::Output>,
+    generation: u64,
+) {
+    state.threads += 1;
     let shared = Arc::clone(shared);
     thread::Builder::new()
         .name(format!("prelo-compile-{generation}"))
         .spawn(move || {
+            let exit = Exit(Arc::clone(&shared));
             let compiler = (shared.new_compiler)();
             work(&shared, compiler, generation);
+            drop(exit);
         })
         .expect("falha ao criar a thread de compilação");
+}
+
+/// Saída de uma thread de compilação (normal ou por pânico): sai da conta e, se a agenda estava
+/// suspensa, põe uma thread nova para a edição pendente.
+struct Exit<C: Compiler>(Arc<Shared<C>>);
+
+impl<C: Compiler> Drop for Exit<C> {
+    fn drop(&mut self) {
+        let shared = &self.0;
+        let mut state = shared.lock();
+        state.threads -= 1;
+        if state.suspended && !state.shutdown && state.threads < MAX_COMPILE_THREADS {
+            state.suspended = false;
+            // A edição pendente já foi respondida como suspensa com o id dela; o resultado
+            // de verdade precisa de um id mais novo para ser entregue.
+            if state.pending.is_some() {
+                state.last_id += 1;
+                let id = state.last_id;
+                if let Some(job) = state.pending.as_mut() {
+                    job.0 = id;
+                }
+            }
+            let generation = state.generation;
+            spawn_worker(shared, &mut state, generation);
+        }
+    }
 }
 
 /// Laço da thread de compilação: pega a edição pendente, compila sem a trava e entrega. Sai no
@@ -315,7 +407,16 @@ fn watch<C: Compiler>(shared: &Arc<Shared<C>>) {
             diagnostics: vec![timeout_diagnostic(shared.timeout)],
             duration_ms: millis(elapsed),
         });
-        spawn_worker(shared, generation);
+        // A thread presa continua na conta até terminar (`Exit`).
+        if state.threads < MAX_COMPILE_THREADS {
+            spawn_worker(shared, &mut state, generation);
+        } else {
+            state.suspended = true;
+            let stuck = state.threads;
+            if let Some(pending) = state.pending.as_ref().map(|job| job.0) {
+                state.deliver(suspended(pending, stuck));
+            }
+        }
     }
 }
 
@@ -642,6 +743,118 @@ mod tests {
         assert_eq!(h.next().status, Status::Abandonada);
         gate.open();
         h.assert_quiet();
+    }
+
+    /// Prende `MAX_COMPILE_THREADS` compilações seguidas, cada uma abandonada por tempo.
+    fn stick_all(h: &Harness) -> Vec<Gate> {
+        let mut gates = Vec::new();
+        for i in 0..MAX_COMPILE_THREADS {
+            let gate = Gate::default();
+            h.scheduler.submit(held("preso", &gate));
+            h.wait_started("preso");
+            assert_eq!(h.next().status, Status::Abandonada, "abandono {i}");
+            assert!(h.scheduler.compile_threads() <= MAX_COMPILE_THREADS);
+            gates.push(gate);
+        }
+        gates
+    }
+
+    /// T078: compilações abandonadas em sequência não acumulam threads além do limite.
+    #[test]
+    fn abandoned_threads_stay_bounded() {
+        let h = Harness::new(SHORT);
+        let gates = stick_all(&h);
+        assert_eq!(h.scheduler.compile_threads(), MAX_COMPILE_THREADS);
+        // Mais edições não criam threads novas: cada uma é respondida na hora como suspensa.
+        for _ in 0..3 {
+            let started = Instant::now();
+            let id = h.scheduler.submit(quick("suspensa"));
+            let c = h.next();
+            assert!(started.elapsed() < Duration::from_secs(1));
+            assert_eq!((c.compile_id, c.status), (id, Status::ComErros));
+            assert!(
+                c.diagnostics[0].message.starts_with("compilação suspensa"),
+                "{:?}",
+                c.diagnostics
+            );
+        }
+        h.assert_quiet();
+        assert_eq!(h.scheduler.compile_threads(), MAX_COMPILE_THREADS);
+        assert_eq!(h.worlds.load(Ordering::SeqCst), MAX_COMPILE_THREADS);
+        for gate in gates {
+            gate.open();
+        }
+    }
+
+    /// Quando uma thread presa termina, a edição pendente compila numa thread nova, com um id
+    /// mais novo que o da resposta "suspensa".
+    #[test]
+    fn suspended_edit_compiles_when_a_stuck_thread_ends() {
+        let h = Harness::new(SHORT);
+        let gates = stick_all(&h);
+        let suspended = h.scheduler.submit(quick("depois"));
+        assert_eq!(h.next().status, Status::ComErros);
+
+        gates[0].open();
+        let c = h.next();
+        assert_eq!(c.status, Status::Ok, "{:?}", c.diagnostics);
+        assert!(c.compile_id > suspended);
+        assert_eq!(c.output.unwrap().tag, "depois");
+        assert!(h.scheduler.compile_threads() <= MAX_COMPILE_THREADS);
+        h.assert_quiet();
+
+        // De volta ao normal: a próxima edição compila.
+        let id = h.scheduler.submit(quick("normal"));
+        let c = h.next();
+        assert_eq!((c.compile_id, c.status), (id, Status::Ok));
+        for gate in &gates[1..] {
+            gate.open();
+        }
+    }
+
+    /// Edição que estava pendente quando o limite foi atingido é respondida como suspensa.
+    #[test]
+    fn pending_edit_is_answered_when_suspension_starts() {
+        let h = Harness::new(SHORT);
+        let mut gates = Vec::new();
+        for _ in 0..MAX_COMPILE_THREADS - 1 {
+            let gate = Gate::default();
+            h.scheduler.submit(held("preso", &gate));
+            h.wait_started("preso");
+            assert_eq!(h.next().status, Status::Abandonada);
+            gates.push(gate);
+        }
+        let gate = Gate::default();
+        h.scheduler.submit(held("preso", &gate));
+        h.wait_started("preso");
+        let pending = h.scheduler.submit(quick("pendente"));
+        assert_eq!(h.next().status, Status::Abandonada);
+        let c = h.next();
+        assert_eq!((c.compile_id, c.status), (pending, Status::ComErros));
+        gates.push(gate);
+        for gate in gates {
+            gate.open();
+        }
+    }
+
+    /// Threads presas saem da conta quando terminam.
+    #[test]
+    fn threads_leave_the_count_when_they_end() {
+        let h = Harness::new(SHORT);
+        let gates = stick_all(&h);
+        for gate in &gates {
+            gate.open();
+        }
+        // As presas terminam; sobra só a thread ativa criada quando a suspensão acabou.
+        let deadline = Instant::now() + WAIT;
+        while h.scheduler.compile_threads() > 1 {
+            assert!(
+                Instant::now() < deadline,
+                "threads presas não saíram da conta"
+            );
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(h.scheduler.compile_threads(), 1);
     }
 
     /// Pânico do compilador (erro interno do Typst com entrada malformada) vira diagnóstico na

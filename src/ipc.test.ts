@@ -63,6 +63,7 @@ const CALLS: [string, (ipc: Ipc) => Promise<unknown>, string, Record<string, unk
   ["complete", (i) => i.complete("main.typ", 7), "complete", { path: "main.typ", offset: 7 }],
   ["semanticTokens", (i) => i.semanticTokens("main.typ"), "semantic_tokens", { path: "main.typ" }],
   ["pageSvg", (i) => i.pageSvg(2, "abc"), "page_svg", { index: 2, hash: "abc" }],
+  ["previewAsset", (i) => i.previewAsset("ab12"), "preview_asset", { sha256: "ab12" }],
   [
     "jumpFromClick",
     (i) => i.jumpFromClick(1, 10.5, 20),
