@@ -77,7 +77,7 @@ RFs conforme a spec 003; #154, #155 e #158 bloqueiam a `1.0.0`.
 
 #### US1 — Escrever com prévia ao vivo [#154](https://github.com/paulossjunior/prelo/issues/154)
 
-- **RF-01** Editor de código Typst com realce de sintaxe, autocompletar e diagnósticos fornecidos pelo Tinymist.
+- **RF-01** Editor de código Typst com realce de sintaxe, autocompletar e diagnósticos fornecidos pelo compilador Typst embutido (`typst-ide` e `typst-syntax` oficiais, D-17).
 - **RF-02** Prévia ao lado do editor, atualizada enquanto se digita (meta: menos de 100 ms em artigos de até 40 páginas).
 - **RF-06** O Prelo compila Typst com compilador embutido, sem exigir `typst` instalado na máquina. A mesma compilação gera prévia, diagnósticos e todos os PDFs exportados.
   - Nota: também em US5 ([#158](https://github.com/paulossjunior/prelo/issues/158)), para o PDF exportado.
@@ -155,7 +155,7 @@ Release R3 · versão `1.2.0` (proposta). Sem histórias ainda.
 
 - **RF-52** Arquivo referenciado que o projeto já conhece mas que ainda não chegou ao computador (**pendente**) não impede a prévia. Imagem pendente aparece como marcador do mesmo tamanho pedido no `.typ`, com o nome do arquivo. Bibliografia, `.typ` incluído ou dado pendente mantém na prévia a última compilação bem-sucedida, com aviso "Aguardando <arquivo>". Arquivo que o projeto não conhece gera o diagnóstico normal de arquivo não encontrado. Quando o arquivo chega, a prévia recompila sem ação do usuário.
   - Origem: RF-02, RF-05; fluxo 6.1, passo 7 (o texto chega antes das figuras); [arquitetura.md §7](arquitetura.md#7-riscos-técnicos-e-questões-em-aberto) ("Sincronização lenta").
-  - Verificação: teste de integração com dois pares em que o texto chega e a figura é retida; a prévia do receptor mostra o marcador e o aviso, e recompila ao liberar a figura. TODO(manifesto-arquivos): como o app sabe que um arquivo é "pendente" depende de D-12 (proposta). TODO(marcador-tamanho): imagem pendente sem `width`/`height` no `.typ` não tem tamanho conhecido; definir o tamanho do marcador.
+  - Verificação: teste de integração com dois pares em que o texto chega e a figura é retida; a prévia do receptor mostra o marcador e o aviso, e recompila ao liberar a figura. O app sabe que um arquivo é "pendente" pelo manifesto de arquivos de D-12 (aceita em 2026-11-18). TODO(marcador-tamanho): imagem pendente sem `width`/`height` no `.typ` não tem tamanho conhecido; definir o tamanho do marcador.
 - **RF-53** Exportar o PDF final (RF-42) fica bloqueado enquanto houver arquivo pendente referenciado pelo artigo. O app lista os arquivos que faltam.
   - Origem: RF-42 (PDF final limpo, sem marcações) e Princípio I (o `.typ` precisa compilar fora do Prelo, onde não existe marcador).
   - Verificação: com uma figura pendente, a ação Exportar PDF final aparece desativada e lista o arquivo; ao chegar a figura, a ação é liberada. TODO(export-revisao): decidir se o PDF com comentários (RF-43) e o PDF de diferenças (RF-44) podem sair com marcador.
@@ -276,7 +276,7 @@ nas issues do GitHub ([backlog.md](backlog.md)).
 - **RNF-03 Desempenho**: prévia em menos de 100 ms após uma edição; sincronização de um Salvar em cerca de 1 s em rede comum.
 - **RNF-04 Robustez**: fechar o app ou perder a conexão nunca perde trabalho. A fila offline fica no disco.
 - **RNF-05 Interoperabilidade**: o `.typ` no repositório é sempre Typst puro, compilável fora do Prelo.
-- **RNF-06 Licenças**: só dependências com licenças permissivas (Apache-2.0, MIT).
+- **RNF-06 Licenças**: só dependências com licenças permissivas (Apache-2.0, MIT). Arquivos de fonte embutidos no app também podem usar OFL-1.1 (D-15).
 
 ## 4. Regras de revisão
 

@@ -54,7 +54,11 @@ describe("ci.yml: chamável pela release sem mudar os checks da main", () => {
 
   it("mantém exatamente os checks obrigatórios verify (<sistema>) da proteção da main", () => {
     const jobs = ci().jobs;
-    expect(Object.keys(jobs)).toEqual(["verify"]);
+    // `perf` (003, T075) e `equivalence` (003, T070) rodam junto, mas não são checks
+    // obrigatórios: o nome não é verify.
+    expect(Object.keys(jobs)).toEqual(["verify", "perf", "equivalence"]);
+    expect(String(jobs.perf.name)).not.toMatch(/^verify/);
+    expect(String(jobs.equivalence.name)).not.toMatch(/^verify/);
     const verify = jobs.verify;
     expect(verify.name).toBe("verify (${{ matrix.os }})");
     // Gitflow: a matriz depende do destino; fora da dev (main, tag, workflow_call) são os 3.

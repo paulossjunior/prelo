@@ -124,3 +124,113 @@ jobs:
           name: msedgedriver-log
           path: ${{ runner.temp }}/msedgedriver.log
           if-no-files-found: ignore
+
+  # Desempenho da prévia (T075; SC-001, SC-002): p95 edição → SVG pronto na fixture de 40
+  # páginas, com e sem imagens grandes, em build de release (src-tauri/tests/perf_preview.rs,
+  # feature `perf`). Limite de 250 ms como guarda de regressão; a meta de 100 ms vale no
+  # computador de referência (research.md, "Medições de desempenho").
+  # Fora da release (tag): o commit da tag já passou por este job no PR para a main, e uma
+  # oscilação de tempo num runner compartilhado não deve barrar a publicação.
+  perf:
+    name: perf (${{ matrix.os }})
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Dependências de sistema (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev build-essential libssl-dev libxdo-dev
+
+      - name: Rust (rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: perf
+
+      - name: Teste de desempenho (release)
+        env:
+          PRELO_PERF_LIMIT_MS: "250"
+        run: cargo test --release --manifest-path src-tauri/Cargo.toml --features perf --test perf_preview -- --nocapture --test-threads=1
+
+  # Equivalência com o `typst` de linha de comando (T070; FR-031, SC-005): o PDF do Prelo e o do
+  # `typst` 0.15.1, com o mesmo conjunto de fontes, renderizados e comparados página a página
+  # (src-tauri/tests/equivalence.rs, feature `equivalence`). O `typst` é instalado só neste job,
+  # do release oficial com SHA-256 fixado; o job `verify` e o app continuam sem `typst` (FR-010).
+  equivalence:
+    name: equivalence (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            asset: typst-x86_64-unknown-linux-musl.tar.xz
+            sha256: a6d077d0a95eed5a2eba715b2dae06be954f624ccbf85758a03f389ded33118c
+          - os: windows-latest
+            asset: typst-x86_64-pc-windows-msvc.zip
+            sha256: 19ce3551153c2fe7ee9fa2f95208310c8f4d3209fedb699e0333faf8913f6736
+          - os: macos-latest
+            asset: typst-aarch64-apple-darwin.tar.xz
+            sha256: 48f62ed034aa3a7978309579ac6ca00045e2ef0da73114e8af27cfd8e74dc05a
+    env:
+      TYPST_VERSION: "0.15.1"
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Dependências de sistema (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev build-essential libssl-dev libxdo-dev
+
+      - name: Rust (rust-toolchain.toml)
+        run: rustup show active-toolchain || rustup toolchain install
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: equivalence
+
+      - name: typst ${{ env.TYPST_VERSION }} (só neste job)
+        shell: bash
+        run: |
+          dir="$RUNNER_TEMP/typst"
+          mkdir -p "$dir"
+          curl -fsSL -o "$dir/${{ matrix.asset }}" \
+            "https://github.com/typst/typst/releases/download/v$TYPST_VERSION/${{ matrix.asset }}"
+          if command -v sha256sum >/dev/null; then sum=sha256sum; else sum="shasum -a 256"; fi
+          echo "${{ matrix.sha256 }}  $dir/${{ matrix.asset }}" | $sum -c -
+          case "${{ matrix.asset }}" in
+            *.zip) unzip -q "$dir/${{ matrix.asset }}" -d "$dir" ;;
+            *) tar -xJf "$dir/${{ matrix.asset }}" -C "$dir" ;;
+          esac
+          bin="$(find "$dir" -type f \( -name typst -o -name typst.exe \) | head -n 1)"
+          test -n "$bin"
+          "$bin" --version
+          if [ "$RUNNER_OS" = "Windows" ]; then bin="$(cygpath -w "$bin")"; fi
+          echo "PRELO_TYPST_CLI=$bin" >> "$GITHUB_ENV"
+
+      - name: Teste de equivalência
+        env:
+          PRELO_EQUIVALENCE_REQUIRED: "1"
+          PRELO_EQUIVALENCE_OUT: ${{ runner.temp }}/equivalence
+        run: cargo test --manifest-path src-tauri/Cargo.toml --features equivalence --test equivalence -- --nocapture
+
+      - name: PDFs que diferem (em falha)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: equivalence-${{ matrix.os }}
+          path: ${{ runner.temp }}/equivalence
+          if-no-files-found: ignore

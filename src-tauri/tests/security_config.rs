@@ -1,5 +1,6 @@
 //! Testes de segurança da configuração da janela (T008, FR-007).
 //! Contrato: specs/001-app-skeleton/contracts/ipc.md, "Permissões da janela".
+//! Atualizado em 003 (T016): specs/003-editor-local/contracts/ipc.md, "Permissões da janela".
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -114,11 +115,33 @@ fn capabilities_valem_so_para_a_janela_principal() {
 /// Permissões que a janela pode receber: só as necessárias para chamar os comandos do contrato
 /// (contracts/ipc.md: "falha em qualquer permissão fora desta lista"; plan.md: "nenhuma permissão
 /// de janela além do IPC do contrato"). Comandos do app não exigem permissão `core:*`.
-const ALLOWED_PERMISSIONS: &[&str] = &["allow-get-app-info", "allow-self-test-report"];
+/// 003 acrescenta só escutar e deixar de escutar eventos do núcleo (`external_change_conflict`,
+/// `copy_into_project_offer`, `plugin_approval_needed`; contracts/ipc.md). Nada de `emit`:
+/// a webview não fala com outras janelas nem forja eventos.
+const EVENT_PERMISSIONS: &[&str] = &["core:event:allow-listen", "core:event:allow-unlisten"];
+const ALLOWED_PERMISSIONS: &[&str] = &[
+    "allow-get-app-info",
+    "allow-self-test-report",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+];
 
 /// Fontes que a CSP pode citar. Qualquer origem de rede além do IPC do Tauri abriria canal para
 /// fora do app (STRIDE: divulgação) e anularia `default-src 'self'`.
-const ALLOWED_CSP_SOURCES: &[&str] = &["'self'", "'none'", "ipc:", "http://ipc.localhost"];
+/// 003 acrescenta `blob:` e o protocolo próprio `prelo-asset` (imagens da prévia, research R4).
+const ALLOWED_CSP_SOURCES: &[&str] = &[
+    "'self'",
+    "'none'",
+    "ipc:",
+    "http://ipc.localhost",
+    "blob:",
+    "prelo-asset:",
+    "http://prelo-asset.localhost",
+];
+
+/// CSP exata de specs/003-editor-local/contracts/ipc.md, "Permissões da janela".
+const EXPECTED_CSP: &str = "default-src 'self'; connect-src ipc: http://ipc.localhost; \
+img-src 'self' blob: prelo-asset: http://prelo-asset.localhost; style-src 'self'";
 
 fn csp_directives(csp: &str) -> Vec<(String, Vec<String>)> {
     csp.split(';')
@@ -156,6 +179,34 @@ fn csp_nenhuma_diretiva_libera_origem_remota() {
             assert!(
                 ALLOWED_CSP_SOURCES.contains(&source.as_str()),
                 "{name} libera fonte fora da lista {ALLOWED_CSP_SOURCES:?}: {source} ({csp})"
+            );
+        }
+    }
+}
+
+#[test]
+fn csp_e_exatamente_a_do_contrato_003() {
+    let csp = csp(&tauri_conf());
+    assert_eq!(
+        csp_directives(&csp),
+        csp_directives(EXPECTED_CSP),
+        "CSP difere de specs/003-editor-local/contracts/ipc.md"
+    );
+}
+
+#[test]
+fn csp_so_libera_blob_e_prelo_asset_para_imagens() {
+    // blob: e prelo-asset servem só às imagens da prévia; em outra diretiva abririam canal novo.
+    let csp = csp(&tauri_conf());
+    for (name, sources) in csp_directives(&csp) {
+        if name == "img-src" {
+            continue;
+        }
+        for source in sources {
+            assert!(
+                !["blob:", "prelo-asset:", "http://prelo-asset.localhost"]
+                    .contains(&source.as_str()),
+                "{name} libera {source}, reservado a img-src ({csp})"
             );
         }
     }
@@ -215,4 +266,27 @@ fn self_test_nao_compila_em_release() {
         lib.contains(guard),
         "src/lib.rs precisa barrar `--features self-test` em release com compile_error!"
     );
+}
+
+#[test]
+fn capability_escuta_eventos_do_nucleo_e_nada_mais_de_core() {
+    let cap = read_json(&manifest_dir().join("capabilities/default.json"));
+    let perms: Vec<&str> = cap["permissions"]
+        .as_array()
+        .expect("permissions ausente")
+        .iter()
+        .filter_map(|p| p.as_str().or_else(|| p["identifier"].as_str()))
+        .collect();
+    for needed in EVENT_PERMISSIONS {
+        assert!(
+            perms.contains(needed),
+            "falta {needed}: sem ela a webview não recebe external_change_conflict"
+        );
+    }
+    for perm in perms.iter().filter(|p| p.starts_with("core:")) {
+        assert!(
+            EVENT_PERMISSIONS.contains(perm),
+            "permissão core além de escutar eventos: {perm}"
+        );
+    }
 }

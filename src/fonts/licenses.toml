@@ -1,0 +1,69 @@
+# Licenças das fontes da interface (D-15, data-model.md "FontLicense"), servidas pela webview.
+# Cada arquivo de fonte em src/fonts/ precisa de uma entrada; verificado por scripts/audit.mjs.
+# Origem: Google Fonts (css2, subconjuntos latin e latin-ext, woff2 variável), baixado em
+# 2026-11-22 com as mesmas famílias e pesos de prototype/index.html. Texto da licença de cada
+# família: OFL-<Família>.txt (google/fonts, pasta ofl/). Um sha256 por arquivo abaixo.
+
+[[font]]
+file = "BricolageGrotesque-latin-ext.woff2"
+family = "Bricolage Grotesque"
+license = "OFL-1.1"
+copyright = "Copyright 2022 The Bricolage Grotesque Project Authors (https://github.com/ateliertriay/bricolage)"
+source = "https://fonts.gstatic.com/s/bricolagegrotesque/v9/3y9K6as8bTXq_nANBjzKo3IeZx8z6up5BeSl9D4dj_x9PpZBMlGGInHWVyNJtvI.woff2"
+sha256 = "1d04719f1325400ea4267e630dba29b02af87eb094d7d71d2e4d80a05479d07a"
+
+[[font]]
+file = "BricolageGrotesque-latin.woff2"
+family = "Bricolage Grotesque"
+license = "OFL-1.1"
+copyright = "Copyright 2022 The Bricolage Grotesque Project Authors (https://github.com/ateliertriay/bricolage)"
+source = "https://fonts.gstatic.com/s/bricolagegrotesque/v9/3y9K6as8bTXq_nANBjzKo3IeZx8z6up5BeSl9D4dj_x9PpZBMlGIInHWVyNJ.woff2"
+sha256 = "85f55a58a31e61a2e19e8bb25fed503181bf2a6b4cab76c589992cfaac377447"
+
+[[font]]
+file = "IBMPlexSans-Italic-latin-ext.woff2"
+family = "IBM Plex Sans"
+license = "OFL-1.1"
+copyright = "Copyright © 2017 IBM Corp. with Reserved Font Name \"Plex\""
+source = "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXEKVElMYYaJe8bpLHnCwDKhdTEG46kmUZQCX598fQbM4jw8V78x9OWIhqbQ5g0voKE7-jfBVSl7w.woff2"
+sha256 = "f0d521828c0d91f2857f001f0ede42adb7b2c12520b00f1cbc1af16ae4fa1eeb"
+
+[[font]]
+file = "IBMPlexSans-Italic-latin.woff2"
+family = "IBM Plex Sans"
+license = "OFL-1.1"
+copyright = "Copyright © 2017 IBM Corp. with Reserved Font Name \"Plex\""
+source = "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXEKVElMYYaJe8bpLHnCwDKhdTEG46kmUZQCX598fQbM4jw8V78x9OWIhqbQ5g6voKE7-jfBVQ.woff2"
+sha256 = "134dc0ee94e70cf5d52f608a7ac4b864c9b00bdf69779b8919712ce89da253b1"
+
+[[font]]
+file = "IBMPlexSans-latin-ext.woff2"
+family = "IBM Plex Sans"
+license = "OFL-1.1"
+copyright = "Copyright © 2017 IBM Corp. with Reserved Font Name \"Plex\""
+source = "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxQKYbSB4ZhRNU.woff2"
+sha256 = "ae1d854fefa1167a79071f1afe01d4d51b60c5840c1be36dd74bd5fe7375b405"
+
+[[font]]
+file = "IBMPlexSans-latin.woff2"
+family = "IBM Plex Sans"
+license = "OFL-1.1"
+copyright = "Copyright © 2017 IBM Corp. with Reserved Font Name \"Plex\""
+source = "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYbSB4Zh.woff2"
+sha256 = "056e4e2459f57a0033c8c9c844ff19d6e42ac8602027803d4345823bcc939818"
+
+[[font]]
+file = "JetBrainsMono-latin-ext.woff2"
+family = "JetBrains Mono"
+license = "OFL-1.1"
+copyright = "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)"
+source = "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPx7cwgknk-6nFg.woff2"
+sha256 = "9c38cb2d0d2d93c1ee6e21fa78db76f13ea7e15e15cc64214c7ca89b6aaa35c4"
+
+[[font]]
+file = "JetBrainsMono-latin.woff2"
+family = "JetBrains Mono"
+license = "OFL-1.1"
+copyright = "Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)"
+source = "https://fonts.gstatic.com/s/jetbrainsmono/v24/tDbv2o-flEEny0FZhsfKu5WU4zr3E_BX0PnT8RD8yKwBNntkaToggR7BYRbKPxDcwgknk-4.woff2"
+sha256 = "2c32b9b3ee358c119e210f6f5195f9bd34894d78a785ff2e95d60e718e400af4"

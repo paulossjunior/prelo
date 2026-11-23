@@ -8,3 +8,17 @@
 # ecosystem = "cargo"
 # reason = "sem correção publicada; caminho vulnerável não é usado pelo Prelo"
 # review_by = "2027-01-31"
+
+# quick-xml 0.38: tempo quadrático com nomes de atributo repetidos
+[[exception]]
+id = "RUSTSEC-2026-0194"
+ecosystem = "cargo"
+reason = "via typst-library 0.15.1 → hayagriva 0.10.1 → citationberg 0.7.0 (^0.38); sem versão corrigida compatível; mitigado por limite de tamanho do .csl (1 MiB) e limite de tempo da compilação (10 s). Aprovada pelo dono em 2026-11-19."
+review_by = "2027-02-17"
+
+# quick-xml 0.38: memória sem limite com declarações de namespace
+[[exception]]
+id = "RUSTSEC-2026-0195"
+ecosystem = "cargo"
+reason = "via typst-library 0.15.1 → hayagriva 0.10.1 → citationberg 0.7.0 (^0.38); sem versão corrigida compatível; mitigado por limite de tamanho do .csl (1 MiB) e limite de tempo da compilação (10 s). Aprovada pelo dono em 2026-11-19."
+review_by = "2027-02-17"

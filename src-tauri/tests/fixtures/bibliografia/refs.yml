@@ -1,0 +1,8 @@
+lima2019:
+  type: article
+  title: Compiladores de texto científico
+  author: ["Lima, Daniel"]
+  date: 2019
+  parent:
+    type: periodical
+    title: Cadernos de Computação
