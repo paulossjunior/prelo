@@ -65,7 +65,8 @@ button.pt-item:hover { background: var(--accent-soft); }
 .prelo-editor .cm-content { padding: 10px 0; }
 .prelo-editor .cm-line { padding: 0 14px 0 10px; }
 .prelo-editor .cm-gutters { background: var(--code-bg); color: var(--muted); border-right: 0; }
-.prelo-editor .cm-lineNumbers .cm-gutterElement { min-width: 38px; padding: 0; text-align: right; opacity: 0.7; }
+/* Largura em em (38 px a 12,5 px) para escalar com o zoom do editor (FR-013c). */
+.prelo-editor .cm-lineNumbers .cm-gutterElement { min-width: 3.04em; padding: 0; text-align: right; opacity: 0.7; }
 .prelo-editor .cm-gutter-lint { width: 1.2em; }
 .prelo-editor .cm-gutter-lint .cm-gutterElement { padding: 0; }
 .prelo-editor .cm-activeLine { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
@@ -275,3 +276,10 @@ body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
 .ws-body.is-resizing { cursor: col-resize; user-select: none; }
 .ws-panes { display: flex; align-items: center; gap: 8px; }
 .ws-tree-toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); }
+
+/* ---------- zoom do editor (T095; FR-013c): grupo .seg no cabeçalho do editor ---------- */
+.ws-pane-h .ed-zoom { margin-left: auto; }
+.ws-pane-h .ed-zoom ~ .ws-collapse { margin-left: 0; }
+.ws-pane-h .seg button { padding: 3px 9px; }
+.ed-zoom-pct { display: grid; place-items: center; min-width: 42px; padding: 0 6px; color: var(--ink); font-size: 12px; }
+.ed-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

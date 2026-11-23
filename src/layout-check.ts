@@ -196,3 +196,57 @@ export function paneLayoutProblems(doc: Document = document): string[] {
   for (const p of closedBefore) collapse(p)!.click();
   return problems;
 }
+
+/**
+ * Um quadro de pintura, ou 100 ms se a webview não pinta (janela do autoteste encoberta: o
+ * WebKit suspende `requestAnimationFrame`).
+ */
+const frame = () =>
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 100);
+    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => resolve());
+  });
+
+/**
+ * Zoom do editor no app real (T095; FR-013c): leva o editor a 150 % pelo "+", espera o
+ * CodeMirror medir de novo, roda `check` (padrão: `layoutProblems`, que confere números de
+ * linha alinhados, rolagem e quebra de linha) e devolve o zoom ao nível de antes.
+ */
+export async function editorZoomProblems(
+  doc: Document = document,
+  check: () => string[] = () => layoutProblems(doc),
+): Promise<string[]> {
+  const q = <T extends HTMLElement = HTMLElement>(sel: string) => doc.querySelector<T>(sel);
+  const plus = q<HTMLButtonElement>('button[aria-label="Aumentar zoom do editor"]');
+  const minus = q<HTMLButtonElement>('button[aria-label="Diminuir zoom do editor"]');
+  const pct = q(".ed-zoom-pct");
+  if (!plus || !minus || !pct) return ["controles de zoom do editor ausentes (Aumentar/Diminuir zoom do editor)"];
+
+  let clicks = 0;
+  while (!(pctOf(pct) >= 150) && !plus.disabled && clicks < 20) {
+    plus.click();
+    clicks++;
+  }
+  const problems: string[] = [];
+  if (pctOf(pct) !== 150) problems.push(`o "+" do editor não chegou a 150 % (parou em ${pct.textContent})`);
+  await frame();
+  await frame();
+  problems.push(...check().map((p) => `editor a 150 %: ${p}`));
+  for (let i = 0; i < clicks; i++) minus.click();
+  await frame();
+  return problems;
+}
+
+/**
+ * Abre os painéis recolhidos (o arranjo lembrado do projeto pode ter deixado a prévia ou o
+ * editor recolhidos) e devolve a função que os recolhe de novo. O autoteste confere o layout
+ * com tudo aberto.
+ */
+export function openAllPanes(doc: Document = document): () => void {
+  const rails = [...doc.querySelectorAll<HTMLButtonElement>(".ws-rail")].filter((r) => !r.hidden);
+  for (const r of rails) r.click();
+  const panes = rails.map((r) => r.dataset.pane).filter((p): p is Pane => !!p);
+  return () => {
+    for (const p of panes) doc.querySelector<HTMLButtonElement>(`button[aria-label="${COLLAPSE[p]}"]`)?.click();
+  };
+}

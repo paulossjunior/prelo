@@ -87,29 +87,53 @@ function defaultStorage(): ZoomStorage | null {
   }
 }
 
-/** Nível guardado para o projeto; sem chave, sem armazenamento ou valor inválido → "fit". */
-export function loadZoom(key: string | null | undefined, storage: ZoomStorage | null = defaultStorage()): ZoomLevel {
-  if (!key || !storage) return "fit";
+/**
+ * Nível guardado sob `prefix + key` (também usado pelo zoom do editor, FR-013c): número, "fit",
+ * ou `null` sem chave, sem armazenamento, sem valor ou com valor inválido.
+ */
+export function loadLevel(
+  prefix: string,
+  key: string | null | undefined,
+  storage: ZoomStorage | null = defaultStorage(),
+): number | "fit" | null {
+  if (!key || !storage) return null;
   try {
-    const v = storage.getItem(PREFIX + key);
-    if (v === null || v === "fit") return "fit";
+    const v = storage.getItem(prefix + key);
+    if (v === null) return null;
+    if (v === "fit") return "fit";
     const n = Number(v);
-    return Number.isFinite(n) && v.trim() !== "" ? clampZoom(n) : "fit";
+    return Number.isFinite(n) && v.trim() !== "" ? n : null;
   } catch {
-    return "fit";
+    return null;
   }
 }
 
-/** Grava o nível do projeto; falha do armazenamento (modo privado, cota) é ignorada. */
+/** Grava o nível sob `prefix + key`; falha do armazenamento (modo privado, cota) é ignorada. */
+export function saveLevel(
+  prefix: string,
+  key: string | null | undefined,
+  level: number | "fit",
+  storage: ZoomStorage | null = defaultStorage(),
+): void {
+  if (!key || !storage) return;
+  try {
+    storage.setItem(prefix + key, level === "fit" ? "fit" : String(Math.round(level * 10) / 10));
+  } catch {
+    // O zoom continua valendo nesta sessão; só não é lembrado.
+  }
+}
+
+/** Nível da prévia guardado para o projeto; sem valor ou inválido → "fit". */
+export function loadZoom(key: string | null | undefined, storage: ZoomStorage | null = defaultStorage()): ZoomLevel {
+  const v = loadLevel(PREFIX, key, storage);
+  return v === null || v === "fit" ? "fit" : clampZoom(v);
+}
+
+/** Grava o nível da prévia do projeto. */
 export function saveZoom(
   key: string | null | undefined,
   level: ZoomLevel,
   storage: ZoomStorage | null = defaultStorage(),
 ): void {
-  if (!key || !storage) return;
-  try {
-    storage.setItem(PREFIX + key, level === "fit" ? "fit" : String(Math.round(level * 10) / 10));
-  } catch {
-    // O zoom continua valendo nesta sessão; só não é lembrado.
-  }
+  saveLevel(PREFIX, key, level, storage);
 }

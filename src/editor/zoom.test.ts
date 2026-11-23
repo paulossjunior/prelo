@@ -94,6 +94,7 @@ describe("controles do zoom do editor", () => {
   it("mantém cursor e seleção", () => {
     const { ed, zoomIn } = setup();
     ed.view.dispatch({ selection: EditorSelection.range(40, 55) });
+    ed.view.scrollDOM.scrollTop = 600;
     const spy = vi.spyOn(ed.view, "dispatch");
     zoomIn.click();
     expect(ed.view.state.selection.main.from).toBe(40);

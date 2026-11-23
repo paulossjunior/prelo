@@ -9,7 +9,7 @@
 import { diagnosticCount } from "@codemirror/lint";
 import { invoke } from "@tauri-apps/api/core";
 import type { PreviewUpdate, ProjectInfo } from "./ipc";
-import { layoutProblems, paneLayoutProblems, previewZoomProblems } from "./layout-check";
+import { editorZoomProblems, layoutProblems, openAllPanes, paneLayoutProblems, previewZoomProblems } from "./layout-check";
 import type { WorkspaceHandle } from "./workspace";
 
 /** Chamada a algo que não existe: o Typst acusa erro nesta linha. */
@@ -40,7 +40,7 @@ export interface ScenarioOptions {
   /** Espera máxima por cada compilação. */
   timeoutMs?: number;
   /** Mede o layout na webview real (src/layout-check.ts); ausente em jsdom. */
-  checkLayout?: () => string[];
+  checkLayout?: () => string[] | Promise<string[]>;
   /** Grava o arquivo principal como outro programa faria (`self_test_write_external`). */
   writeExternal?: (text: string) => Promise<void>;
 }
@@ -179,7 +179,7 @@ export async function runEditorScenario(
         userEvent: "input.type",
       });
       await nextFrame();
-      r.layoutProblems = opts.checkLayout();
+      r.layoutProblems = await opts.checkLayout();
     }
   } catch (err) {
     r.failure = err instanceof Error ? err.message : String(err);
@@ -187,8 +187,13 @@ export async function runEditorScenario(
   return r;
 }
 
+// Dois quadros de pintura, ou 200 ms se a webview não pinta (janela encoberta: o WebKit suspende
+// `requestAnimationFrame` e o autoteste ficaria parado).
 const nextFrame = () =>
-  new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  new Promise<void>((resolve) => {
+    setTimeout(resolve, 200);
+    requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+  });
 
 /** Roda o autoteste no app real e entrega o resultado ao núcleo. */
 export async function reportSelfTest(
@@ -201,7 +206,21 @@ export async function reportSelfTest(
   const elapsedMs = Math.round(performance.now());
   const rendered = ws.appInfoElement.textContent?.trim() ?? "";
   const scenario = await runEditorScenario(ws, () => invoke<ProjectInfo>("self_test_open_project"), {
-    checkLayout: () => [...cspViolations(), ...layoutProblems(document), ...previewZoomProblems(document), ...paneLayoutProblems(document)],
+    checkLayout: async () => {
+      const restore = openAllPanes(document);
+      await nextFrame();
+      try {
+        return [
+          ...cspViolations(),
+          ...layoutProblems(document),
+          ...previewZoomProblems(document),
+          ...paneLayoutProblems(document),
+          ...(await editorZoomProblems(document)),
+        ];
+      } finally {
+        restore();
+      }
+    },
     writeExternal: (text) => invoke("self_test_write_external", { text }),
   });
   await invoke("self_test_report", { rendered, elapsedMs, scenario });
