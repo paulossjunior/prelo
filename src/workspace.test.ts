@@ -269,6 +269,59 @@ describe("prévia e diagnósticos (cenários 2 e 4)", () => {
     expect(diagnosticCount(ws.editor()!.view.state)).toBe(1);
   });
 
+  it("diagnóstico num pacote baixado não abre arquivo nem mostra erro", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    const opened = core.calls("open_file").length;
+    core.push(
+      update({
+        compileId: 2,
+        ok: true,
+        diagnostics: [
+          {
+            severity: "warning",
+            path: "@preview/stellar-springer-nature:0.1.0/lib.typ",
+            range: { from: 2000, to: 2010 },
+            line: 77,
+            message: "unknown font family: new computer modern",
+            hints: [],
+            kind: "typst",
+          },
+        ],
+      }),
+    );
+    await settle();
+    expect(root.querySelector("button.pb-item")).toBeNull();
+    const item = root.querySelector<HTMLElement>(".pb-item")!;
+    expect(item.querySelector(".pb-loc")?.textContent).toBe("pacote @preview/stellar-springer-nature:0.1.0 · lib.typ:77");
+    item.click();
+    await settle();
+    expect(core.calls("open_file")).toHaveLength(opened);
+    expect(root.querySelector<HTMLElement>(".ws-message")!.hidden).toBe(true);
+    expect(ws.editor()?.path).toBe("main.typ");
+  });
+
+  it("clique na prévia que cai no código de um pacote não faz nada (sem faixa de erro)", async () => {
+    const { core, root, ws } = setup({
+      jump_from_click: () => ({ path: "@preview/stellar-springer-nature:0.1.0/lib.typ", line: 77, column: 3 }),
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(update({ compileId: 2 }));
+    await settle();
+    const opened = core.calls("open_file").length;
+    const page = root.querySelector<HTMLElement>('.pv-page[data-page-index="0"]')!;
+    page.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 595, height: 842, x: 0, y: 0, right: 595, bottom: 842, toJSON() {} }) as DOMRect;
+    page.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
+    await settle();
+    expect(core.calls("jump_from_click")).toHaveLength(1);
+    expect(core.calls("open_file")).toHaveLength(opened);
+    expect(root.querySelector<HTMLElement>(".ws-message")!.hidden).toBe(true);
+    expect(ws.editor()?.path).toBe("main.typ");
+  });
+
   it("onPreviewUpdate avisa quem observa (autoteste)", async () => {
     const { core, ws } = setup();
     await ws.ready;
