@@ -11,7 +11,7 @@ Editor desktop para escrever artigos científicos em [Typst](https://typst.app) 
 | [`docs/especificacao.md`](docs/especificacao.md) | Visão geral: problema, alternativas, escopo, plano e pendências |
 | [`docs/requisitos.md`](docs/requisitos.md) | Requisitos: papéis, RF e RNF, regras de revisão e sincronização, fluxos |
 | [`docs/arquitetura.md`](docs/arquitetura.md) | Arquitetura: componentes, conexão sem servidor, modelo de revisão, sincronização, acesso a arquivos, riscos técnicos |
-| [`docs/adrs.md`](docs/adrs.md) | Decisões de arquitetura D-01 a D-18 (índice; uma ADR por arquivo em `docs/adrs/`) |
+| [`docs/adrs.md`](docs/adrs.md) | Índice das decisões de arquitetura D-01 a D-18; uma decisão por arquivo em [`docs/adrs/`](docs/adrs/) |
 | [`docs/backlog.md`](docs/backlog.md) | Backlog Epic → User Story → Task com links para as issues do GitHub (gerado pela skill `gestor-projeto`) |
 | [`docs/release-plan.md`](docs/release-plan.md) | Plano de releases R0–R5: funcionalidades, RFs, épicos, versão e status de cada release |
 | [`specs/`](specs/) | Features no fluxo [spec-kit](https://github.com/github/spec-kit): spec, plano, tarefas |
@@ -136,6 +136,7 @@ No Linux sem tela, rode os testes ponta a ponta sob `xvfb-run`.
   | `main` | PR da `dev` | `verify` completo | `verify` nos 3 sistemas |
   | tag `vX.Y.Z` | (na `main`) | `verify` completo | release nos 3 sistemas |
 
+- **Commits e PRs:** assunto em inglês (`<tipo>(<escopo>): <resumo>`), corpo em pt-BR explicando o porquê, e trailers `Task`/`Story`/`Epic` com as issues. O PR segue o [modelo](.github/pull_request_template.md), com resumo para humanos e links do Épico, da História e das Tasks. Detalhes e exemplo: [docs/contribuir.md](docs/contribuir.md).
 - **Push só com o verify verde.** O hook `.githooks/pre-push` escolhe o modo pelo destino; não use `--no-verify`.
 - **`main` e `dev` só por pull request**, inclusive para o dono do repositório.
   A proteção está em [`.github/branch-protection.json`](.github/branch-protection.json); para reaplicar:
