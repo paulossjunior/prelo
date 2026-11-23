@@ -81,8 +81,8 @@ button.pt-item:hover { background: var(--accent-soft); }
 .prelo-editor .cm-gutters { background: var(--code-bg); color: var(--muted); border-right: 0; }
 /* Largura em em (38 px a 12,5 px) para escalar com o zoom do editor (FR-013c). */
 .prelo-editor .cm-lineNumbers .cm-gutterElement { min-width: 3.04em; padding: 0; text-align: right; opacity: 0.7; }
-.prelo-editor .cm-gutter-lint { width: 1.2em; }
-.prelo-editor .cm-gutter-lint .cm-gutterElement { padding: 0; }
+.prelo-editor .prelo-lint-gutter { width: 1.2em; }
+.prelo-editor .prelo-lint-gutter .cm-gutterElement { display: flex; align-items: center; justify-content: center; padding: 0; }
 .prelo-editor .cm-activeLine { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
 .prelo-editor .cm-activeLineGutter { background: transparent; color: var(--ink); }
 .prelo-editor .cm-cursor { border-left-color: var(--fg); }
@@ -94,14 +94,18 @@ button.pt-item:hover { background: var(--accent-soft); }
 .prelo-editor .cm-content .cm-lintRange { background-image: none; }
 .prelo-editor .cm-content .cm-lintRange-info,
 .prelo-editor .cm-content .cm-lintRange-hint { text-decoration: underline dotted var(--muted); }
-.prelo-editor .cm-gutter-lint .cm-lint-marker {
-  content: normal; box-sizing: border-box; width: 0.8em; height: 0.8em; margin: 0.35em auto 0;
-  background: var(--muted);
-}
-.prelo-editor .cm-gutter-lint .cm-lint-marker-error { background: var(--err); border-radius: 50%; }
-.prelo-editor .cm-gutter-lint .cm-lint-marker-warning {
-  background: var(--warn); clip-path: polygon(50% 0, 100% 100%, 0 100%);
-}
+/* Ícones de gravidade (src/editor/icons.ts): SVG montado pelo DOM, cor por classe. A margem
+   não usa o marcador do lint, cuja imagem `data:` (na propriedade content) a CSP bloqueia; no
+   app real sobrava um quadrado vazio. Em em, para crescer com o zoom do editor (FR-013c). */
+.prelo-icon { display: inline-flex; flex: none; vertical-align: -0.15em; color: var(--muted); }
+.prelo-icon svg { width: 1em; height: 1em; display: block; }
+.prelo-icon .pi-bg { fill: currentColor; stroke: currentColor; stroke-width: 0.6; }
+.prelo-icon .pi-fg { fill: var(--surface); }
+.prelo-icon.is-error { color: var(--err); }
+.prelo-icon.is-warning { color: var(--warn); }
+.prelo-icon.is-info { color: var(--accent); }
+.prelo-editor .prelo-lint-gutter .prelo-icon svg { width: 0.9em; height: 0.9em; }
+.pb-icon { margin-top: 0.2em; }
 /* Realce como o do protótipo: `#nome` (funções e palavras-chave) roxo, `<rótulo>` laranja,
    `@referência` verde-azulado, títulos em negrito, comentários em itálico; o resto na cor do
    texto. Classes = tags do Typst sem o prefixo `typ-` (src-tauri/src/lang_service.rs). */

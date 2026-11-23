@@ -397,7 +397,10 @@ comando.
   MUST mostrar a original com as dicas. Clicar num item MUST abrir o arquivo com o cursor no
   trecho; a contagem de erros na barra de status e a faixa de erro da prévia MUST abrir o
   painel. O sublinhado no editor MUST mostrar a mesma explicação ao passar o ponteiro, sem
-  `'unsafe-inline'` na CSP. Os itens MUST ser botões com nome acessível, e a mudança da
+  `'unsafe-inline'` na CSP. A linha com erro MUST ter na margem um ícone de erro visível (aviso e
+  informação com ícones próprios), e a faixa de erro da prévia e a contagem na barra de status
+  MUST ter o ícone de erro; os ícones MUST NOT depender de imagem `data:`, que a CSP bloqueia.
+  Os itens MUST ser botões com nome acessível, e a mudança da
   contagem MUST ser anunciada numa região viva. O contrato IPC não muda: a explicação é feita
   na interface a partir de `Diagnostic.message` e `Diagnostic.kind`.
 - **FR-007**: Alterações MUST ser gravadas no disco ao Salvar (⌘S / Ctrl+S), ao fechar o app e

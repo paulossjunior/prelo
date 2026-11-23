@@ -18,6 +18,7 @@ import { EditorView } from "@codemirror/view";
 import { compilerStatus, mountAbout, type AboutHandle } from "./about";
 import { mountAppInfo, type Invoke } from "./app-info";
 import { mountEditor, type EditorHandle } from "./editor/editor";
+import { severityIcon } from "./editor/icons";
 import { mountProblems, type ProblemsHandle } from "./editor/problems";
 import { mountEditorZoom, type EditorZoomHandle } from "./editor/zoom";
 import { mountExport } from "./export";
@@ -268,8 +269,11 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     if (u.ok) {
       compileEl.textContent = `● Compilado em ${u.durationMs} ms`;
     } else {
-      compileEl.textContent =
-        errors === 0 ? "● A compilação falhou" : `● ${errors} ${errors === 1 ? "erro" : "erros"} no documento`;
+      // Ícone de erro desenhado em SVG (sem `data:`), como na faixa da prévia e na margem.
+      compileEl.replaceChildren(
+        severityIcon("error"),
+        errors === 0 ? " A compilação falhou" : ` ${errors} ${errors === 1 ? "erro" : "erros"} no documento`,
+      );
     }
   }
 

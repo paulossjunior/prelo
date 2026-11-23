@@ -2,6 +2,8 @@
 // então o autoteste mede na webview de verdade o que a pessoa vê. Pega a regressão em que a CSP
 // bloqueou o tema base do CodeMirror: números de linha empilhados acima do código e editor sem
 // rolagem (PR #176 só tinha rodado em jsdom).
+import { forEachDiagnostic, setDiagnostics, type Diagnostic as LintDiagnostic } from "@codemirror/lint";
+import type { EditorView } from "@codemirror/view";
 
 /** Violações da CSP vistas desde o início da página (`securitypolicyviolation`). */
 export function watchCspViolations(target: Pick<Document, "addEventListener"> = document): () => string[] {
@@ -249,4 +251,45 @@ export function openAllPanes(doc: Document = document): () => void {
   return () => {
     for (const p of panes) doc.querySelector<HTMLButtonElement>(`button[aria-label="${COLLAPSE[p]}"]`)?.click();
   };
+}
+
+/** `rgb(r, g, b)` com o vermelho bem acima do verde e do azul. */
+function reddish(color: string): boolean {
+  const m = color.match(/rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)/);
+  if (!m) return false;
+  const [r, g, b] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  return r > g + 40 && r > b + 40;
+}
+
+/**
+ * Marcador de erro na margem do editor no app real (FR-006a; regressão do quadrado vazio): põe
+ * um erro de teste na linha 1, confere que o ícone aparece com tamanho, em vermelho e sem o
+ * marcador `data:` do lint, e devolve os diagnósticos de antes. Vazio quando está tudo certo.
+ */
+export async function lintMarkerProblems(view: EditorView): Promise<string[]> {
+  const before: LintDiagnostic[] = [];
+  forEachDiagnostic(view.state, (d, from, to) => before.push({ ...d, from, to }));
+  const line = view.state.doc.line(1);
+  view.dispatch(
+    setDiagnostics(view.state, [{ from: line.from, to: line.to, severity: "error", message: "teste do autoteste" }]),
+  );
+  await frame();
+  const problems: string[] = [];
+  try {
+    if (view.dom.querySelector(".cm-lint-marker")) {
+      problems.push("margem com o marcador do lint (`content: url(data:…)`, bloqueado pela CSP)");
+    }
+    const icon = view.dom.querySelector<HTMLElement>(".prelo-lint-gutter .prelo-icon.is-error");
+    if (!icon?.querySelector("svg")) {
+      problems.push("margem sem o ícone de erro (.prelo-lint-gutter .prelo-icon.is-error svg)");
+    } else {
+      const r = icon.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4) problems.push(`ícone de erro da margem sem tamanho (${r.width}×${r.height})`);
+      const color = getComputedStyle(icon).color;
+      if (!reddish(color)) problems.push(`ícone de erro da margem não está vermelho (cor ${color})`);
+    }
+  } finally {
+    view.dispatch(setDiagnostics(view.state, before));
+  }
+  return problems;
 }

@@ -9,7 +9,7 @@
 import { diagnosticCount } from "@codemirror/lint";
 import { invoke } from "@tauri-apps/api/core";
 import type { PreviewUpdate, ProjectInfo } from "./ipc";
-import { editorZoomProblems, layoutProblems, openAllPanes, paneLayoutProblems, previewZoomProblems } from "./layout-check";
+import { editorZoomProblems, layoutProblems, lintMarkerProblems, openAllPanes, paneLayoutProblems, previewZoomProblems } from "./layout-check";
 import type { WorkspaceHandle } from "./workspace";
 
 /** Chamada a algo que não existe: o Typst acusa erro nesta linha. */
@@ -286,6 +286,7 @@ export async function reportSelfTest(
           ...previewZoomProblems(document),
           ...paneLayoutProblems(document),
           ...(await editorZoomProblems(document)),
+          ...(ws.editor() ? await lintMarkerProblems(ws.editor()!.view) : ["sem editor para conferir a margem"]),
         ];
       } finally {
         restore();

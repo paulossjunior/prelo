@@ -13,6 +13,7 @@
 // (padrão). O zoom só muda a largura CSS das páginas; como cada página é um SVG, ela continua
 // nítida e nada é pedido de novo ao núcleo. Ao mudar o nível, o ponto da página sob o centro (ou
 // sob o ponteiro, na roda e na pinça) volta ao mesmo lugar da tela.
+import { severityIcon } from "../editor/icons";
 import { toIpcError, type Ipc, type PageInfo, type PreviewUpdate } from "../ipc";
 import {
   MAX_ZOOM,
@@ -448,7 +449,8 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
     if (destroyed || u.compileId <= lastCompileId) return;
     lastCompileId = u.compileId;
     if (!u.ok) {
-      band.textContent = errorText(u);
+      const errors = u.diagnostics.some((d) => d.severity === "error") || u.diagnostics.length === 0;
+      band.replaceChildren(severityIcon(errors ? "error" : "warning"), " ", errorText(u));
       if (opts.onShowErrors) {
         const show = opts.onShowErrors;
         const b = document.createElement("button");

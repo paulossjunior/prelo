@@ -6,6 +6,7 @@
 // por `textContent` (mensagens vêm de arquivos do projeto e não são HTML).
 import type { Diagnostic } from "../ipc";
 import { explain } from "./explain";
+import { severityIcon } from "./icons";
 
 export interface Location {
   line: number;
@@ -156,8 +157,8 @@ export function mountProblems(parent: HTMLElement, opts: ProblemsOptions): Probl
         const where = d.path ? [d.path, loc?.line, loc?.column].filter((x) => x !== undefined).join(":") : "";
         const item = d.path ? document.createElement("button") : document.createElement("div");
         item.className = `pb-item is-${d.severity}`;
-        const icon = span("pb-icon", d.severity === "error" ? "●" : "▲");
-        icon.setAttribute("aria-hidden", "true");
+        const icon = severityIcon(d.severity === "error" ? "error" : "warning");
+        icon.classList.add("pb-icon");
         const body = span("pb-body", "");
         if (where) body.append(span("pb-loc", where));
         body.append(...explanationParts(d));
@@ -182,7 +183,7 @@ export function mountProblems(parent: HTMLElement, opts: ProblemsOptions): Probl
     root.classList.toggle("is-open", open);
   }
 
-  toggle.addEventListener("click", () => setOpen(list.hidden));
+  toggle.addEventListener("click", () => setOpen(toggle.getAttribute("aria-expanded") !== "true"));
   render();
 
   return {

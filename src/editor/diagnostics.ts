@@ -2,10 +2,11 @@
 // O núcleo manda `Diagnostic` com `range` (deslocamentos UTF-16 no texto atual, como as
 // edições) ou só `line` (1-based). Diagnóstico de outro arquivo ou sem posição não é marcado
 // aqui; a faixa de erro da prévia e o painel "Erros" (src/editor/problems.ts) mostram esses.
-import { lintGutter, setDiagnostics, type Diagnostic as LintDiagnostic } from "@codemirror/lint";
-import type { Extension, Text } from "@codemirror/state";
-import type { EditorView } from "@codemirror/view";
+import { forEachDiagnostic, setDiagnostics, type Diagnostic as LintDiagnostic } from "@codemirror/lint";
+import { RangeSet, type EditorState, type Extension, type Text } from "@codemirror/state";
+import { gutter, GutterMarker, type EditorView } from "@codemirror/view";
 import type { Diagnostic } from "../ipc";
+import { severityIcon, type Severity } from "./icons";
 import { explanationNode } from "./problems";
 
 function clamp(n: number, max: number): number {
@@ -53,7 +54,55 @@ export function applyDiagnostics(view: EditorView, diags: Diagnostic[], path: st
   view.dispatch(setDiagnostics(view.state, toLintDiagnostics(diags, path, view.state.doc)));
 }
 
-/** Marcador na margem para as linhas com diagnóstico. */
+const RANK: Record<string, number> = { hint: 0, info: 1, warning: 2, error: 3 };
+
+/** Marcador da margem: ícone SVG da gravidade mais alta da linha, com a mensagem no `title`. */
+class SeverityMarker extends GutterMarker {
+  constructor(
+    readonly severity: Severity,
+    readonly title: string,
+  ) {
+    super();
+  }
+  eq(other: SeverityMarker): boolean {
+    return other.severity === this.severity && other.title === this.title;
+  }
+  toDOM(): Node {
+    return severityIcon(this.severity, this.title);
+  }
+}
+
+function markers(state: EditorState): RangeSet<GutterMarker> {
+  const byLine = new Map<number, { rank: number; severity: Severity; titles: string[] }>();
+  forEachDiagnostic(state, (d, from) => {
+    const line = state.doc.lineAt(Math.min(from, state.doc.length)).from;
+    const severity: Severity = d.severity === "error" || d.severity === "warning" ? d.severity : "info";
+    const rank = RANK[d.severity] ?? 1;
+    const title = d.message.split("\n")[0] ?? "";
+    const cur = byLine.get(line);
+    if (!cur) byLine.set(line, { rank, severity, titles: [title] });
+    else {
+      cur.titles.push(title);
+      if (rank > cur.rank) Object.assign(cur, { rank, severity });
+    }
+  });
+  const ranges = [...byLine.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([pos, m]) => new SeverityMarker(m.severity, m.titles.join("\n")).range(pos));
+  return RangeSet.of(ranges);
+}
+
+/**
+ * Margem com o ícone de cada linha com diagnóstico. Substitui o `lintGutter()` do
+ * @codemirror/lint: o tema dele desenha o marcador com uma imagem `data:` na propriedade
+ * `content` do próprio elemento, que a CSP (`img-src` sem `data:`) bloqueia; o PR #187 dependia
+ * de sobrescrever isso por CSS, e o dono viu no app real um quadrado vazio no lugar do marcador.
+ * Aqui o ícone é SVG montado pelo DOM, sem nada a sobrescrever, e o autoteste confere no app
+ * real que ele aparece em vermelho (src/layout-check.ts, `lintMarkerProblems`).
+ */
 export function diagnosticsExtension(): Extension {
-  return lintGutter();
+  return gutter({
+    class: "prelo-lint-gutter",
+    markers: (view) => markers(view.state),
+  });
 }
