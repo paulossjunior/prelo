@@ -59,9 +59,19 @@ pub struct Hover {
 
 /// Visão de qualquer [`World`] como [`IdeWorld`], com a lista de arquivos do projeto já
 /// filtrada pela regra de escopo ([`path_candidates`]). Sem lista de pacotes.
-struct Ide<'a, W> {
+pub(crate) struct Ide<'a, W> {
     world: &'a W,
     files: Vec<FileId>,
+}
+
+impl<'a, W> Ide<'a, W> {
+    /// Sem lista de arquivos (saltos da prévia, US4: nada a sugerir).
+    pub(crate) fn new(world: &'a W) -> Self {
+        Self {
+            world,
+            files: Vec::new(),
+        }
+    }
 }
 
 /// Profundidade máxima de pastas varridas para sugerir caminhos.
@@ -396,14 +406,22 @@ impl Engine for LangService {
             .unwrap_or_default())
     }
 
-    /// Fica para US4 (T061, T063): os *spans* do documento da prévia saem do World da
-    /// compilação, e o deste serviço pode numerá-los diferente depois de edições.
+    /// Pontos da prévia do texto em `offset` (US4). Roda no documento da prévia com o World
+    /// que o compilou (`ctx.synced`), não no World deste serviço: os *spans* do documento só
+    /// valem nas fontes da compilação que o gerou. Sem prévia ou sem `.typ`: nenhum ponto.
     fn jump_from_cursor(
         &self,
-        _ctx: &EngineContext,
-        _path: &ProjectPath,
-        _offset: usize,
+        ctx: &EngineContext,
+        path: &ProjectPath,
+        offset: usize,
     ) -> Result<Vec<JumpTarget>, String> {
-        Err("not_implemented".into())
+        if !is_typ(path) {
+            return Ok(Vec::new());
+        }
+        Ok(ctx
+            .synced
+            .as_ref()
+            .map(|synced| synced.jump_from_cursor(path.relative(), offset))
+            .unwrap_or_default())
     }
 }

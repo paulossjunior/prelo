@@ -135,7 +135,10 @@ fn arquivo_de_fonte_malformado_gera_diagnostico_sem_derrubar() {
         used_families(&doc).contains(PROJECT_FONT),
         "a fonte boa continua valendo"
     );
-    let bad: Vec<_> = diagnostics.iter().filter(|d| d.kind == Kind::Font).collect();
+    let bad: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.kind == Kind::Font)
+        .collect();
     assert_eq!(bad.len(), 1, "{diagnostics:?}");
     assert_eq!(bad[0].path.as_deref(), Some("fonts/quebrada.ttf"));
     assert!(

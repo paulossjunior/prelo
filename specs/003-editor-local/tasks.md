@@ -194,13 +194,13 @@ linha; localizar a partir de linhas conhecidas; clicar em cada seção.
 
 ### Testes para User Story 4
 
-- [ ] T061 [P] [US4] Testes em `src-tauri/tests/compile_sync.rs`: `jump_from_click` em parágrafo do principal e de `.typ` incluído devolve arquivo e linha corretos; ponto sem origem no projeto (numeração, pacote) devolve `null`; `jump_from_cursor` devolve página e posição; `outline` em ordem e com nível, incluindo títulos de arquivo incluído ([data-model.md](data-model.md#outlineitem) `OutlineItem.level`) (FR-005, FR-020, SC-007)
-- [ ] T062 [P] [US4] Testes de interface em `src/preview/sync.test.ts` e `src/project/outline.test.ts`: clique converte pixels em pontos e abre o arquivo na linha; `null` mostra aviso e não move o cursor; localizar rola e destaca; clicar na seção move editor e prévia
+- [x] T061 [P] [US4] Testes em `src-tauri/tests/compile_sync.rs`: `jump_from_click` em parágrafo do principal e de `.typ` incluído devolve arquivo e linha corretos; ponto sem origem no projeto (numeração, pacote) devolve `null`; `jump_from_cursor` devolve página e posição; `outline` em ordem e com nível, incluindo títulos de arquivo incluído ([data-model.md](data-model.md#outlineitem) `OutlineItem.level`) (FR-005, FR-020, SC-007)
+- [x] T062 [P] [US4] Testes de interface em `src/preview/sync.test.ts` e `src/project/outline.test.ts`: clique converte pixels em pontos e abre o arquivo na linha; `null` mostra aviso e não move o cursor; localizar rola e destaca; clicar na seção move editor e prévia
 
 ### Implementação para User Story 4
 
-- [ ] T063 [US4] Implementar `src-tauri/src/compile/sync.rs` (`typst_ide::jump_from_click`, `jump_from_cursor`, outline pelo introspector) e os comandos `jump_from_click`, `jump_from_cursor`, `outline` com [data-model.md](data-model.md#outlineitem) `OutlineItem.level`, até T061 passar
-- [ ] T064 [US4] Implementar `src/preview/sync.ts` e `src/project/outline.ts` até T062 passar
+- [x] T063 [US4] Implementar `src-tauri/src/compile/sync.rs` (`typst_ide::jump_from_click`, `jump_from_cursor`, outline pelo introspector) e os comandos `jump_from_click`, `jump_from_cursor`, `outline` com [data-model.md](data-model.md#outlineitem) `OutlineItem.level`, até T061 passar
+- [x] T064 [US4] Implementar `src/preview/sync.ts` e `src/project/outline.ts` até T062 passar
 
 **Checkpoint**: US4 funciona com US1; QA valida.
 
@@ -239,13 +239,13 @@ arquivos.
 
 ### Testes para User Story 6
 
-- [ ] T071 [P] [US6] Testes em `src-tauri/tests/project_create.rs`: pasta vazia → `main.typ` mínimo e `.prelo/project.json` com `ProjectRecord.compiler.typst` e `ProjectRecord.main` ([data-model.md](data-model.md#projectrecord-preloprojectjson)); pasta com arquivos → `folder_not_empty` e nada escrito; o `main.typ` criado compila no Prelo e, com a feature `equivalence`, no `typst` CLI (FR-002, Princípio I)
+- [x] T071 [P] [US6] Testes em `src-tauri/tests/project_create.rs`: pasta vazia → `main.typ` mínimo e `.prelo/project.json` com `ProjectRecord.compiler.typst` e `ProjectRecord.main` ([data-model.md](data-model.md#projectrecord-preloprojectjson)); pasta com arquivos → `folder_not_empty` e nada escrito; o `main.typ` criado compila no Prelo e, com a feature `equivalence`, no `typst` CLI (FR-002, Princípio I)
 
 ### Implementação para User Story 6
 
-- [ ] T072 [P] [US6] Escrever teste em `src/project/tree.test.ts`: ação "Novo projeto" chama `create_project_dialog`; `folder_not_empty` mostra aviso. Confirmar que falha
-- [ ] T073 [US6] Implementar `create_project_dialog` em `src-tauri/src/project/mod.rs` gravando [data-model.md](data-model.md#projectrecord-preloprojectjson) `ProjectRecord.compiler.typst` e `ProjectRecord.main`, até T071 passar
-- [ ] T074 [US6] Adicionar a ação "Novo projeto" em `src/main.ts` até T072 passar
+- [x] T072 [P] [US6] Escrever teste em `src/project/tree.test.ts`: ação "Novo projeto" chama `create_project_dialog`; `folder_not_empty` mostra aviso. Confirmar que falha (feito em `src/workspace.test.ts`, onde mora a barra de ações)
+- [x] T073 [US6] Implementar `create_project_dialog` em `src-tauri/src/project/mod.rs` gravando [data-model.md](data-model.md#projectrecord-preloprojectjson) `ProjectRecord.compiler.typst` e `ProjectRecord.main`, até T071 passar
+- [x] T074 [US6] Adicionar a ação "Novo projeto" em `src/main.ts` até T072 passar (feito em `src/workspace.ts`; `main.ts` só monta a área de trabalho)
 
 **Checkpoint**: todas as histórias funcionam; QA valida US6.
 

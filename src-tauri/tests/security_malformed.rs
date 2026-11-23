@@ -18,7 +18,7 @@ use std::sync::mpsc::Receiver;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use prelo_lib::compile::project::{CompileInput, ProjectCompiler};
+use prelo_lib::compile::project::{CompileInput, Compiled, ProjectCompiler};
 use prelo_lib::compile::scheduler::{Compilation, Scheduler, Status, COMPILE_TIMEOUT};
 use prelo_lib::diagnostic::{Diagnostic, Kind};
 use prelo_lib::fs::access_model::AccessModel;
@@ -28,7 +28,6 @@ use prelo_lib::world::plugins::{sha256_hex, Decision, PluginApprovals};
 use prelo_lib::world::WorldEnv;
 use support::{fixtures_dir, TempProject};
 use tinymist_vfs::PathAccessModel;
-use typst_layout::PagedDocument;
 
 /// Prazo para a resposta a uma edição depois de entrada malformada (SC-004).
 const RESPONSIVE: Duration = Duration::from_secs(1);
@@ -46,7 +45,7 @@ const EDIT: &str = "= Editado\n\nTexto válido.\n";
 struct Live {
     project: TempProject,
     scheduler: Scheduler<ProjectCompiler>,
-    results: Receiver<Compilation<PagedDocument>>,
+    results: Receiver<Compilation<Compiled>>,
 }
 
 impl Live {
@@ -82,7 +81,7 @@ impl Live {
     }
 
     /// Compila o que está no disco e devolve o resultado, dentro de [`DELIVERY`].
-    fn compile_disk(&self) -> Compilation<PagedDocument> {
+    fn compile_disk(&self) -> Compilation<Compiled> {
         let id = self.scheduler.submit(CompileInput {
             main: "main.typ".into(),
             files: Vec::new(),
@@ -90,7 +89,7 @@ impl Live {
         self.wait(id, DELIVERY)
     }
 
-    fn wait(&self, id: u64, limit: Duration) -> Compilation<PagedDocument> {
+    fn wait(&self, id: u64, limit: Duration) -> Compilation<Compiled> {
         let deadline = Instant::now() + limit;
         loop {
             let left = deadline.saturating_duration_since(Instant::now());

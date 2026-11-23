@@ -5,12 +5,14 @@
 //!   `Cargo.lock` (research R1).
 //! - Comandos IPC de projeto que não recebem caminho: `open_project_dialog` (diálogo nativo
 //!   mostrado pelo núcleo; a webview não tem permissão de diálogo nem de arquivo),
+//!   `create_project_dialog` (US6; o projeto mínimo vem de [`create`]),
 //!   `update_project_compiler_version` e `compiler_info`. `list_tree` e `choose_main_file`
 //!   ficam em [`crate::commands`], junto da validação de caminho.
 //!
 //! O estado do projeto aberto (registro ausente criado ao abrir, estado `VersaoDiferente`,
 //! aviso de principal ausente) mora em [`crate::commands::AppState`].
 
+pub mod create;
 pub mod record;
 
 use serde::Serialize;
@@ -62,6 +64,30 @@ pub fn open_project_dialog<R: Runtime>(
         .open_project(&root)
         .map(Some)
         .map_err(|_| "not_found".into())
+}
+
+/// "Novo projeto" (US6; FR-002): pasta escolhida no diálogo nativo do núcleo; se vazia, ganha o
+/// projeto mínimo ([`create`]) e abre. Cancelado → `null`; pasta com arquivos →
+/// `folder_not_empty`, sem escrever nada.
+#[tauri::command(async)]
+pub fn create_project_dialog<R: Runtime>(
+    window: Window<R>,
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Option<ProjectInfo>, String> {
+    no_args(&request)?;
+    let Some(folder) = window
+        .dialog()
+        .file()
+        .set_parent(&window)
+        .set_title("Novo projeto: escolha uma pasta vazia")
+        .set_can_create_directories(true)
+        .blocking_pick_folder()
+    else {
+        return Ok(None);
+    };
+    let folder = folder.into_path().map_err(|_| "not_found".to_owned())?;
+    state.create_project(&folder).map(Some)
 }
 
 /// "Atualizar o projeto para a versão embutida" (FR-012): única ação que muda

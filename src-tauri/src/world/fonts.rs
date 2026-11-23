@@ -70,7 +70,8 @@ pub static EMBEDDED: &[(&str, &[u8])] = embedded![
 ];
 
 /// Licenças das fontes embutidas, como o `scripts/audit.mjs` as confere.
-const LICENSES_TOML: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/licenses.toml"));
+const LICENSES_TOML: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/fonts/licenses.toml"));
 
 /// `FontLicense` (data-model.md "Fontes"; `compiler_info.fonts`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]

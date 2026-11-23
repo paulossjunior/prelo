@@ -50,6 +50,11 @@ export interface PreviewHandle {
   readonly element: HTMLElement;
   /** Barra da prévia (a área de trabalho põe nela o botão de recolher, FR-013b). */
   readonly bar: HTMLElement;
+  /** Área rolável com as páginas (`.pv-page[data-page-index]`); a sincronização (US4) escuta
+   * cliques e rola por ela. */
+  readonly pagesElement: HTMLElement;
+  /** Número, hash e tamanho em pontos da página `index` atual; `null` se não existe. */
+  pageInfo(index: number): PageInfo | null;
   /** Aplica um `PreviewUpdate` recebido por `subscribe_preview`. */
   update(u: PreviewUpdate): void;
   /** Índices das páginas visíveis (o observador de rolagem chama isto). */
@@ -483,6 +488,8 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
   return {
     element: root,
     bar,
+    pagesElement: pagesEl,
+    pageInfo: (index: number) => slots[index]?.info ?? null,
     update,
     setVisible,
     idle,

@@ -209,6 +209,14 @@ where
 
     /// Compila o estado atual (disco + overlay). Erros e avisos viram [`Diagnostic`].
     pub fn compile(&mut self) -> Outcome<PagedDocument> {
+        self.compile_with_snapshot().0
+    }
+
+    /// Como [`ProjectWorld::compile`], e devolve também o instantâneo que compilou: os
+    /// *spans* do documento só valem nas fontes dele (sincronização com a prévia, US4).
+    pub fn compile_with_snapshot(
+        &mut self,
+    ) -> (Outcome<PagedDocument>, CompilerWorld<PreloFeat<M>>) {
         self.refresh_trust();
         self.refresh_fonts();
         let world = self.snapshot();
@@ -227,10 +235,13 @@ where
             .map(|diag| self.convert(&world, diag))
             .collect();
         diagnostics.extend_from_slice(self.fonts.diagnostics());
-        Outcome {
-            output,
-            diagnostics,
-        }
+        (
+            Outcome {
+                output,
+                diagnostics,
+            },
+            world,
+        )
     }
 
     /// Diagnóstico do Typst → [`Diagnostic`]. Recusas do modelo de acesso e caminhos que

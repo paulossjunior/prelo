@@ -31,7 +31,9 @@ use typst::visualize::Image;
 use typst_layout::{Page, PagedDocument};
 use typst_svg::{SvgOptions, WebImage};
 
+use super::project::Compiled;
 use super::scheduler::{Compilation, Status};
+use super::sync::Synced;
 use crate::diagnostic::Diagnostic;
 
 /// Erro de `page_svg` com hash que não é o da página atual (ou página inexistente).
@@ -79,6 +81,9 @@ pub type LastCompilation = Result<(u64, Arc<PagedDocument>), Vec<Diagnostic>>;
 #[derive(Default)]
 pub struct Preview {
     document: Option<Arc<PagedDocument>>,
+    /// O documento de `document` com o instantâneo do World que o compilou (saltos e
+    /// estrutura, US4). `None` quando o documento veio sem World ([`Preview::apply`]).
+    synced: Option<Arc<Synced>>,
     pages: Vec<PageInfo>,
     /// Último evento entregue, para quem assinar depois.
     last: Option<PreviewUpdate>,
@@ -129,8 +134,7 @@ impl Assets {
     fn insert(&mut self, key: u128, asset: &Arc<Asset>) {
         if self.live.contains(&key) {
             self.by_image.insert(key, Arc::clone(asset));
-            self.by_sha
-                .insert(asset.sha256.clone(), Arc::clone(asset));
+            self.by_sha.insert(asset.sha256.clone(), Arc::clone(asset));
         }
     }
 }
@@ -193,6 +197,7 @@ impl Preview {
                 self.pages = pages;
                 self.assets.track(&doc);
                 self.document = Some(Arc::new(doc));
+                self.synced = None;
                 (true, changed)
             }
             // `ComErros` e `Abandonada`: mantém as páginas da última `Ok` (FR-014).
@@ -208,6 +213,30 @@ impl Preview {
         };
         self.last = Some(update.clone());
         update
+    }
+
+    /// Como [`Preview::apply`], guardando o World que compilou o documento junto com ele.
+    pub fn apply_compiled(&mut self, compilation: Compilation<Compiled>) -> PreviewUpdate {
+        let (output, world) = match compilation.output {
+            Some(Compiled { document, world }) => (Some(document), Some(world)),
+            None => (None, None),
+        };
+        let update = self.apply(Compilation {
+            compile_id: compilation.compile_id,
+            status: compilation.status,
+            output,
+            diagnostics: compilation.diagnostics,
+            duration_ms: compilation.duration_ms,
+        });
+        if let (true, Some(world), Some(doc)) = (update.ok, world, &self.document) {
+            self.synced = Some(Arc::new(Synced::new(Arc::clone(doc), world)));
+        }
+        update
+    }
+
+    /// Último documento bom com o World que o compilou.
+    pub fn synced(&self) -> Option<&Arc<Synced>> {
+        self.synced.as_ref()
     }
 
     /// Último documento compilado com sucesso.
@@ -292,12 +321,12 @@ impl PreviewHub {
     }
 
     /// Aplica a compilação da geração `generation` e entrega o evento ao assinante.
-    pub fn deliver(&self, generation: u64, compilation: Compilation<PagedDocument>) {
+    pub fn deliver(&self, generation: u64, compilation: Compilation<Compiled>) {
         let mut state = self.lock();
         if state.generation != generation {
             return;
         }
-        let update = state.preview.apply(compilation);
+        let update = state.preview.apply_compiled(compilation);
         if let Some(sink) = &state.sink {
             sink(&update);
         }
@@ -354,9 +383,14 @@ impl PreviewHub {
             .map(|asset| asset.image.to_base64_url().to_string())
     }
 
-    /// Último documento compilado com sucesso (saltos e estrutura, fases seguintes).
+    /// Último documento compilado com sucesso.
     pub fn document(&self) -> Option<Arc<PagedDocument>> {
         self.lock().preview.document().cloned()
+    }
+
+    /// Último documento bom com o World que o compilou (saltos e estrutura, US4).
+    pub fn synced(&self) -> Option<Arc<Synced>> {
+        self.lock().preview.synced().cloned()
     }
 
     /// Ver [`Preview::export_source`].
@@ -368,7 +402,7 @@ impl PreviewHub {
     pub fn spawn_pump(
         self: &Arc<Self>,
         generation: u64,
-        compilations: Receiver<Compilation<PagedDocument>>,
+        compilations: Receiver<Compilation<Compiled>>,
     ) {
         let hub = Arc::clone(self);
         thread::Builder::new()
@@ -699,6 +733,16 @@ mod tests {
     }
 
     /// Hub com a compilação `doc` entregue; devolve o evento.
+    /// Como [`PreviewHub::deliver`], para um documento sem o World que o compilou.
+    fn deliver_doc(hub: &PreviewHub, generation: u64, compilation: Compilation<PagedDocument>) {
+        let mut state = hub.lock();
+        assert_eq!(state.generation, generation);
+        let update = state.preview.apply(compilation);
+        if let Some(sink) = &state.sink {
+            sink(&update);
+        }
+    }
+
     fn hub_with(doc: PagedDocument) -> (PreviewHub, u64, PreviewUpdate) {
         let hub = PreviewHub::default();
         let generation = hub.reset();
@@ -706,7 +750,7 @@ mod tests {
         hub.subscribe(Arc::new(move |u: &PreviewUpdate| {
             let _ = tx.send(u.clone());
         }));
-        hub.deliver(generation, ok(1, doc));
+        deliver_doc(&hub, generation, ok(1, doc));
         let update = rx.try_recv().expect("evento entregue");
         (hub, generation, update)
     }
@@ -726,7 +770,10 @@ mod tests {
         let (hub, _, update) = hub_with(compile(&with_image("Legenda")));
         let svg = hub.page_svg(0, &update.pages[0].hash).expect("SVG");
         assert!(svg.contains("<image"), "{svg:.200}");
-        assert!(!svg.contains("data:image/"), "imagem continua embutida no SVG");
+        assert!(
+            !svg.contains("data:image/"),
+            "imagem continua embutida no SVG"
+        );
         assert_eq!(asset_tokens(&svg), vec![sha256_hex(PNG)]);
         // A referência é o atributo inteiro, sem sobra do `data:`.
         assert!(svg.contains(&format!("\"{ASSET_PREFIX}{}\"", sha256_hex(PNG))));
@@ -806,20 +853,20 @@ mod tests {
     fn hash_so_vale_enquanto_a_imagem_esta_na_compilacao_atual() {
         let hub = PreviewHub::default();
         let generation = hub.reset();
-        hub.deliver(generation, ok(1, compile(&with_image("Legenda"))));
+        deliver_doc(&hub, generation, ok(1, compile(&with_image("Legenda"))));
         let page = current_hash(&hub, 0);
         hub.page_svg(0, &page).expect("SVG");
         let sha = sha256_hex(PNG);
         assert!(hub.asset_data_url(&sha).is_some());
 
         // Compilação nova sem a figura: o hash some.
-        hub.deliver(generation, ok(2, compile(&three_pages("B"))));
+        deliver_doc(&hub, generation, ok(2, compile(&three_pages("B"))));
         assert!(hub.asset_data_url(&sha).is_none());
         let response = asset_response(&hub, &request(&format!("prelo-asset://localhost/{sha}")));
         assert_eq!(response.status(), 404);
 
         // Projeto novo (reset): nada da prévia anterior.
-        hub.deliver(generation, ok(3, compile(&with_image("Legenda"))));
+        deliver_doc(&hub, generation, ok(3, compile(&with_image("Legenda"))));
         let page = current_hash(&hub, 0);
         hub.page_svg(0, &page).expect("SVG");
         assert!(hub.asset_data_url(&sha).is_some());
@@ -831,11 +878,15 @@ mod tests {
     fn editar_texto_na_pagina_da_imagem_nao_reenvia_os_bytes() {
         let hub = PreviewHub::default();
         let generation = hub.reset();
-        hub.deliver(generation, ok(1, compile(&with_image("Legenda"))));
+        deliver_doc(&hub, generation, ok(1, compile(&with_image("Legenda"))));
         let first_hash = current_hash(&hub, 0);
         let first = hub.page_svg(0, &first_hash).expect("SVG");
 
-        hub.deliver(generation, ok(2, compile(&with_image("Legenda editada"))));
+        deliver_doc(
+            &hub,
+            generation,
+            ok(2, compile(&with_image("Legenda editada"))),
+        );
         let second_hash = current_hash(&hub, 0);
         assert_ne!(second_hash, first_hash, "a página da figura mudou");
         let second = hub.page_svg(0, &second_hash).expect("SVG");

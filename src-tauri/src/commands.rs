@@ -10,7 +10,9 @@
 //! `choose_main_file` recompilam, e cada resultado chega à interface pelo canal de
 //! `subscribe_preview`; `page_svg` serve o SVG de cada página (T035). O serviço de linguagem
 //! (T036) passa pelo trait [`Engine`]: o padrão é o [`LangService`], que recebe o mesmo estado
-//! da compilação ([`EngineContext`]); `jump_from_cursor` ainda responde `not_implemented`.
+//! da compilação ([`EngineContext`]). Saltos entre prévia e código e a estrutura de seções
+//! (US4: `jump_from_click`, `jump_from_cursor`, `outline`) rodam sobre o documento da prévia e
+//! o World que o compilou ([`crate::compile::sync`]).
 //! Mudança externa (T034): o observador de [`crate::fs::watch`] repassa caminhos para
 //! [`AppState::handle_disk_change`], que recarrega ou marca conflito; `resolve_external_change`
 //! aplica a escolha da pessoa. Arquivo aberto e gravação (`open_file`, `edit_file`, `save_file`,
@@ -35,6 +37,7 @@ use crate::compile::export::{ExportError, ExportSource, Exported};
 use crate::compile::preview::{asset_response, PreviewHub, PreviewUpdate};
 use crate::compile::project::{CompileInput, ProjectCompiler};
 use crate::compile::scheduler::Scheduler;
+use crate::compile::sync::{OutlineItem, SourcePosition, Synced};
 use crate::fs::create::{self, NewItem};
 pub use crate::fs::save::{apply_changes, Change};
 use crate::fs::save::{format_utc, OpenFile};
@@ -131,12 +134,25 @@ pub struct JumpTarget {
 
 /// Estado do projeto que o motor precisa para responder como a prévia veria o texto: a raiz,
 /// o mesmo [`CompileInput`] da compilação (principal + textos abertos, ainda não salvos;
-/// FR-011) e o último documento compilado com sucesso (rótulos).
-#[derive(Debug, Clone)]
+/// FR-011) e o último documento compilado com sucesso (rótulos), também com o World que o
+/// compilou (`synced`, para os saltos da prévia).
+#[derive(Clone)]
 pub struct EngineContext {
     pub root: PathBuf,
     pub input: CompileInput,
     pub document: Option<Arc<PagedDocument>>,
+    pub synced: Option<Arc<Synced>>,
+}
+
+impl std::fmt::Debug for EngineContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EngineContext")
+            .field("root", &self.root)
+            .field("input", &self.input)
+            .field("document", &self.document.is_some())
+            .field("synced", &self.synced.is_some())
+            .finish()
+    }
 }
 
 /// Consultas que dependem do World (T020) e dos serviços de prévia e linguagem (T035, T036).
@@ -465,6 +481,17 @@ impl AppState {
         self.project.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// "Novo projeto" (US6; FR-002): cria o projeto mínimo em `root` e o abre. Chamado pelo
+    /// diálogo nativo do núcleo (`create_project_dialog`) e pelos testes.
+    ///
+    /// Pasta não vazia → `folder_not_empty` sem escrever nada; o projeto aberto, se houver,
+    /// continua aberto em qualquer recusa.
+    pub fn create_project(&self, folder: &Path) -> Result<ProjectInfo, String> {
+        let root = crate::project::create::create_project(folder, EMBEDDED_TYPST)
+            .map_err(|e| e.code().to_owned())?;
+        self.open_project(&root).map_err(|_| "not_found".to_owned())
+    }
+
     /// Abre o projeto em `root` (canonicalizada uma vez). Chamado pelo diálogo nativo do
     /// núcleo (`open_project_dialog`) e pelos testes; nunca exposto à interface com caminho.
     ///
@@ -615,7 +642,11 @@ impl AppState {
     /// Hash malformado → `invalid_arguments`; hash que não é de imagem da prévia atual →
     /// `not_found`.
     pub fn preview_asset(&self, sha256: &str) -> Result<String, String> {
-        if sha256.len() != 64 || !sha256.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+        if sha256.len() != 64
+            || !sha256
+                .bytes()
+                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        {
             return Err(INVALID_ARGUMENTS.into());
         }
         self.preview
@@ -647,11 +678,13 @@ impl AppState {
     /// consulta.
     fn engine_query(&self, requested: &str) -> Result<(EngineContext, ProjectPath), String> {
         let document = self.preview.document();
+        let synced = self.preview.synced();
         self.with_path(requested, |project, path| {
             let ctx = EngineContext {
                 root: project.scope.root().to_owned(),
                 input: project.input(),
                 document,
+                synced,
             };
             Ok((ctx, path))
         })
@@ -667,6 +700,35 @@ impl AppState {
     pub fn semantic_tokens(&self, requested: &str) -> Result<Vec<Token>, String> {
         let (ctx, path) = self.engine_query(requested)?;
         self.engine.semantic_tokens(&ctx, &path)
+    }
+
+    /// Origem no projeto do ponto `(x_pt, y_pt)` da página `page` da prévia (a partir de 0);
+    /// `None` quando o ponto não tem origem no projeto ou ainda não há prévia (US4, FR-020).
+    pub fn jump_from_click(
+        &self,
+        page: usize,
+        x_pt: f64,
+        y_pt: f64,
+    ) -> Result<Option<SourcePosition>, String> {
+        if self.lock().is_none() {
+            return Err(NO_PROJECT.into());
+        }
+        Ok(self
+            .preview
+            .synced()
+            .and_then(|synced| synced.jump_from_click(page, x_pt, y_pt)))
+    }
+
+    /// Títulos de seção do último documento bom, em ordem (US4, FR-005); vazio sem prévia.
+    pub fn outline(&self) -> Result<Vec<OutlineItem>, String> {
+        if self.lock().is_none() {
+            return Err(NO_PROJECT.into());
+        }
+        Ok(self
+            .preview
+            .synced()
+            .map(|synced| synced.outline())
+            .unwrap_or_default())
     }
 
     /// Posições na prévia do trecho em `offset` (US4).
@@ -997,6 +1059,14 @@ struct AssetArgs {
     sha256: String,
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ClickArgs {
+    page: usize,
+    x_pt: f64,
+    y_pt: f64,
+}
+
 /// Corpo de `subscribe_preview`: só o canal (o Tauri o entrega à parte, como `Channel`).
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -1145,6 +1215,24 @@ pub fn jump_from_cursor(
 ) -> Result<Vec<JumpTarget>, String> {
     let a: OffsetArgs = args(&request)?;
     state.jump_from_cursor(&a.path, a.offset)
+}
+
+#[tauri::command(async)]
+pub fn jump_from_click(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Option<SourcePosition>, String> {
+    let a: ClickArgs = args(&request)?;
+    state.jump_from_click(a.page, a.x_pt, a.y_pt)
+}
+
+#[tauri::command(async)]
+pub fn outline(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Vec<OutlineItem>, String> {
+    no_args(&request)?;
+    state.outline()
 }
 
 #[cfg(test)]
@@ -1563,6 +1651,7 @@ mod tests {
                 files: Vec::new(),
             },
             document: None,
+            synced: None,
         };
         assert_eq!(
             Unavailable.complete(&ctx, &p, 0),
