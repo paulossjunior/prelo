@@ -239,13 +239,13 @@ arquivos.
 
 ### Testes para User Story 6
 
-- [ ] T071 [P] [US6] Testes em `src-tauri/tests/project_create.rs`: pasta vazia → `main.typ` mínimo e `.prelo/project.json` com `ProjectRecord.compiler.typst` e `ProjectRecord.main` ([data-model.md](data-model.md#projectrecord-preloprojectjson)); pasta com arquivos → `folder_not_empty` e nada escrito; o `main.typ` criado compila no Prelo e, com a feature `equivalence`, no `typst` CLI (FR-002, Princípio I)
+- [x] T071 [P] [US6] Testes em `src-tauri/tests/project_create.rs`: pasta vazia → `main.typ` mínimo e `.prelo/project.json` com `ProjectRecord.compiler.typst` e `ProjectRecord.main` ([data-model.md](data-model.md#projectrecord-preloprojectjson)); pasta com arquivos → `folder_not_empty` e nada escrito; o `main.typ` criado compila no Prelo e, com a feature `equivalence`, no `typst` CLI (FR-002, Princípio I)
 
 ### Implementação para User Story 6
 
-- [ ] T072 [P] [US6] Escrever teste em `src/project/tree.test.ts`: ação "Novo projeto" chama `create_project_dialog`; `folder_not_empty` mostra aviso. Confirmar que falha
-- [ ] T073 [US6] Implementar `create_project_dialog` em `src-tauri/src/project/mod.rs` gravando [data-model.md](data-model.md#projectrecord-preloprojectjson) `ProjectRecord.compiler.typst` e `ProjectRecord.main`, até T071 passar
-- [ ] T074 [US6] Adicionar a ação "Novo projeto" em `src/main.ts` até T072 passar
+- [x] T072 [P] [US6] Escrever teste em `src/project/tree.test.ts`: ação "Novo projeto" chama `create_project_dialog`; `folder_not_empty` mostra aviso. Confirmar que falha (feito em `src/workspace.test.ts`, onde mora a barra de ações)
+- [x] T073 [US6] Implementar `create_project_dialog` em `src-tauri/src/project/mod.rs` gravando [data-model.md](data-model.md#projectrecord-preloprojectjson) `ProjectRecord.compiler.typst` e `ProjectRecord.main`, até T071 passar
+- [x] T074 [US6] Adicionar a ação "Novo projeto" em `src/main.ts` até T072 passar (feito em `src/workspace.ts`; `main.ts` só monta a área de trabalho)
 
 **Checkpoint**: todas as histórias funcionam; QA valida US6.
 
