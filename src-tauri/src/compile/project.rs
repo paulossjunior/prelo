@@ -14,11 +14,20 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, PoisonError};
 
+use tinymist_world::CompilerWorld;
 use typst_layout::PagedDocument;
 
 use super::scheduler::{Compiler, Outcome};
 use crate::diagnostic::Diagnostic;
-use crate::world::{ProjectWorld, WorldEnv};
+use crate::world::{PreloFeat, ProjectWorld, WorldEnv};
+
+/// Documento compilado e o instantâneo do World que o compilou. Saltos entre prévia e código
+/// (US4) resolvem os *spans* do documento nas fontes deste instantâneo, não nas de um World
+/// que já viu edições mais novas.
+pub struct Compiled {
+    pub document: PagedDocument,
+    pub world: CompilerWorld<PreloFeat>,
+}
 
 /// Estado da edição a compilar.
 #[derive(Debug, Clone)]
@@ -133,11 +142,17 @@ impl ProjectCompiler {
 
 impl Compiler for ProjectCompiler {
     type Input = CompileInput;
-    type Output = PagedDocument;
+    type Output = Compiled;
 
-    fn compile(&mut self, input: CompileInput) -> Outcome<PagedDocument> {
+    fn compile(&mut self, input: CompileInput) -> Outcome<Compiled> {
         match self.sync(input) {
-            Ok(world) => world.compile(),
+            Ok(world) => {
+                let (outcome, world) = world.compile_with_snapshot();
+                Outcome {
+                    output: outcome.output.map(|document| Compiled { document, world }),
+                    diagnostics: outcome.diagnostics,
+                }
+            }
             Err(diag) => Outcome {
                 output: None,
                 diagnostics: vec![diag],

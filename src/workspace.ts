@@ -1,19 +1,34 @@
 // Área de trabalho do editor local (T039; US1): barra com o projeto e as ações (Abrir projeto,
-// Salvar, Sobre), árvore | editor | prévia, e a barra de status com a compilação, o estado de
+// Novo projeto (US6), Salvar, Sobre), árvore | editor | prévia, e a barra de status com a compilação, o estado de
 // gravação, a versão do Typst e a do Prelo. Layout e linguagem visual de prototype/index.html.
 //
 // Fiação (PR #176): uma assinatura de `subscribe_preview` alimenta a prévia e os diagnósticos
 // do editor; a árvore abre arquivos (`open_file` → `mountEditor` → `setCurrent`); edição
 // recusada pelo núcleo recarrega o arquivo.
+//
+// Navegação (US4): clique na prévia abre o arquivo de origem na linha; "Localizar na prévia"
+// (cabeçalho do editor) rola a prévia até o trecho do cursor; o painel "Estrutura", abaixo dos
+// arquivos, leva editor e prévia a cada seção (src/preview/sync.ts, src/project/outline.ts).
 import { StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { compilerStatus, mountAbout, type AboutHandle } from "./about";
 import { mountAppInfo, type Invoke } from "./app-info";
 import { mountEditor, type EditorHandle } from "./editor/editor";
 import { mountExport } from "./export";
-import { errorMessage, toIpcError, type Ipc, type IpcError, type PreviewUpdate, type ProjectInfo } from "./ipc";
+import {
+  errorMessage,
+  toIpcError,
+  type Ipc,
+  type IpcError,
+  type OutlineItem,
+  type PreviewUpdate,
+  type ProjectInfo,
+  type SourcePosition,
+} from "./ipc";
 import { mountPanes, type PanesHandle } from "./panes";
 import { mountPreview, type BlobUrls, type PreviewHandle } from "./preview/preview";
+import { mountSync, offsetOf, type SyncHandle } from "./preview/sync";
+import { mountOutline, type OutlineHandle } from "./project/outline";
 import {
   conflictResolver,
   mountPackageActions,
@@ -70,6 +85,13 @@ function button(label: string, cls = "btn"): HTMLButtonElement {
   return b;
 }
 
+function newProjectButton(): HTMLButtonElement {
+  const b = button("Novo projeto…");
+  b.dataset.action = "new-project";
+  b.title = "Criar um projeto Typst mínimo numa pasta vazia";
+  return b;
+}
+
 function clock(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -85,6 +107,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   const projectEl = el("div", "ws-project");
   projectEl.append(el("strong", undefined, "Prelo"), el("small", undefined, "nenhum projeto aberto"));
   const openBtn = button("Abrir projeto…", "btn primary");
+  // "Novo projeto" (US6): o núcleo mostra o diálogo de pasta e cria o projeto mínimo.
+  const newBtn = newProjectButton();
   const saveBtn = button("Salvar");
   saveBtn.title = "Salvar (⌘S / Ctrl+S)";
   saveBtn.disabled = true;
@@ -92,7 +116,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   // "Exportar PDF" (US5): a ação principal da barra; o resto em src/export.ts.
   const exporter = mountExport({ ipc, onError: (err) => showError(err) });
   const topSpacer = el("div", "ws-spacer");
-  top.append(projectEl, topSpacer, openBtn, saveBtn, aboutBtn, exporter.button);
+  top.append(projectEl, topSpacer, openBtn, newBtn, saveBtn, aboutBtn, exporter.button);
 
   const message = el("div", "ws-message");
   message.setAttribute("role", "status");
@@ -114,7 +138,11 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   const editorCol = el("div", "ws-col ws-col-editor");
   const editorHead = el("div", "ws-pane-h");
   const editorPath = el("span", "ws-pane-path");
-  editorHead.append(el("span", "ws-pane-title", "Editor"), editorPath);
+  // "Localizar na prévia" (US4 cenário 3): rola a prévia até o trecho do cursor.
+  const locateBtn = button("Localizar na prévia", "btn sm ws-locate");
+  locateBtn.title = "Mostrar na prévia o trecho onde está o cursor";
+  locateBtn.disabled = true;
+  editorHead.append(el("span", "ws-pane-title", "Editor"), editorPath, locateBtn);
   const editorBox = el("div", "ws-editor");
   editorCol.append(editorHead, editorBox);
   const previewCol = el("div", "ws-col ws-col-preview");
@@ -150,8 +178,19 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     onChange: () => editor?.view.requestMeasure(),
   });
   topSpacer.after(panes.modeControl);
+  let sync: SyncHandle | null = null;
   function attachPreview(p: PreviewHandle): PreviewHandle {
     p.bar.append(panes.previewButton);
+    // Clique na prévia → código; cursor → prévia (US4).
+    sync?.destroy();
+    sync = mountSync({
+      ipc,
+      preview: p,
+      openAt: (pos) => openAt(pos),
+      cursor: () => (editor ? { path: editor.path, offset: editor.view.state.selection.main.head } : null),
+      flush: () => editor?.flush() ?? Promise.resolve(),
+      notify: (text) => showMessage(text),
+    });
     return p;
   }
   let preview: PreviewHandle = attachPreview(mountPreview(previewBox, { ipc, urls: opts.previewUrls }));
@@ -172,7 +211,11 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     if (!info) {
       const b = button("Abrir projeto…", "btn primary");
       b.addEventListener("click", () => void openProject());
-      p.append(b);
+      const n = newProjectButton();
+      n.addEventListener("click", () => void createProject());
+      const actions = el("div", "ws-empty-actions");
+      actions.append(b, n);
+      p.append(actions);
     }
     editorBox.replaceChildren(p);
   }
@@ -187,6 +230,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   const resolveConflict = conflictResolver(conflictOpts);
 
   const tree: TreeHandle = mountTree(side, { ipc, onOpen: (path) => void openFile(path) });
+  // Estrutura do artigo abaixo dos arquivos, como no protótipo (FR-005).
+  const outline: OutlineHandle = mountOutline(side, { ipc, onSelect: (item) => void goToSection(item) });
 
   const about: AboutHandle = mountAbout(app, {
     ipc,
@@ -214,6 +259,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     renderCompile(u);
     exporter.update(u);
     packages.update(u.diagnostics);
+    // A estrutura vem do último documento bom: só muda quando a compilação dá certo.
+    if (u.ok) void outline.refresh();
     for (const cb of [...observers]) cb(u);
   }
 
@@ -298,6 +345,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     last = null;
     showMessage(null);
     exporter.reset();
+    outline.clear();
     // O núcleo recomeça a prévia ao abrir outro projeto: a interface também.
     preview.destroy();
     // O zoom da prévia é lembrado por projeto (FR-013a); `ProjectInfo` não traz o caminho da
@@ -323,6 +371,18 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     let next: ProjectInfo | null;
     try {
       next = await ipc.openProjectDialog();
+    } catch (err) {
+      showError(toIpcError(err));
+      return;
+    }
+    if (next) await showProject(next);
+  }
+
+  /** "Novo projeto" (US6): pasta não vazia → aviso `folder_not_empty`, nada muda. */
+  async function createProject() {
+    let next: ProjectInfo | null;
+    try {
+      next = await ipc.createProjectDialog();
     } catch (err) {
       showError(toIpcError(err));
       return;
@@ -412,10 +472,37 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     editorPath.textContent = path;
     if (last) handle.setDiagnostics(last.diagnostics);
     refreshChooseMain();
+    refreshLocate();
+  }
+
+  // ---------------------------------------------------------------- navegação (US4)
+  /** Abre `pos.path` (se ainda não estiver aberto) com o cursor na linha e coluna dadas. */
+  async function openAt(pos: SourcePosition) {
+    if (editor?.path !== pos.path) await openFile(pos.path);
+    const current = editor as EditorHandle | null;
+    if (current?.path !== pos.path) return;
+    const view = current.view;
+    const anchor = offsetOf(view.state.doc.toString(), pos.line, pos.column);
+    view.dispatch({
+      selection: { anchor },
+      effects: EditorView.scrollIntoView(anchor, { y: "center" }),
+    });
+    view.focus();
+  }
+
+  async function goToSection(item: OutlineItem) {
+    sync?.reveal({ page: item.page, yPt: item.yPt });
+    await openAt({ path: item.path, line: item.line, column: 1 });
+  }
+
+  function refreshLocate() {
+    locateBtn.disabled = !(editor && /\.typ$/i.test(editor.path));
   }
 
   // ---------------------------------------------------------------- ações
+  locateBtn.addEventListener("click", () => void sync?.locate());
   openBtn.addEventListener("click", () => void openProject());
+  newBtn.addEventListener("click", () => void createProject());
   saveBtn.addEventListener("click", () => void editor?.save());
   aboutBtn.addEventListener("click", () => void about.open());
 
@@ -476,9 +563,11 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
       for (const s of stops) s();
       editor?.destroy();
       editor = null;
+      sync?.destroy();
       preview.destroy();
       panes.destroy();
       tree.destroy();
+      outline.destroy();
       app.remove();
     },
   };

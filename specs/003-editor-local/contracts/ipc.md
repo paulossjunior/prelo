@@ -11,7 +11,7 @@ mostra o texto em português.
 | Comando | Argumentos | Sucesso | Erros |
 |---|---|---|---|
 | `open_project_dialog` | — | `ProjectInfo` ou `null` (cancelado) | `project_json_invalid` (abre com aviso, ver data-model) |
-| `create_project_dialog` | — | `ProjectInfo` ou `null` | `folder_not_empty` |
+| `create_project_dialog` | — | `ProjectInfo` ou `null` | `folder_not_empty`, `not_found`, `path_outside_project`, `write_failed` |
 | `choose_main_file` | `{ path }` | `ProjectInfo` | `not_a_typ_file`, `path_outside_project` |
 | `list_tree` | — | `TreeNode[]` | — |
 | `update_project_compiler_version` | — | `ProjectInfo` | — (só por ação explícita, FR-012) |
@@ -25,6 +25,12 @@ raiz; o último componente segue as regras de nome de FR-035 (`invalid_name`), e
 existe, inclusive como link, é `already_exists`. A resposta traz o caminho normalizado
 (relativo, com `/`). Regras completas em
 [file-access.md](file-access.md#criação-de-arquivo-e-pasta-fr-034-fr-035).
+
+`create_project_dialog` (US6, FR-002): o núcleo mostra o diálogo de pasta; a pasta MUST estar
+vazia (só `.DS_Store` é tolerado e fica intacto), senão `folder_not_empty` e nada é escrito.
+Nela nascem, em criação exclusiva e sem seguir link, `main.typ` mínimo e `.prelo/project.json`
+com `compiler.typst` = versão embutida e `main: "main.typ"`; depois o projeto abre como em
+`open_project_dialog`. Falha no meio desfaz o que foi criado.
 
 Com versão registrada ≠ embutida, `ProjectInfo.warnings` traz `compiler_version_mismatch`, nenhum `PreviewUpdate` é emitido e `export_pdf_dialog` responde `compiler_version_mismatch` até `update_project_compiler_version`.
 
@@ -51,6 +57,10 @@ classe do `typst-syntax` sem o prefixo `typ-`: `heading`, `strong`, `key`, `func
 lista vazia. Ambos leem o mesmo estado que a prévia compila, inclusive texto não salvo; rótulos
 vêm da última prévia `Ok`.
 
+`jump_from_click`, `jump_from_cursor` e `outline` (US4) leem o documento da última prévia `Ok`
+**com o World que o compilou**: os *spans* do documento só valem nas fontes daquela compilação.
+Depois de uma edição que não compila, os saltos seguem as linhas da prévia mostrada.
+
 ## Compilação e prévia
 
 | Comando / evento | Conteúdo |
@@ -60,9 +70,9 @@ vêm da última prévia `Ok`.
 | `page_svg` | `{ index, hash }` → SVG da página (texto). `hash` velho → `stale_page` |
 | `Diagnostic.range` | `{ from, to }` em **unidades UTF-16** do texto atual do arquivo (as mesmas de `edit_file` e do CodeMirror); o núcleo converte os bytes do Typst |
 | `prelo-asset://<sha256>` | Protocolo próprio: bytes de imagem por hash; hash desconhecido → 404 |
-| `jump_from_click` | `{ page, xPt, yPt }` → `{ path, line, column }` ou `null` (sem origem) |
-| `jump_from_cursor` | `{ path, offset }` → `{ page, xPt, yPt }[]` |
-| `outline` | → `OutlineItem[]` |
+| `jump_from_click` | `{ page, xPt, yPt }` → `{ path, line, column }` ou `null` (sem origem). `page` a partir de 0 (o `index` de `PreviewUpdate.pages`); `xPt`/`yPt` em pontos a partir do canto superior esquerdo da página; `line` e `column` a partir de 1, `column` em unidades UTF-16. Link interno leva à origem do destino; link externo, conteúdo de pacote e ponto sem *span* (numeração de página, margem) → `null` |
+| `jump_from_cursor` | `{ path, offset }` → `{ page, xPt, yPt }[]` (mesmas unidades; `offset` em UTF-16). Cursor fora de texto que aparece na prévia → lista vazia |
+| `outline` | → `OutlineItem[]` (vazio antes da primeira prévia `Ok`) |
 | `compiler_info` | → `{ embedded: "0.15.1", registered: string \| null, fonts: FontLicense[] }` |
 
 ## Exportação

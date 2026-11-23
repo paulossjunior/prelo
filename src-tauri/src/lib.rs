@@ -31,8 +31,8 @@ pub fn configure_with_state<R: Runtime>(
     state: commands::AppState,
 ) -> Builder<R> {
     builder
-        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`, `export_pdf_dialog`,
-        // `copy_into_project`). Os comandos
+        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`,
+        // `create_project_dialog`, `export_pdf_dialog`, `copy_into_project`). Os comandos
         // `plugin:dialog|*` ficam fora do alcance da webview: nenhuma capability concede
         // `dialog:` (tests/security_config.rs, tests/security_ipc.rs).
         .plugin(tauri_plugin_dialog::init())
@@ -44,6 +44,7 @@ pub fn configure_with_state<R: Runtime>(
             commands::create_file,
             commands::create_dir,
             project::open_project_dialog,
+            project::create_project_dialog,
             project::update_project_compiler_version,
             project::compiler_info,
             commands::open_file,
@@ -53,6 +54,8 @@ pub fn configure_with_state<R: Runtime>(
             commands::complete,
             commands::semantic_tokens,
             commands::jump_from_cursor,
+            commands::jump_from_click,
+            commands::outline,
             commands::subscribe_preview,
             commands::page_svg,
             commands::decide_plugin,
@@ -70,9 +73,10 @@ pub fn configure_with_state<R: Runtime>(
     state: commands::AppState,
 ) -> Builder<R> {
     builder
-        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`, `export_pdf_dialog`). Os comandos
-        // `plugin:dialog|*` ficam fora do alcance da webview: nenhuma capability concede
-        // `dialog:` (tests/security_config.rs, tests/security_ipc.rs).
+        // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`,
+        // `create_project_dialog`, `export_pdf_dialog`). Os comandos `plugin:dialog|*` ficam
+        // fora do alcance da webview: nenhuma capability concede `dialog:`
+        // (tests/security_config.rs, tests/security_ipc.rs).
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
@@ -82,6 +86,7 @@ pub fn configure_with_state<R: Runtime>(
             commands::create_file,
             commands::create_dir,
             project::open_project_dialog,
+            project::create_project_dialog,
             project::update_project_compiler_version,
             project::compiler_info,
             commands::open_file,
@@ -91,6 +96,8 @@ pub fn configure_with_state<R: Runtime>(
             commands::complete,
             commands::semantic_tokens,
             commands::jump_from_cursor,
+            commands::jump_from_click,
+            commands::outline,
             commands::subscribe_preview,
             commands::page_svg,
             commands::decide_plugin,

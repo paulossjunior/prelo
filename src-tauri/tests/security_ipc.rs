@@ -433,6 +433,16 @@ fn argumentos_malformados_sao_recusados_sem_derrubar_o_nucleo() {
             "jump_from_cursor",
             json!({ "path": "main.typ", "offset": "0" }),
         ),
+        ("jump_from_click", json!({ "page": -1, "xPt": 1, "yPt": 1 })),
+        (
+            "jump_from_click",
+            json!({ "page": 0, "xPt": "1", "yPt": 1 }),
+        ),
+        ("jump_from_click", json!({ "page": 0, "xPt": 1 })),
+        (
+            "jump_from_click",
+            json!({ "page": 0, "xPt": 1, "yPt": 1, "path": "main.typ" }),
+        ),
     ];
     for (cmd, args) in specific {
         let shown = args.to_string();
@@ -445,7 +455,8 @@ fn argumentos_malformados_sao_recusados_sem_derrubar_o_nucleo() {
         InvokeBody::Json(json!("x")),
         InvokeBody::Raw(vec![1, 2, 3]),
     ] {
-        assert!(h.invoke("list_tree", body).is_err());
+        assert!(h.invoke("list_tree", body.clone()).is_err());
+        assert!(h.invoke("outline", body).is_err());
     }
     assert!(
         h.engine.calls().is_empty(),

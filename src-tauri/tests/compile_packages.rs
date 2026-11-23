@@ -68,11 +68,7 @@ impl Fetcher for LocalFetcher {
 
 /// Núcleo com os dados locais em `data` e o *fetcher* dado; abre `project` e devolve a
 /// primeira prévia que terminou (ok ou com erro).
-fn open(
-    data: &Path,
-    fetcher: &LocalFetcher,
-    project: &TempProject,
-) -> (AppState, PreviewUpdate) {
+fn open(data: &Path, fetcher: &LocalFetcher, project: &TempProject) -> (AppState, PreviewUpdate) {
     let state = AppState::default();
     state.trust().set_data_dir(data.to_path_buf());
     state.trust().set_fetcher(Arc::new(fetcher.clone()));
