@@ -75,7 +75,7 @@ Um arquivo WASM (do projeto ou de um pacote) só chega ao compilador depois que 
 
 | O quê | Limite | Ao passar |
 |---|---|---|
-| Arquivos lidos pelo compilador | só dentro da pasta do projeto, sem seguir link para fora | acesso recusado, com diagnóstico |
+| Arquivos lidos pelo compilador | só dentro da pasta do projeto, sem seguir link para fora | acesso recusado, com diagnóstico e a oferta de escolher o arquivo para copiá-lo para dentro do projeto |
 | Tamanho de arquivo aberto ou lido | 256 MiB | recusado, com diagnóstico |
 | Estilo `.csl` | 1 MiB | "estilo grande demais" |
 | `.prelo/project.json` | 1 MiB | aviso; o projeto abre com os padrões |

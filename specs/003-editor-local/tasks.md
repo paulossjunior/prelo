@@ -253,11 +253,11 @@ arquivos.
 
 ## Phase 9: Polish & Cross-Cutting Concerns
 
-- [ ] T075 Escrever `src-tauri/tests/perf_preview.rs` (`--release`): p95 edição→`PreviewUpdate` em `artigo-40p` e em `artigo-40p` com imagens de 4000×3000 px e ≥ 10 MB; falha acima de 250 ms no CI e imprime o p95 (SC-001, SC-002)
-- [ ] T076 Otimizar o necessário (compilação incremental, diff de páginas, `prelo-asset`) em `src-tauri/src/compile/` até T075 passar no CI e o p95 ficar < 100 ms no computador de referência, registrando a medição em `specs/003-editor-local/research.md`
+- [X] T075 Escrever `src-tauri/tests/perf_preview.rs` (`--release`): p95 edição→`PreviewUpdate` em `artigo-40p` e em `artigo-40p` com imagens de 4000×3000 px e ≥ 10 MB; falha acima de 250 ms no CI e imprime o p95 (SC-001, SC-002)
+- [X] T076 Otimizar o necessário (compilação incremental, diff de páginas, `prelo-asset`) em `src-tauri/src/compile/` até T075 passar no CI e o p95 ficar < 100 ms no computador de referência, registrando a medição em `specs/003-editor-local/research.md`
 - [ ] T077 [P] Teste de encerramento forçado em `scripts/self-test.mjs`: matar o processo 2 s após a última edição e reabrir; no máximo os últimos 2 s se perdem (SC-009)
-- [ ] T078 [P] Teste de threads abandonadas em `src-tauri/tests/security_malformed.rs`: após 3 compilações abandonadas, o número de threads de compilação vivas fica limitado e o editor responde (research R9)
-- [ ] T079 [P] Atualizar `README.md`: fontes embutidas e licenças, pasta `fonts/` e `typst compile --font-path fonts`, cache de pacotes e aprovações de plugin, limites (D-15, Princípio I)
+- [X] T078 [P] Teste de threads abandonadas em `src-tauri/tests/security_malformed.rs`: após 3 compilações abandonadas, o número de threads de compilação vivas fica limitado e o editor responde (research R9)
+- [X] T079 [P] Atualizar `README.md`: fontes embutidas e licenças, pasta `fonts/` e `typst compile --font-path fonts`, cache de pacotes e aprovações de plugin, limites (D-15, Princípio I)
 - [ ] T080 Rodar o roteiro de [quickstart.md](quickstart.md) e `npm run verify` nos três sistemas; corrigir o que falhar
 - [ ] T081 Validação do QA: cobertura de FR-001 a FR-029 por ao menos um teste que falhou antes (SC-010) e de todas as categorias de FR-030, conferida pelo histórico de commits
 
