@@ -265,9 +265,9 @@ Decididas pelo dono em 2026-11-18:
 
 | ID | Pergunta | Decisão |
 |---|---|---|
-| [D-12](adrs.md#d-12-transporte-de-arquivos-binários-entre-coautores) | Como imagens e outros binários chegam aos coautores? | Blobs por iroh com manifesto no documento Yjs, git como canal assíncrono |
-| [D-13](adrs.md#d-13-arquivos-fora-do-projeto) | Como usar um arquivo fora do projeto, como um `.bib` compartilhado? | Não permitir; copiar para dentro do projeto |
-| [D-14](adrs.md#d-14-edição-concorrente-de-bibliografia) | `.bib` e `.yml` se fundem pelo CRDT ou como arquivo inteiro? | CRDT de texto, como o `.typ`; `.csl` como arquivo inteiro |
+| [D-12](adrs/D-12-binarios-entre-coautores.md) | Como imagens e outros binários chegam aos coautores? | Blobs por iroh com manifesto no documento Yjs, git como canal assíncrono |
+| [D-13](adrs/D-13-arquivos-fora-do-projeto.md) | Como usar um arquivo fora do projeto, como um `.bib` compartilhado? | Não permitir; copiar para dentro do projeto |
+| [D-14](adrs/D-14-bibliografia-concorrente.md) | `.bib` e `.yml` se fundem pelo CRDT ou como arquivo inteiro? | CRDT de texto, como o `.typ`; `.csl` como arquivo inteiro |
 
 ## 7. Riscos técnicos e questões em aberto
 
