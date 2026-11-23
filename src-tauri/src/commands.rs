@@ -774,9 +774,8 @@ impl AppState {
                         .lock()
                         .unwrap_or_else(PoisonError::into_inner)
                         .update(generation, &compilation);
-                    if tx.send(compilation).is_err() {
-                        break;
-                    }
+                    // Ofertas antes da compilação: quem recebe a prévia já encontra a oferta
+                    // que ela gerou (sem isso, a ordem dependia do agendamento das threads).
                     let listener = listener
                         .read()
                         .unwrap_or_else(PoisonError::into_inner)
@@ -785,6 +784,9 @@ impl AppState {
                         for offer in &new {
                             listener(offer);
                         }
+                    }
+                    if tx.send(compilation).is_err() {
+                        break;
                     }
                 }
             })

@@ -125,9 +125,15 @@ fn overlay_recusa_caminho_fora_da_raiz() {
         );
     }
     let fora = case.outside.root().join("segredo.txt");
-    assert!(case.model.set_overlay(fora.to_str().unwrap(), "x").is_ok());
-    // Caminho do sistema vira relativo à raiz (`/` inicial = raiz, como no Typst): não
-    // cria overlay fora do projeto.
+    let overlay = case.model.set_overlay(fora.to_str().unwrap(), "x");
+    // Unix: caminho do sistema vira relativo à raiz (`/` inicial = raiz, como no Typst) e o
+    // overlay fica dentro do projeto. Windows: `C:\...` não é caminho de projeto e é recusado.
+    // Nos dois casos, nada passa a existir fora da raiz.
+    if cfg!(windows) {
+        assert!(overlay.is_err(), "caminho com unidade aceito no overlay");
+    } else {
+        assert!(overlay.is_ok());
+    }
     assert!(case.model.content(&fora).is_err());
 }
 
