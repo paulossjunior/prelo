@@ -68,6 +68,70 @@ pub fn page_hash(page: &Page) -> String {
     format!("{:032x}", typst::utils::hash128(page))
 }
 
+/// A página `new` desenha exatamente o mesmo que `old`? Equivale a comparar os dois
+/// [`page_hash`] (os mesmos campos), sem calcular o hash dos quadros que a compilação refez.
+///
+/// T076 (#141): numa edição, o Typst refaz o quadro de **toda** página da sequência editada:
+/// `finalize` monta um quadro novo por página e o fluxo achata nele as linhas de texto (cerca
+/// de 40 `Text` e 15 `Tag` por página de `artigo-40p`). Só os grupos de dentro (fórmulas,
+/// cabeçalhos) voltam do cache, os mesmos `Arc` de antes. O `LazyHash` de cada quadro novo
+/// começa vazio, então hashear as 40 páginas a cada edição passava o SipHash por todo o texto
+/// do documento: 4,5 ms no M4 livre, 14 ms em média (25 ms no pior caso) nos núcleos de
+/// eficiência, um terço do tempo até o `PreviewUpdate`. Aqui os dois quadros são percorridos
+/// juntos: quadro compartilhado (mesmo `Arc`) é igual sem olhar dentro, e os itens são
+/// comparados pela igualdade derivada (campo a campo, sem hash); só `Tag` usa o hash, porque a
+/// igualdade de `Content` ignora a localização. A página que muda é hasheada como antes.
+fn same_page(old: &Page, new: &Page) -> bool {
+    old.bleed == new.bleed
+        && old.number == new.number
+        && typst::utils::hash128(&(&old.fill, &old.numbering, &old.supplement))
+            == typst::utils::hash128(&(&new.fill, &new.numbering, &new.supplement))
+        && same_frame(&old.frame, &new.frame)
+}
+
+fn same_frame(old: &Frame, new: &Frame) -> bool {
+    if old.size() != new.size()
+        || old.kind() != new.kind()
+        || old.has_baseline() != new.has_baseline()
+        || old.baseline() != new.baseline()
+    {
+        return false;
+    }
+    let (a, b) = (old.items().as_slice(), new.items().as_slice());
+    // Mesmo `Arc` de itens: o mesmo quadro.
+    if std::ptr::eq(a, b) {
+        return true;
+    }
+    a.len() == b.len()
+        && a.iter().zip(b).all(|((pa, ia), (pb, ib))| {
+            pa == pb
+                && match (ia, ib) {
+                    (FrameItem::Group(ga), FrameItem::Group(gb)) => {
+                        typst::utils::hash128(&(&ga.transform, &ga.clip, &ga.label, &ga.parent))
+                            == typst::utils::hash128(&(
+                                &gb.transform,
+                                &gb.clip,
+                                &gb.label,
+                                &gb.parent,
+                            ))
+                            && same_frame(&ga.frame, &gb.frame)
+                    }
+                    // Igualdade derivada, campo a campo: o que o hash olharia, sem o SipHash.
+                    (FrameItem::Text(ta), FrameItem::Text(tb)) => ta == tb,
+                    (FrameItem::Shape(sa, xa), FrameItem::Shape(sb, xb)) => sa == sb && xa == xb,
+                    (FrameItem::Image(ia, za, xa), FrameItem::Image(ib, zb, xb)) => {
+                        ia == ib && za == zb && xa == xb
+                    }
+                    (FrameItem::Link(da, za), FrameItem::Link(db, zb)) => da == db && za == zb,
+                    // A igualdade de `Content` ignora a localização; o hash não.
+                    (FrameItem::Tag(ta), FrameItem::Tag(tb)) => {
+                        typst::utils::hash128(ta) == typst::utils::hash128(tb)
+                    }
+                    _ => false,
+                }
+        })
+}
+
 /// SVG de uma página (`typst-svg`). Imagens vêm embutidas como `data:` URL; a interface mostra
 /// o SVG como `<img>`, nunca como marcação no DOM (research R4).
 pub fn render_svg(page: &Page) -> String {
@@ -90,6 +154,9 @@ pub struct Preview {
     last: Option<PreviewUpdate>,
     /// Imagens do documento atual servidas por hash.
     assets: Assets,
+    /// Páginas cujo hash a última compilação `Ok` calculou (as outras reaproveitaram o da
+    /// anterior). Para testes e medição.
+    hashed: usize,
 }
 
 /// Imagem servida por `prelo-asset`: o conteúdo como o `typst-svg` o embutiria.
@@ -218,17 +285,33 @@ impl Preview {
         } = compilation;
         let (ok, changed) = match output {
             Some(doc) if status == Status::Ok => {
+                let previous = self.document.as_deref().map(PagedDocument::pages);
+                let mut hashed = 0;
                 let pages: Vec<PageInfo> = doc
                     .pages()
                     .iter()
                     .enumerate()
-                    .map(|(index, page)| PageInfo {
-                        index,
-                        hash: page_hash(page),
-                        width_pt: page.frame.width().to_pt(),
-                        height_pt: page.frame.height().to_pt(),
+                    .map(|(index, page)| {
+                        // Página igual à da última `Ok` no mesmo índice: mesmo hash, sem
+                        // percorrer os quadros refeitos (T076).
+                        let reused = previous
+                            .and_then(|old| old.get(index))
+                            .zip(self.pages.get(index))
+                            .filter(|(old, _)| same_page(old, page))
+                            .map(|(_, info)| info.hash.clone());
+                        let hash = reused.unwrap_or_else(|| {
+                            hashed += 1;
+                            page_hash(page)
+                        });
+                        PageInfo {
+                            index,
+                            hash,
+                            width_pt: page.frame.width().to_pt(),
+                            height_pt: page.frame.height().to_pt(),
+                        }
                     })
                     .collect();
+                self.hashed = hashed;
                 let changed = pages
                     .iter()
                     .filter(|p| self.pages.get(p.index).is_none_or(|old| old.hash != p.hash))
@@ -272,6 +355,11 @@ impl Preview {
             self.synced = Some(Arc::new(Synced::new(Arc::clone(doc), world)));
         }
         update
+    }
+
+    /// Páginas hasheadas na última compilação `Ok` ([`same_page`]).
+    pub fn hashed_pages(&self) -> usize {
+        self.hashed
     }
 
     /// Último documento bom com o World que o compilou.
@@ -676,6 +764,21 @@ mod tests {
         let fewer = preview.apply(ok(5, compile("#set page(width: 100pt, height: 80pt)\nA\n")));
         assert_eq!(fewer.pages.len(), 1);
         assert!(fewer.changed.is_empty(), "{:?}", fewer.changed);
+    }
+
+    /// T076 (#141): o hash completo de uma página percorre todos os quadros que a compilação
+    /// refez. Página igual à da última `Ok` reaproveita o hash dela; só as alteradas são
+    /// hasheadas.
+    #[test]
+    fn so_paginas_alteradas_sao_hasheadas() {
+        let mut preview = Preview::default();
+        preview.apply(ok(1, compile(&three_pages("B"))));
+        assert_eq!(preview.hashed_pages(), 3, "primeira compilação: todas");
+        let second = preview.apply(ok(2, compile(&three_pages("B mudou"))));
+        assert_eq!(second.changed, vec![1]);
+        assert_eq!(preview.hashed_pages(), 1, "só a página alterada");
+        preview.apply(ok(3, compile(&three_pages("B mudou"))));
+        assert_eq!(preview.hashed_pages(), 0, "nada mudou");
     }
 
     #[test]
