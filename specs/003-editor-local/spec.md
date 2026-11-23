@@ -81,6 +81,15 @@ diagnóstico na linha certa e que a versão do compilador aparece no app.
     continuam alinhados, a quebra de linha é refeita, o cursor e a seleção não mudam e a linha
     que estava no topo continua no topo; "100%" (ou ⌘/Ctrl + `0`) volta ao padrão; ao reabrir
     o projeto, o zoom do editor volta (FR-013c; emenda de 2026-11-22).
+12. **Given** um projeto com pastas, **When** a pessoa clica na linha de uma pasta (ou, com o
+    foco nela, aperta Enter, Espaço ou ←), **Then** a seta passa de ▾ para ▸ e os arquivos e
+    subpastas dela deixam de aparecer na árvore; clicar de novo (ou Enter, Espaço, →) mostra-os
+    outra vez; "Recolher tudo" e "Expandir tudo" fazem o mesmo com todas as pastas; criar um
+    arquivo, uma mudança externa ou uma recompilação não reabrem as pastas recolhidas; abrir um
+    arquivo (pela árvore, pela estrutura ou pela prévia) expande as pastas que o contêm; ao
+    reabrir o projeto, as pastas recolhidas continuam recolhidas; os botões da árvore ("Novo
+    arquivo", "Nova pasta", "Recolher tudo", "Expandir tudo") têm símbolo além do nome (FR-004a;
+    emenda de 2026-11-23).
 
 ---
 
@@ -296,6 +305,15 @@ comando.
 - **Zoom pelo teclado e foco**: ⌘/Ctrl + `+`/`-`/`0` mudam o zoom do painel que está com o foco:
   a prévia (FR-013a) ou o editor (FR-013c); com o foco em outro lugar (árvore, barra), nada muda.
   O mapa de teclas do editor não usa essas combinações.
+- **Pasta recolhida que some ou é renomeada** (FR-004a): o estado guardado daquele caminho é
+  ignorado; uma pasta nova aparece expandida.
+- **Troca de projeto com o campo de criação aberto** (FR-034, FR-004a; bug do dono de
+  2026-11-23): abrir ou criar outro projeto fecha o campo e o erro dele, esquece a pasta
+  escolhida e o arquivo aberto do projeto anterior e usa as pastas recolhidas do projeto novo.
+  O destino de "Novo arquivo"/"Nova pasta" é sempre relativo à raiz: a pasta escolhida, a pasta
+  do arquivo escolhido ou, sem escolha, a raiz; pasta escolhida que sumiu deixa de ser destino.
+  Recusas dizem o motivo: "A pasta de destino não existe." (`not_found`), "Já existe um arquivo
+  com esse nome." ou "Já existe uma pasta com esse nome." (`already_exists`).
 - **Armazenamento local indisponível** (modo privado, cota cheia, acesso negado): o zoom
   funciona na sessão e só não é lembrado; a prévia não quebra.
 - **Recolher o último painel de conteúdo** (FR-013b): editor e prévia não ficam os dois
@@ -355,6 +373,20 @@ comando.
   arquivos do projeto (RF-07, docs/arquitetura.md §2).
 - **FR-004**: O app MUST mostrar a árvore de arquivos do projeto e abrir no editor qualquer
   `.typ`, `.bib` ou `.yml` dela (RF-04, D-14).
+- **FR-004a**: A pessoa MUST poder recolher e expandir cada pasta da árvore (emenda de
+  2026-11-23, pedido do dono: "No projeto, quando existir uma pasta, permita encolher a pasta e
+  não mostrar os arquivos."). Cada pasta MUST mostrar uma seta (▾ aberta, ▸ recolhida) e a linha
+  inteira MUST alternar com um clique; pasta recolhida MUST NOT mostrar seus filhos. A árvore
+  MUST seguir o padrão de árvore do WAI-ARIA (`role="tree"`, `treeitem`, `group`,
+  `aria-expanded`), com Enter/Espaço alternando, ← recolhendo (ou indo à pasta-mãe), →
+  expandindo (ou indo ao primeiro filho) e ↑/↓ movendo entre itens visíveis. A árvore MUST ter
+  "Recolher tudo" e "Expandir tudo". O estado MUST sobreviver a cada atualização da árvore
+  (criar item, mudança externa, recompilação) e MUST ser lembrado por projeto nos dados locais
+  da interface; falha desse armazenamento MUST NOT quebrar a árvore. Abrir um arquivo MUST
+  expandir as pastas que o contêm. Os botões da árvore ("Novo arquivo", "Nova pasta",
+  "Recolher tudo", "Expandir tudo") MUST ter um símbolo além do nome, que continua sendo o nome
+  acessível (pedido do dono em 2026-11-23: "no botão de novo arquivo, nova pasta, coloque
+  símbolos"). Só interface: o núcleo e o contrato IPC não mudam (RF-04).
 - **FR-005**: O app MUST mostrar a estrutura de seções (outline) do artigo e levar editor e
   prévia até a seção escolhida. A contagem de pendências de revisão por seção fica para a
   fase de revisão (RF-04).
