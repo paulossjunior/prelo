@@ -185,6 +185,64 @@ describe("prévia e diagnósticos (cenários 2 e 4)", () => {
     expect(root.querySelector(".pv-error")?.hasAttribute("hidden")).toBe(false);
   });
 
+  it("painel Erros lista os diagnósticos; status e faixa da prévia abrem o painel (FR-006a)", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(
+      update({
+        compileId: 2,
+        ok: false,
+        pages: [],
+        changed: [],
+        diagnostics: [
+          { severity: "error", path: "main.typ", range: { from: 14, to: 18 }, line: 3, message: "unknown variable: Olá", hints: [], kind: "typst" },
+        ],
+      }),
+    );
+    await settle();
+    const panel = root.querySelector<HTMLElement>(".pb")!;
+    expect(panel).not.toBeNull();
+    // Acima da barra de status, abaixo do corpo.
+    expect(panel.nextElementSibling).toBe(root.querySelector(".ws-status"));
+    const list = panel.querySelector<HTMLElement>(".pb-list")!;
+    expect(list.hidden).toBe(true);
+    expect(panel.querySelector(".pb-loc")?.textContent).toBe("main.typ:3:1");
+    // Contagem na barra de status é um botão que abre o painel.
+    const status = root.querySelector<HTMLButtonElement>("button.ws-compile")!;
+    expect(status).not.toBeNull();
+    status.click();
+    expect(list.hidden).toBe(false);
+    panel.querySelector<HTMLButtonElement>(".pb-toggle")!.click();
+    expect(list.hidden).toBe(true);
+    // Faixa vermelha da prévia também.
+    root.querySelector<HTMLButtonElement>(".pv-error button")!.click();
+    expect(list.hidden).toBe(false);
+  });
+
+  it("clicar num item do painel abre o arquivo com o cursor no trecho (FR-006a)", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(
+      update({
+        compileId: 2,
+        ok: false,
+        diagnostics: [
+          { severity: "error", path: "capitulos/metodo.typ", range: { from: 2, to: 8 }, line: 1, message: "unknown variable: Método", hints: [], kind: "typst" },
+        ],
+      }),
+    );
+    await settle();
+    root.querySelector<HTMLButtonElement>("button.pb-item")!.click();
+    await settle();
+    expect(ws.editor()?.path).toBe("capitulos/metodo.typ");
+    const sel = ws.editor()!.view.state.selection.main;
+    expect({ from: sel.from, to: sel.to }).toEqual({ from: 2, to: 8 });
+    // Agora com o arquivo aberto, o painel mostra a coluna.
+    expect(root.querySelector(".pb-loc")?.textContent).toBe("capitulos/metodo.typ:1:3");
+  });
+
   it("diagnósticos já recebidos valem para o arquivo aberto depois", async () => {
     const { core, root, ws } = setup();
     await ws.ready;

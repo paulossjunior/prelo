@@ -62,6 +62,32 @@ describe("toLintDiagnostics", () => {
     expect(out).toEqual([]);
   });
 
+  it("tooltip do sublinhado mostra a explicação em português, como corrigir, original e dicas (FR-006a)", () => {
+    const [d] = toLintDiagnostics(
+      [diag({ range: { from: 0, to: 1 }, message: "unknown variable: foo", hints: ["did you mean `for`?"] })],
+      "main.typ",
+      DOC,
+    );
+    expect(d?.renderMessage).toBeTypeOf("function");
+    const node = d!.renderMessage!({} as never) as HTMLElement;
+    expect(node.querySelector(".pb-reason")?.textContent).toMatch(/`foo` não existe/);
+    expect(node.querySelector(".pb-fix")?.textContent).toMatch(/^Como corrigir:/);
+    expect(node.querySelector(".pb-orig")?.textContent).toContain("unknown variable: foo");
+    expect(node.querySelector(".pb-hint")?.textContent).toContain("did you mean `for`?");
+  });
+
+  it("tooltip de mensagem desconhecida mostra a original e as dicas", () => {
+    const [d] = toLintDiagnostics(
+      [diag({ range: { from: 0, to: 1 }, message: "brand new error", hints: ["h1"] })],
+      "main.typ",
+      DOC,
+    );
+    const node = d!.renderMessage!({} as never) as HTMLElement;
+    expect(node.querySelector(".pb-reason")?.textContent).toBe("brand new error");
+    expect(node.querySelector(".pb-fix")).toBeNull();
+    expect(node.querySelector(".pb-hint")?.textContent).toContain("h1");
+  });
+
   it("intervalo fora do texto é limitado ao fim do texto", () => {
     const [d] = toLintDiagnostics([diag({ range: { from: 20, to: 900 } })], "main.typ", DOC);
     expect(d).toMatchObject({ from: 20, to: DOC.length });
