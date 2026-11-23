@@ -224,7 +224,7 @@ com o `typst` CLI; tentar exportar com erro.
 - [x] T067 [US5] Implementar `src-tauri/src/compile/export.rs` (`typst-pdf`, gravação atômica) e `export_pdf_dialog` até T065 passar
 - [x] T068 [P] [US5] Escrever teste em `src/export.test.ts`: ação "Exportar PDF" chama `export_pdf_dialog`; `compile_errors` mostra a lista; desativada com versão diferente. Confirmar que falha
 - [x] T069 [US5] Adicionar a ação "Exportar PDF" com lista de erros em `src/main.ts` até T068 passar
-- [ ] T070 [US5] Adicionar job de equivalência ao CI em `.github/workflows/ci.yml` (instala `typst` 0.15.1 só nesse job) até T066 passar nos três sistemas
+- [X] T070 [US5] Adicionar job de equivalência ao CI em `.github/workflows/ci.yml` (instala `typst` 0.15.1 só nesse job) até T066 passar nos três sistemas
 
 **Checkpoint**: US5 funciona com US1; QA valida.
 
@@ -255,7 +255,7 @@ arquivos.
 
 - [X] T075 Escrever `src-tauri/tests/perf_preview.rs` (`--release`): p95 edição→`PreviewUpdate` em `artigo-40p` e em `artigo-40p` com imagens de 4000×3000 px e ≥ 10 MB; falha acima de 250 ms no CI e imprime o p95 (SC-001, SC-002)
 - [X] T076 Otimizar o necessário (compilação incremental, diff de páginas, `prelo-asset`) em `src-tauri/src/compile/` até T075 passar no CI e o p95 ficar < 100 ms no computador de referência, registrando a medição em `specs/003-editor-local/research.md`
-- [ ] T077 [P] Teste de encerramento forçado em `scripts/self-test.mjs`: matar o processo 2 s após a última edição e reabrir; no máximo os últimos 2 s se perdem (SC-009)
+- [X] T077 [P] Teste de encerramento forçado em `scripts/self-test.mjs`: matar o processo 2 s após a última edição e reabrir; no máximo os últimos 2 s se perdem (SC-009)
 - [X] T078 [P] Teste de threads abandonadas em `src-tauri/tests/security_malformed.rs`: após 3 compilações abandonadas, o número de threads de compilação vivas fica limitado e o editor responde (research R9)
 - [X] T079 [P] Atualizar `README.md`: fontes embutidas e licenças, pasta `fonts/` e `typst compile --font-path fonts`, cache de pacotes e aprovações de plugin, limites (D-15, Princípio I)
 - [ ] T080 Rodar o roteiro de [quickstart.md](quickstart.md) e `npm run verify` nos três sistemas; corrigir o que falhar
