@@ -232,7 +232,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   };
   const resolveConflict = conflictResolver(conflictOpts);
 
-  const tree: TreeHandle = mountTree(side, { ipc, onOpen: (path) => void openFile(path) });
+  // "Recolher tudo"/"Expandir tudo" no cabeçalho da árvore; pastas recolhidas por projeto (FR-004a).
+  const tree: TreeHandle = mountTree(side, { ipc, onOpen: (path) => void openFile(path), header: treeHead, key: null });
   // Estrutura do artigo abaixo dos arquivos, como no protótipo (FR-005).
   const outline: OutlineHandle = mountOutline(side, { ipc, onSelect: (item) => void goToSection(item) });
 
@@ -357,6 +358,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     // O arranjo dos painéis também é lembrado por projeto (FR-013b).
     panes.setKey(next.name);
     editorZoom.setKey(next.name);
+    tree.setKey(next.name);
     compileEl.textContent = "Compilando…";
     compileEl.classList.remove("is-ok", "is-err");
     saveEl.textContent = "";
