@@ -22,7 +22,7 @@ import { compilerStatus, mountAbout, type AboutHandle } from "./about";
 import { mountAppInfo, type Invoke } from "./app-info";
 import { mountEditor, type EditorHandle } from "./editor/editor";
 import { severityIcon } from "./editor/icons";
-import { mountProblems, type ProblemsHandle } from "./editor/problems";
+import { isPackagePath, mountProblems, type ProblemsHandle } from "./editor/problems";
 import { mountEditorZoom, type EditorZoomHandle } from "./editor/zoom";
 import { mountExport } from "./export";
 import {
@@ -529,8 +529,10 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   }
 
   // ---------------------------------------------------------------- navegação (US4)
-  /** Abre `pos.path` (se ainda não estiver aberto) com o cursor na linha e coluna dadas. */
+  /** Abre `pos.path` (se ainda não estiver aberto) com o cursor na linha e coluna dadas; caminho de pacote (`@…`) é ignorado. */
   async function openAt(pos: SourcePosition) {
+    // Código de pacote baixado: o núcleo não abre (só arquivos do projeto); não faz nada.
+    if (isPackagePath(pos.path)) return;
     if (editor?.path !== pos.path) await openFile(pos.path);
     const current = editor as EditorHandle | null;
     if (current?.path !== pos.path) return;
@@ -545,7 +547,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
 
   /** Item do painel "Erros": abre o arquivo e seleciona o trecho (ou o início da linha). */
   async function revealDiagnostic(d: Diagnostic) {
-    if (!d.path) return;
+    if (!d.path || isPackagePath(d.path)) return;
     if (editor?.path !== d.path) await openFile(d.path);
     const current = editor as EditorHandle | null;
     if (current?.path !== d.path) return;
