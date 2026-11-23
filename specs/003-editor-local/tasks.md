@@ -259,7 +259,7 @@ arquivos.
 - [X] T078 [P] Teste de threads abandonadas em `src-tauri/tests/security_malformed.rs`: após 3 compilações abandonadas, o número de threads de compilação vivas fica limitado e o editor responde (research R9)
 - [X] T079 [P] Atualizar `README.md`: fontes embutidas e licenças, pasta `fonts/` e `typst compile --font-path fonts`, cache de pacotes e aprovações de plugin, limites (D-15, Princípio I)
 - [ ] T080 Rodar o roteiro de [quickstart.md](quickstart.md) e `npm run verify` nos três sistemas; corrigir o que falhar
-- [ ] T081 Validação do QA: cobertura de FR-001 a FR-029 por ao menos um teste que falhou antes (SC-010) e de todas as categorias de FR-030, conferida pelo histórico de commits
+- [X] T081 Validação do QA: cobertura de FR-001 a FR-029 por ao menos um teste que falhou antes (SC-010) e de todas as categorias de FR-030, conferida pelo histórico de commits
 
 ---
 
