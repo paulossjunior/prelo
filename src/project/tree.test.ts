@@ -323,7 +323,7 @@ describe("criar arquivo e pasta", () => {
     item(parent, "plugin")!.click();
     action(parent, "new-file")!.click();
     await type(parent, "main.typ");
-    expect(parent.querySelector(".pt-new [role=alert]")?.hidden).toBe(false);
+    expect(parent.querySelector<HTMLElement>(".pt-new [role=alert]")?.hidden).toBe(false);
 
     core.on("list_tree", () => [
       { name: "docs", path: "docs", kind: "dir", children: [{ name: "d.typ", path: "docs/d.typ", kind: "file" }] },

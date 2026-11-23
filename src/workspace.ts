@@ -358,7 +358,9 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     // O arranjo dos painéis também é lembrado por projeto (FR-013b).
     panes.setKey(next.name);
     editorZoom.setKey(next.name);
-    tree.setKey(next.name);
+    // Projeto novo, árvore limpa: sem campo de criação, erro, pasta escolhida ou arquivo do
+    // projeto anterior; pastas recolhidas do projeto novo (FR-004a, FR-034).
+    tree.resetForProject(next.name);
     compileEl.textContent = "Compilando…";
     compileEl.classList.remove("is-ok", "is-err");
     saveEl.textContent = "";

@@ -307,6 +307,13 @@ comando.
   O mapa de teclas do editor não usa essas combinações.
 - **Pasta recolhida que some ou é renomeada** (FR-004a): o estado guardado daquele caminho é
   ignorado; uma pasta nova aparece expandida.
+- **Troca de projeto com o campo de criação aberto** (FR-034, FR-004a; bug do dono de
+  2026-11-23): abrir ou criar outro projeto fecha o campo e o erro dele, esquece a pasta
+  escolhida e o arquivo aberto do projeto anterior e usa as pastas recolhidas do projeto novo.
+  O destino de "Novo arquivo"/"Nova pasta" é sempre relativo à raiz: a pasta escolhida, a pasta
+  do arquivo escolhido ou, sem escolha, a raiz; pasta escolhida que sumiu deixa de ser destino.
+  Recusas dizem o motivo: "A pasta de destino não existe." (`not_found`), "Já existe um arquivo
+  com esse nome." ou "Já existe uma pasta com esse nome." (`already_exists`).
 - **Armazenamento local indisponível** (modo privado, cota cheia, acesso negado): o zoom
   funciona na sessão e só não é lembrado; a prévia não quebra.
 - **Recolher o último painel de conteúdo** (FR-013b): editor e prévia não ficam os dois

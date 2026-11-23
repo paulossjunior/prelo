@@ -45,8 +45,12 @@ export interface TreeHandle {
   refresh(): Promise<void>;
   /** Marca o arquivo aberto e expande as pastas que o contêm (FR-004a). */
   setCurrent(path: string | null): void;
-  /** Troca de projeto: lê as pastas recolhidas guardadas para a chave nova. */
-  setKey(key: string | null): void;
+  /**
+   * Troca de projeto: começa limpo (fecha o campo de criação e o erro dele, esquece a pasta
+   * escolhida e o arquivo aberto) e lê as pastas recolhidas guardadas para a chave nova.
+   * Quem chama redesenha com `refresh`.
+   */
+  resetForProject(key: string | null): void;
   destroy(): void;
 }
 
@@ -93,6 +97,12 @@ function ancestors(path: string): string[] {
   return out;
 }
 
+/** Pasta de `path`, relativa à raiz; "" é a própria raiz. */
+function parentDir(path: string): string {
+  const i = path.lastIndexOf("/");
+  return i < 0 ? "" : path.slice(0, i);
+}
+
 let groupSeq = 0;
 
 export function mountTree(parent: HTMLElement, opts: TreeOptions): TreeHandle {
@@ -109,6 +119,8 @@ export function mountTree(parent: HTMLElement, opts: TreeOptions): TreeHandle {
   let selectedDir: string | null = null;
   // Item com o tabindex 0 (tabindex móvel do padrão de árvore).
   let focusPath: string | null = null;
+  // Pastas do último desenho: a pasta escolhida tem de estar aqui para ser destino.
+  let knownDirs = new Set<string>();
 
   const actions = document.createElement("div");
   actions.className = "pt-actions";
@@ -177,8 +189,18 @@ export function mountTree(parent: HTMLElement, opts: TreeOptions): TreeHandle {
   /** Pasta onde o item novo nasce: a escolhida, senão a do arquivo aberto, senão a raiz. */
   function targetDir(): string {
     if (selectedDir !== null) return selectedDir;
-    if (current !== null && current.includes("/")) return current.slice(0, current.lastIndexOf("/"));
+    if (current !== null) return parentDir(current);
     return "";
+  }
+
+  /** Recusa do núcleo em português, dita para o que se tentou criar. */
+  function createError(err: unknown, path: string): string {
+    const e = toIpcError(err);
+    if (e.code === "not_found") return "A pasta de destino não existe.";
+    if (e.code === "already_exists") {
+      return knownDirs.has(path) ? "Já existe uma pasta com esse nome." : "Já existe um arquivo com esse nome.";
+    }
+    return e.message;
   }
 
   function closeForm() {
@@ -227,7 +249,7 @@ export function mountTree(parent: HTMLElement, opts: TreeOptions): TreeHandle {
         await refresh();
         if (kind === "file" && isOpenable(path)) opts.onOpen(path);
       } catch (err) {
-        error.textContent = toIpcError(err).message;
+        error.textContent = createError(err, requested);
         error.hidden = false;
         input.focus();
       } finally {
@@ -424,8 +446,8 @@ export function mountTree(parent: HTMLElement, opts: TreeOptions): TreeHandle {
         const btn = row("button", node, "pt-file", "");
         btn.title = node.path;
         btn.addEventListener("click", () => {
-          // O destino de "Novo arquivo" volta a ser a pasta do arquivo aberto.
-          selectedDir = null;
+          // O destino de "Novo arquivo" passa a ser a pasta deste arquivo ("" é a raiz).
+          selectedDir = parentDir(node.path);
           opts.onOpen(node.path);
         });
         li.append(btn);
@@ -456,6 +478,9 @@ export function mountTree(parent: HTMLElement, opts: TreeOptions): TreeHandle {
     const tree = renderList(Array.isArray(nodes) ? nodes : [], "tree", dirs);
     tree.setAttribute("aria-label", "Arquivos");
     list.replaceChildren(tree);
+    knownDirs = dirs;
+    // Pasta escolhida que sumiu (apagada, renomeada, outro projeto) deixa de ser destino.
+    if (selectedDir !== null && selectedDir !== "" && !dirs.has(selectedDir)) selectedDir = null;
     // Pasta que sumiu ou foi renomeada: o estado guardado dela é esquecido.
     let pruned = false;
     for (const p of collapsed) {
@@ -480,9 +505,15 @@ export function mountTree(parent: HTMLElement, opts: TreeOptions): TreeHandle {
       markCurrent();
       syncTabStop();
     },
-    setKey(next) {
+    resetForProject(next) {
+      closeForm();
+      selectedDir = null;
+      current = null;
+      focusPath = null;
+      knownDirs = new Set();
       key = next;
       collapsed = load();
+      markCurrent();
     },
     destroy() {
       fold.remove();
