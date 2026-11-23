@@ -3,7 +3,8 @@
 # confere esta lista: cada licença precisa estar em security/licenses-allow.txt ou numa
 # exceção da própria crate em src-tauri/deny.toml ([licenses].exceptions).
 # Fonte: NOTICE do typst-assets 0.15.1. Revisar a cada atualização da crate.
-# As fontes do typst-assets (feature `fonts`) não entram: o Prelo embute as próprias (D-15).
+# As fontes do typst-assets (feature `fonts`) não entram por aqui: o Prelo copia os mesmos
+# arquivos para src-tauri/fonts/, conferidos pelo licenses.toml de lá (D-15, emenda de 2026-11-23).
 
 [[data]]
 name = "icc"

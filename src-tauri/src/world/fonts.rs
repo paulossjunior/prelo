@@ -1,21 +1,21 @@
 //! Fontes do World (D-15, research R6; FR-016; contracts/file-access.md "Fontes").
 //!
-//! Só dois conjuntos entram na compilação: as fontes embutidas de `src-tauri/fonts/`
-//! (Libertinus 7.051, OFL-1.1) e os arquivos `fonts/**/*.{ttf,otf,ttc,otc}` do projeto. Nenhuma
-//! fonte do sistema é consultada: sem `fontdb`, sem varredura de pastas do sistema. Os arquivos
-//! do projeto são lidos pelo [`AccessModel`] (regra de escopo, FR-021): link para fora da raiz é
-//! recusado e vira diagnóstico, como qualquer outra leitura. Fonte pedida que não existe nesses
-//! dois conjuntos sai na fonte padrão, com o aviso do Typst que cita o nome pedido.
+//! Só dois conjuntos entram na compilação: as fontes embutidas de `src-tauri/fonts/` e os
+//! arquivos `fonts/**/*.{ttf,otf,ttc,otc}` do projeto. As embutidas são a família Libertinus
+//! 7.051 (OFL-1.1) e as mesmas fontes que o `typst` CLI 0.15.1 embute (New Computer Modern,
+//! New Computer Modern Math e DejaVu Sans Mono, copiadas do `typst-assets` 0.15.1; D-15, emenda
+//! de 2026-11-23). Nenhuma fonte do sistema é consultada: sem `fontdb`, sem varredura de pastas
+//! do sistema. Os arquivos do projeto são lidos pelo [`AccessModel`] (regra de escopo, FR-021):
+//! link para fora da raiz é recusado e vira diagnóstico, como qualquer outra leitura. Fonte
+//! pedida que não existe nesses dois conjuntos sai na fonte padrão, com o aviso do Typst que
+//! cita o nome pedido.
 //!
 //! [`ProjectFonts`] confere `fonts/` a cada compilação (nome, tamanho e data de cada arquivo,
 //! sem ler conteúdo) e só remonta o resolvedor quando algo mudou; arquivo novo entra na
 //! compilação seguinte sem depender do observador de arquivos.
 //!
-//! O Typst pede "New Computer Modern Math" para matemática e "DejaVu Sans Mono" para `raw`,
-//! que o Prelo não embute. Os padrões do Prelo (Libertinus Math e Libertinus Mono) entram como
-//! regras `show … : set text(font: …)` nos estilos padrão da biblioteca do World, sem escrever
-//! nada no `.typ` (Princípio I). Por serem os estilos mais externos, qualquer regra do próprio
-//! documento vence.
+//! Com as fontes do CLI embutidas, os padrões do próprio Typst valem sem ajuste: Libertinus
+//! Serif para texto, New Computer Modern Math para matemática e DejaVu Sans Mono para `raw`.
 
 use std::path::Path;
 use std::sync::{Arc, LazyLock};
@@ -25,19 +25,12 @@ use serde::Serialize;
 use tinymist_world::font::memory::MemoryFontSearcher;
 use tinymist_world::font::FontResolverImpl;
 use tinymist_world::vfs::PathAccessModel;
-use typst::foundations::{Bytes, NativeElement, Recipe, Selector, Styles, Transformation};
-use typst::math::EquationElem;
-use typst::syntax::Span;
-use typst::text::{FontFamily, FontInfo, FontList, RawElem, TextElem};
+use typst::foundations::Bytes;
+use typst::text::FontInfo;
 
 use crate::diagnostic::{Diagnostic, Kind, Severity};
 use crate::fs::access_model::{access_diagnostic, AccessModel};
 use crate::fs::scope::Refusal;
-
-/// Família padrão da matemática.
-pub const MATH_FAMILY: &str = "Libertinus Math";
-/// Família padrão de `raw` (código).
-pub const RAW_FAMILY: &str = "Libertinus Mono";
 
 /// Pasta de fontes do projeto, relativa à raiz (D-15; spec, Assumptions).
 pub const PROJECT_DIR: &str = "fonts";
@@ -55,6 +48,8 @@ macro_rules! embedded {
 }
 
 /// Arquivos de fonte embutidos (nome, bytes). Licenças em `src-tauri/fonts/licenses.toml`.
+/// NewCM* e DejaVuSansMono* são os bytes de `files/fonts/` do `typst-assets` 0.15.1, o mesmo
+/// conjunto do `typst` CLI (os LibertinusSerif-* também são idênticos aos de lá).
 pub static EMBEDDED: &[(&str, &[u8])] = embedded![
     "LibertinusMath-Regular.otf",
     "LibertinusMono-Regular.otf",
@@ -67,6 +62,17 @@ pub static EMBEDDED: &[(&str, &[u8])] = embedded![
     "LibertinusSerif-Regular.otf",
     "LibertinusSerif-Semibold.otf",
     "LibertinusSerif-SemiboldItalic.otf",
+    "NewCM10-Regular.otf",
+    "NewCM10-Bold.otf",
+    "NewCM10-Italic.otf",
+    "NewCM10-BoldItalic.otf",
+    "NewCMMath-Regular.otf",
+    "NewCMMath-Book.otf",
+    "NewCMMath-Bold.otf",
+    "DejaVuSansMono.ttf",
+    "DejaVuSansMono-Bold.ttf",
+    "DejaVuSansMono-Oblique.ttf",
+    "DejaVuSansMono-BoldOblique.ttf",
 ];
 
 /// Licenças das fontes embutidas, como o `scripts/audit.mjs` as confere.
@@ -274,24 +280,6 @@ fn is_font_file(name: &str) -> bool {
         .is_some_and(|e| EXTENSIONS.iter().any(|x| e.eq_ignore_ascii_case(x)))
 }
 
-/// Regras de fonte padrão do Prelo para matemática e `raw`.
-pub fn default_styles() -> Styles {
-    let mut styles = Styles::new();
-    for (selector, family) in [
-        (Selector::Elem(EquationElem::ELEM, None), MATH_FAMILY),
-        (Selector::Elem(RawElem::ELEM, None), RAW_FAMILY),
-    ] {
-        let mut set = Styles::new();
-        set.set(TextElem::font, FontList(vec![FontFamily::new(family)]));
-        styles.push(Recipe::new(
-            Some(selector),
-            Transformation::Style(set),
-            Span::detached(),
-        ));
-    }
-    styles
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,7 +292,31 @@ mod tests {
         embedded.sort();
         listed.sort();
         assert_eq!(listed, embedded);
-        assert!(licenses().iter().all(|l| l.license == "OFL-1.1"));
+        let permitted = [
+            "OFL-1.1",
+            "LicenseRef-GUST-Font-License",
+            "LicenseRef-NewCM-GPL-3.0-or-later-FE-DE",
+            "Bitstream-Vera",
+        ];
+        assert!(licenses()
+            .iter()
+            .all(|l| permitted.contains(&l.license.as_str())));
+        // As fontes do `typst` CLI 0.15.1 estão todas embutidas (D-15, emenda de 2026-11-23).
+        for file in [
+            "NewCM10-Regular.otf",
+            "NewCM10-Bold.otf",
+            "NewCM10-Italic.otf",
+            "NewCM10-BoldItalic.otf",
+            "NewCMMath-Regular.otf",
+            "NewCMMath-Book.otf",
+            "NewCMMath-Bold.otf",
+            "DejaVuSansMono.ttf",
+            "DejaVuSansMono-Bold.ttf",
+            "DejaVuSansMono-Oblique.ttf",
+            "DejaVuSansMono-BoldOblique.ttf",
+        ] {
+            assert!(embedded.contains(&file), "{file} não embutida");
+        }
         // Aspas escapadas no copyright.
         assert!(licenses()[0].copyright.contains("\"Linux Libertine\""));
     }

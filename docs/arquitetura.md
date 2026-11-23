@@ -257,7 +257,7 @@ Os estados de sincronização continuam os quatro de [requisitos.md §5](requisi
 | Embutidas + fontes do sistema | Usa o que já está instalado | Prévia e PDF podem mudar de um computador para outro |
 | Embutidas + pasta de fontes no projeto | Reprodutível e flexível | Arquivos de fonte vão para o git; a licença de cada fonte precisa permitir redistribuição |
 
-Decidido em [D-15](adrs/D-15-fontes-embutidas-e-do-projeto.md): fontes embutidas no app mais a pasta `fonts/` do projeto, que segue RF-08; fontes do sistema não são lidas. Arquivos de fonte embutidos podem usar OFL-1.1, além das licenças de RNF-06.
+Decidido em [D-15](adrs/D-15-fontes-embutidas-e-do-projeto.md): fontes embutidas no app mais a pasta `fonts/` do projeto, que segue RF-08; fontes do sistema não são lidas. Arquivos de fonte embutidos podem usar OFL-1.1, além das licenças de RNF-06. Emenda aceita em 2026-11-23: o app embute também as fontes do `typst` CLI (New Computer Modern, New Computer Modern Math, DejaVu Sans Mono), com as licenças delas aceitas só para esses arquivos.
 
 **Pacotes.** Pacotes `@preview` são baixados do registro do Typst para um cache local e lidos com a pasta do pacote como raiz (RF-08). Eles são entrada não confiável: trazem código Typst e podem trazer plugins WASM. O download revela ao registro o nome e a versão dos pacotes e o endereço IP de quem baixa, mas não o conteúdo do artigo (Princípio II). Pacotes `@local` ficam na máquina de quem os criou e não existem nos outros computadores, como um arquivo fora do projeto (D-13). Cache para compilar offline e cache no git continuam em aberto ([seção 7](#7-riscos-técnicos-e-questões-em-aberto)).
 

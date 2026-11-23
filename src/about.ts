@@ -1,7 +1,10 @@
 // Tela "Sobre" (T039; FR-012, D-15, D-16): versão do compilador embutido e a registrada no
 // projeto, aviso quando diferem (com a ação explícita de atualizar), licenças das fontes
-// embutidas com o texto da OFL e os avisos de atribuição dos dados do `typst-assets`.
+// embutidas com o texto de cada licença e os avisos de atribuição dos dados do `typst-assets`.
 // Tudo entra como texto, nunca como marcação.
+import dejavuText from "../src-tauri/fonts/LICENSE-DejaVu.txt?raw";
+import gustText from "../src-tauri/fonts/GUST-FONT-LICENSE.txt?raw";
+import newcmGplText from "../src-tauri/fonts/LICENSE-NewCM10-Regular.txt?raw";
 import oflText from "../src-tauri/fonts/OFL.txt?raw";
 import oflBricolage from "./fonts/OFL-BricolageGrotesque.txt?raw";
 import oflPlex from "./fonts/OFL-IBMPlexSans.txt?raw";
@@ -108,6 +111,36 @@ const FALLBACK_FONTS: FontLicense[] = [
     copyright:
       'Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name "Linux Libertine", "Biolinum", "STIX Fonts".',
   },
+  {
+    family: "New Computer Modern",
+    file: "src-tauri/fonts/NewCM10-Regular.otf",
+    license: "LicenseRef-NewCM-GPL-3.0-or-later-FE-DE",
+    copyright: "(Copyleft) 2019-2026 Antonis Tsolomitis.",
+  },
+  {
+    family: "New Computer Modern, New Computer Modern Math",
+    file: "src-tauri/fonts/NewCM10-{Bold,Italic,BoldItalic}.otf, src-tauri/fonts/NewCMMath-*.otf",
+    license: "LicenseRef-GUST-Font-License",
+    copyright: "(C) 2019-2026 Antonis Tsolomitis.",
+  },
+  {
+    family: "DejaVu Sans Mono",
+    file: "src-tauri/fonts/DejaVuSansMono*.ttf",
+    license: "Bitstream-Vera",
+    copyright: "Copyright (c) 2003 by Bitstream, Inc. DejaVu changes are in public domain.",
+  },
+];
+
+/** Texto de cada licença das fontes do compilador, na ordem em que aparece no Sobre. */
+const FONT_LICENSE_TEXTS: readonly { license: string; title: string; text: string }[] = [
+  { license: "OFL-1.1", title: "SIL Open Font License 1.1", text: oflText },
+  { license: "LicenseRef-GUST-Font-License", title: "GUST Font License (New Computer Modern)", text: gustText },
+  {
+    license: "LicenseRef-NewCM-GPL-3.0-or-later-FE-DE",
+    title: "GPL-3.0 ou posterior com Font Exception e Distribution Exception (NewCM10-Regular)",
+    text: newcmGplText,
+  },
+  { license: "Bitstream-Vera", title: "Bitstream Vera e Arev (DejaVu Sans Mono)", text: dejavuText },
 ];
 
 export interface UiFont {
@@ -259,9 +292,13 @@ export function mountAbout(parent: HTMLElement, opts: AboutOptions): AboutHandle
       table.append(tr);
     }
     fonts.append(table);
-    const ofl = el("details");
-    ofl.append(el("summary", "Texto da licença SIL Open Font License 1.1"), el("pre", oflText, "ws-license"));
-    fonts.append(ofl);
+    // O texto da OFL sempre aparece; os demais, quando alguma fonte listada usa a licença.
+    const used = new Set(["OFL-1.1", ...list.map((f) => f.license)]);
+    for (const l of FONT_LICENSE_TEXTS.filter((l) => used.has(l.license))) {
+      const d = el("details");
+      d.append(el("summary", `Texto da licença ${l.title}`), el("pre", l.text, "ws-license"));
+      fonts.append(d);
+    }
 
     const uiFonts = el("section");
     uiFonts.append(el("h3", "Fontes da interface"));

@@ -87,7 +87,8 @@ export interface OutlineItem {
 export interface FontLicense {
   family: string;
   file: string;
-  license: "OFL-1.1";
+  /** Só fontes: OFL-1.1 e as licenças das fontes do `typst` CLI (D-15, emenda de 2026-11-23). */
+  license: "OFL-1.1" | "LicenseRef-GUST-Font-License" | "LicenseRef-NewCM-GPL-3.0-or-later-FE-DE" | "Bitstream-Vera";
   copyright: string;
 }
 

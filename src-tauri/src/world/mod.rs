@@ -3,7 +3,8 @@
 //! `CompilerUniverse` do `tinymist-world` montado com:
 //! - o [`AccessModel`] do Prelo como único `PathAccessModel` do VFS (RF-08);
 //! - só as fontes embutidas e as de `fonts/` do projeto, lidas pelo mesmo modelo de acesso
-//!   ([`fonts`]), com os padrões de matemática e `raw` do Prelo;
+//!   ([`fonts`]); as embutidas incluem as do `typst` CLI, então valem os padrões de fonte do
+//!   próprio Typst;
 //! - o registro de pacotes `@preview` do Prelo ([`packages`]), com cache e verificação;
 //! - plugins WASM barrados até a pessoa aprovar ([`plugins`], no modelo de acesso).
 //!
@@ -204,8 +205,7 @@ where
         });
     }
 
-    /// Instantâneo do World para compilar ou analisar (`typst-ide`), com a biblioteca e os
-    /// padrões de fonte do Prelo.
+    /// Instantâneo do World para compilar ou analisar (`typst-ide`), com a biblioteca do Prelo.
     pub fn snapshot(&self) -> CompilerWorld<PreloFeat<M>> {
         let mut world = self.universe.snapshot();
         world.library = self.library.clone();
@@ -388,10 +388,10 @@ const EVICT_AFTER: usize = 30;
 /// Mensagem do Typst para arquivo que não é UTF-8 (`FileError::InvalidUtf8`).
 const INVALID_UTF8: &str = "file is not valid UTF-8";
 
-/// Biblioteca padrão do Typst com os padrões de fonte do Prelo.
+/// Biblioteca padrão do Typst, sem estilos a mais: com as fontes do `typst` CLI embutidas,
+/// matemática e `raw` usam os padrões do próprio Typst (D-15, emenda de 2026-11-23).
 fn library() -> Arc<LazyHash<Library>> {
-    let mut library = Library::builder().with_inputs(Dict::new()).build();
-    library.styles.apply(fonts::default_styles());
+    let library = Library::builder().with_inputs(Dict::new()).build();
     Arc::new(LazyHash::new(library))
 }
 

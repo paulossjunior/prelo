@@ -1,8 +1,9 @@
 //! Testes do World do Prelo (T020; research R2, R6; D-15, D-17; data-model.md "Diagnostic").
 //!
 //! World do `tinymist-world` montado com o `PathAccessModel` do Prelo, só com as fontes
-//! embutidas de `src-tauri/fonts/` (nenhuma fonte do sistema) e com os padrões de fonte de
-//! matemática e de `raw` definidos no World, sem escrever nada no `.typ` (Princípio I).
+//! embutidas de `src-tauri/fonts/` (nenhuma fonte do sistema). As embutidas cobrem as do
+//! `typst` CLI 0.15.1, então matemática e `raw` saem nos padrões do próprio Typst (New Computer
+//! Modern Math e DejaVu Sans Mono), sem nada escrito no `.typ` (Princípio I).
 
 mod support;
 
@@ -59,6 +60,17 @@ fn compila_projeto_com_varios_arquivos() {
     assert!(outcome.output.expect("compilou").pages().len() >= 2);
 }
 
+/// Famílias embutidas: as Libertinus do Prelo e as do `typst` CLI 0.15.1 (D-15).
+const EMBEDDED_FAMILIES: [&str; 7] = [
+    "Libertinus Serif",
+    "Libertinus Sans",
+    "Libertinus Math",
+    "Libertinus Mono",
+    "New Computer Modern",
+    "New Computer Modern Math",
+    "DejaVu Sans Mono",
+];
+
 #[test]
 fn so_fontes_embutidas_e_nenhuma_do_sistema() {
     let (_project, world) = single_file("= Oi");
@@ -67,7 +79,7 @@ fn so_fontes_embutidas_e_nenhuma_do_sistema() {
     let mut count = 0;
     while let Some(info) = book.info(count) {
         assert!(
-            info.family.starts_with("Libertinus"),
+            EMBEDDED_FAMILIES.contains(&info.family.as_str()),
             "fonte fora das embutidas: {}",
             info.family
         );
@@ -109,20 +121,23 @@ fn fonte_do_sistema_pedida_no_typ_nao_e_usada() {
 }
 
 #[test]
-fn matematica_e_raw_usam_os_padroes_do_world() {
+fn matematica_e_raw_usam_os_padroes_do_typst_cli() {
     let (_project, mut world) = single_file("Texto $x^2 + y$ e `codigo`.");
     let used = families(&mut world);
     assert!(used.contains(&"Libertinus Serif".to_string()), "{used:?}");
-    assert!(used.contains(&fonts::MATH_FAMILY.to_string()), "{used:?}");
-    assert!(used.contains(&fonts::RAW_FAMILY.to_string()), "{used:?}");
+    assert!(
+        used.contains(&"New Computer Modern Math".to_string()),
+        "{used:?}"
+    );
+    assert!(used.contains(&"DejaVu Sans Mono".to_string()), "{used:?}");
 }
 
 #[test]
-fn escolha_de_fonte_no_typ_vence_o_padrao_do_world() {
+fn escolha_de_fonte_no_typ_vence_o_padrao() {
     let (_project, mut world) =
         single_file("#show raw: set text(font: \"Libertinus Sans\")\n`codigo` $x$");
     let used = families(&mut world);
-    assert!(!used.contains(&fonts::RAW_FAMILY.to_string()), "{used:?}");
+    assert!(!used.contains(&"DejaVu Sans Mono".to_string()), "{used:?}");
     assert!(used.contains(&"Libertinus Sans".to_string()), "{used:?}");
 
     // Matemática numa fonte sem tabela MATH: vale a escolha do documento, e o Typst avisa.
