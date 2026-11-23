@@ -3,7 +3,7 @@
 import { diagnosticCount } from "@codemirror/lint";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PreviewUpdate, ProjectInfo } from "./ipc";
-import { fakeCore, settle } from "./testing/fake-core";
+import { deferred, fakeCore, settle } from "./testing/fake-core";
 import { stubRangeLayout } from "./testing/layout";
 import { mountWorkspace, type WorkspaceHandle } from "./workspace";
 
@@ -369,6 +369,86 @@ describe("salvar", () => {
     expect(ws.editor()!.view.state.doc.toString()).toBe("texto do núcleo");
     expect(ws.editor()!.version()).toBe(5);
     expect(root.querySelector(".ws-message")?.textContent).toContain("recarregue");
+  });
+});
+
+describe("Compilar (FR-014a, cenário 14)", () => {
+  const compileBtn = (root: ParentNode) =>
+    root.querySelector<HTMLButtonElement>(".pvbar button[aria-label='Compilar agora (⌘⇧B / Ctrl+Shift+B)']");
+
+  it("botão na barra da prévia, desativado sem projeto e ativo com projeto", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    expect(compileBtn(root)).not.toBeNull();
+    expect(compileBtn(root)!.disabled).toBe(true);
+    await ws.showProject(INFO);
+    expect(compileBtn(root)!.disabled).toBe(false);
+  });
+
+  it("envia ao núcleo a edição pendente antes de compile_now e libera com a prévia", async () => {
+    const held = deferred<unknown>();
+    const order: string[] = [];
+    const { core, root, ws } = setup({
+      compile_now: () => {
+        order.push("compile_now");
+        return { compileId: 5 };
+      },
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.on("edit_file", () => {
+      order.push("edit_file");
+      return held.promise;
+    });
+    ws.editor()!.view.dispatch({ changes: { from: 0, insert: "x" }, userEvent: "input.type" });
+    compileBtn(root)!.click();
+    await settle();
+    expect(order).toEqual(["edit_file"]);
+    held.resolve({ version: 2 });
+    await settle();
+    expect(order).toEqual(["edit_file", "compile_now"]);
+    expect(compileBtn(root)!.disabled).toBe(true);
+    expect(compileBtn(root)!.textContent).toContain("Compilando…");
+    core.push(update({ compileId: 5, durationMs: 33 }));
+    await settle();
+    expect(compileBtn(root)!.disabled).toBe(false);
+    expect(root.querySelector(".ws-status")?.textContent).toContain("Compilado em 33 ms");
+  });
+
+  it("⌘⇧B compila de qualquer lugar da janela", async () => {
+    const { core, ws } = setup({ compile_now: () => ({ compileId: 3 }) });
+    await ws.ready;
+    await ws.showProject(INFO);
+    ws.editor()!.view.contentDOM.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "B", code: "KeyB", metaKey: true, shiftKey: true, bubbles: true, cancelable: true }),
+    );
+    await settle();
+    expect(core.calls("compile_now")).toHaveLength(1);
+  });
+
+  it("recusa (compile_suspended) aparece como mensagem e o botão volta", async () => {
+    const { root, ws } = setup({
+      compile_now: () => {
+        throw "compile_suspended";
+      },
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    compileBtn(root)!.click();
+    await settle();
+    expect(compileBtn(root)!.disabled).toBe(false);
+    expect(root.querySelector(".ws-message")?.textContent).toMatch(/presas|terminar/);
+  });
+
+  it("versão do compilador diferente: desativado", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    await ws.showProject({
+      ...INFO,
+      compiler: { embedded: "0.15.1", registered: "0.14.0" },
+      warnings: ["compiler_version_mismatch"],
+    });
+    expect(compileBtn(root)!.disabled).toBe(true);
   });
 });
 

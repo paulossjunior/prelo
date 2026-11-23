@@ -242,6 +242,8 @@ export interface Ipc {
   jumpFromCursor(path: string, offset: number): Promise<PagePosition[]>;
   outline(): Promise<OutlineItem[]>;
   compilerInfo(): Promise<CompilerInfo>;
+  /** "Compilar" (FR-014a): ainda não implementado (T101). */
+  compileNow(): Promise<{ compileId: number }>;
   exportPdfDialog(): Promise<{ path: string } | null>;
   /**
    * O arquivo de origem é escolhido no diálogo nativo do núcleo, nunca pela interface.
@@ -295,6 +297,7 @@ export function createIpc(transport: Transport): Ipc {
     jumpFromCursor: (path, offset) => call("jump_from_cursor", { path, offset }),
     outline: () => call("outline"),
     compilerInfo: () => call("compiler_info"),
+    compileNow: () => Promise.reject(new IpcError("not_implemented")),
     exportPdfDialog: () => call("export_pdf_dialog"),
     copyIntoProject: (requested) => call("copy_into_project", { requested }),
     decidePlugin: (sha256, approve) => call("decide_plugin", { sha256, approve }),

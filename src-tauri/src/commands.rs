@@ -1054,6 +1054,11 @@ impl AppState {
         Ok(project.info())
     }
 
+    /// "Compilar" (FR-014a; contracts/ipc.md `compile_now`): ainda não implementado (T101).
+    pub fn compile_now(&self) -> Result<u64, String> {
+        Err(NOT_IMPLEMENTED.into())
+    }
+
     /// Cria um arquivo vazio em `requested` (FR-034, FR-035). Devolve o caminho normalizado.
     pub fn create_file(&self, requested: &str) -> Result<String, String> {
         self.create(requested, NewItem::File)

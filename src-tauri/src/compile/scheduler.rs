@@ -234,11 +234,23 @@ impl<C: Compiler> Scheduler<C> {
         id
     }
 
+    /// Compilação forçada ("Compilar", FR-014a): ainda não implementada (T101).
+    pub fn compile_now(&self, input: C::Input) -> Result<u64, Suspended> {
+        let _ = input;
+        Err(Suspended { stuck: 0 })
+    }
+
     /// Threads de compilação vivas: a ativa e as abandonadas que seguem presas. Nunca passa de
     /// [`MAX_COMPILE_THREADS`].
     pub fn compile_threads(&self) -> usize {
         self.shared.lock().threads
     }
+}
+
+/// `compile_now` recusado: a agenda está suspensa, com `stuck` threads presas (o limite).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Suspended {
+    pub stuck: usize,
 }
 
 /// Resposta a uma edição com a agenda suspensa.
@@ -855,6 +867,114 @@ mod tests {
             thread::sleep(Duration::from_millis(10));
         }
         assert_eq!(h.scheduler.compile_threads(), 1);
+    }
+
+    /// FR-014a: sem compilação em andamento, `compile_now` só põe na fila; nada é abandonado e
+    /// o World continua o mesmo (cache incremental mantido).
+    #[test]
+    fn compile_now_when_idle_compiles_on_the_same_world() {
+        let h = Harness::new(WAIT);
+        let id = h.scheduler.submit(quick("a"));
+        assert_eq!(h.next().compile_id, id);
+
+        let id = h.scheduler.compile_now(quick("forçada")).expect("na fila");
+        let c = h.next();
+        assert_eq!((c.compile_id, c.status), (id, Status::Ok));
+        assert_eq!(c.output.unwrap().world, 0, "não deve trocar de World");
+        assert_eq!(h.scheduler.compile_threads(), 1);
+        h.assert_quiet();
+    }
+
+    /// FR-014a: com uma compilação presa (ainda abaixo do limite de tempo), `compile_now` a
+    /// abandona na hora e compila numa thread nova, sem esperar o vigia; o resultado da presa,
+    /// quando chega, é descartado, e o total de threads fica no limite (T078).
+    #[test]
+    fn compile_now_abandons_a_stuck_compile_and_compiles_on_a_new_thread() {
+        let h = Harness::new(WAIT);
+        let gate = Gate::default();
+        let stuck = h.scheduler.submit(held("preso", &gate));
+        let stuck_thread = h.wait_started("preso");
+
+        let started = Instant::now();
+        let id = h.scheduler.compile_now(quick("forçada")).expect("na fila");
+        assert!(id > stuck);
+        let c = h.next();
+        assert!(
+            started.elapsed() < Duration::from_secs(2),
+            "esperou o vigia"
+        );
+        assert_eq!((c.compile_id, c.status), (id, Status::Ok));
+        let done = c.output.unwrap();
+        assert_eq!(done.tag, "forçada");
+        assert_ne!(done.thread, stuck_thread, "compilou na thread presa");
+        assert_eq!(h.scheduler.compile_threads(), 2);
+        assert!(h.scheduler.compile_threads() <= MAX_COMPILE_THREADS);
+
+        gate.open();
+        h.assert_quiet();
+    }
+
+    /// FR-014a: com o limite de threads atingido por compilações presas, `compile_now` é recusado
+    /// sem criar thread nem World; a edição fica pendente e compila quando uma presa termina.
+    #[test]
+    fn compile_now_at_the_thread_limit_is_refused_without_a_new_thread() {
+        let h = Harness::new(SHORT);
+        let gates = stick_all(&h);
+        assert_eq!(
+            h.scheduler.compile_now(quick("forçada")),
+            Err(Suspended {
+                stuck: MAX_COMPILE_THREADS
+            })
+        );
+        h.assert_quiet();
+        assert_eq!(h.scheduler.compile_threads(), MAX_COMPILE_THREADS);
+        assert_eq!(h.worlds.load(Ordering::SeqCst), MAX_COMPILE_THREADS);
+
+        gates[0].open();
+        let c = h.next();
+        assert_eq!(c.status, Status::Ok, "{:?}", c.diagnostics);
+        assert_eq!(c.output.unwrap().tag, "forçada");
+        assert!(h.scheduler.compile_threads() <= MAX_COMPILE_THREADS);
+        for gate in &gates[1..] {
+            gate.open();
+        }
+    }
+
+    /// FR-014a: `compile_now` com o limite já ocupado por presas e uma ativa não cria thread: a
+    /// edição espera na fila de 1 como qualquer outra.
+    #[test]
+    fn compile_now_never_spawns_past_the_limit() {
+        let h = Harness::new(WAIT);
+        let mut gates = Vec::new();
+        for _ in 0..MAX_COMPILE_THREADS {
+            let gate = Gate::default();
+            h.scheduler
+                .compile_now(held("preso", &gate))
+                .expect("dentro do limite");
+            h.wait_started("preso");
+            gates.push(gate);
+            assert!(h.scheduler.compile_threads() <= MAX_COMPILE_THREADS);
+        }
+        assert_eq!(h.scheduler.compile_threads(), MAX_COMPILE_THREADS);
+        let id = h
+            .scheduler
+            .compile_now(quick("forçada"))
+            .expect("fica na fila");
+        assert_eq!(h.scheduler.compile_threads(), MAX_COMPILE_THREADS);
+        assert_eq!(h.worlds.load(Ordering::SeqCst), MAX_COMPILE_THREADS);
+        // A ativa (a última presa) termina e a forçada compila em seguida.
+        gates.last().unwrap().open();
+        let c = loop {
+            let c = h.next();
+            if c.compile_id == id {
+                break c;
+            }
+        };
+        assert_eq!(c.status, Status::Ok);
+        assert_eq!(c.output.unwrap().tag, "forçada");
+        for gate in &gates {
+            gate.open();
+        }
     }
 
     /// Pânico do compilador (erro interno do Typst com entrada malformada) vira diagnóstico na
