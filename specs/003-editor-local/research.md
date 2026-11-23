@@ -192,8 +192,11 @@ levantar licenças antes do plano; o resultado está em R12.
 
 - **Decision**: o núcleo guarda o texto dos arquivos abertos. Gravação: `tempfile` 3.27 na
   mesma pasta + `fsync` + `persist` (rename atômico); erro mantém o texto em memória e avisa.
-  Salvamento automático 2 s após a última edição, em ⌘S/Ctrl+S e no fechamento (o fechamento
-  espera a gravação, com limite). Mudanças externas: `notify` 8 (CC0-1.0) observa a raiz; o
+  Salvamento automático 1,5 s após a primeira edição ainda não gravada (conferido a cada
+  250 ms; continuar digitando não adia, para que um encerramento forçado perca no máximo os
+  últimos 2 s, SC-009; T077 trocou a regra antiga de "2 s ociosos", que perdia tudo o que foi
+  digitado sem pausa), em ⌘S/Ctrl+S e no fechamento (o fechamento espera a gravação, com
+  limite). Mudanças externas: `notify` 8 (CC0-1.0) observa a raiz; o
   núcleo ignora eventos cujo hash é igual ao último que ele mesmo gravou; sem alteração local
   pendente → recarrega; com alteração pendente → evento `external_change_conflict` e a pessoa
   escolhe (manter a minha / usar a do disco); nada é descartado sem escolha.
@@ -299,6 +302,36 @@ de E2E (SC-006).
   tamanho reduz o custo máximo, e o limite de tempo garante que o app não trava.
 - **Revisão**: em 2027-02-17 ou na próxima versão do `typst`, o que vier primeiro.
 
+## Medições de desempenho
+
+T075/T076 (SC-001, SC-002). Medido por `src-tauri/tests/perf_preview.rs` (feature `perf`,
+`cargo test --release`): 5 edições de aquecimento e 60 medidas, uma palavra a mais por edição
+no parágrafo da página 1 de `artigo-40p` (40 páginas), passando pela agenda de produção, pela
+prévia e pelo `page_svg` das páginas alteradas que a interface pediria (visíveis ± 2, R4). O
+caso com imagens põe duas imagens PNG de ruído geradas no teste, 4000×3000 px e ~36 MB cada,
+uma na página editada e outra no fim.
+
+| Data | Máquina | Caso | Edição → `PreviewUpdate` p95 | Edição → SVG pronto p95 |
+|---|---|---|---|---|
+| 2026-11-22 | Apple M4, 10 núcleos, 16 GB, carga ~10 | `artigo-40p` | 10,8 ms | 13,2 ms |
+| 2026-11-22 | idem | `artigo-40p` + 2 imagens 4000×3000 | 10,1 ms | 18,0 ms |
+| 2026-11-22 | idem, carga ~44 (outros builds) | `artigo-40p` | 99,7 ms | 107,2 ms |
+
+**Antes de T076**, o caso com imagens não terminava: `page_svg` gerava o SVG com a `data:` URL
+da imagem (~48 MB em base64) e depois a trocava com `str::replace`, usando a URL inteira como
+padrão de busca; uma só página levou mais de 2 minutos. Duas mudanças em
+`compile/preview.rs`: (1) a troca virou uma varredura linear que delimita cada valor
+`"data:…"` pelas aspas e compara por igualdade (`replace_data_urls`); (2) o SVG passa a ser
+gerado com cada imagem trocada por um SVG de 1×1 px que só leva o sha256 (`stand_in`), então
+o `typst-svg` nem escreve os 48 MB. Só com (1), o p95 com imagens ficou em 298 ms (sob carga);
+com (1) e (2), 18 ms. A compilação incremental e o diff de páginas já atendiam a meta e não
+mudaram.
+
+O computador de referência do plano (Apple M1 ou x64 de 4 núcleos, 8 GB) é mais lento que o
+M4; a folga (p95 ≤ 18 ms contra 100 ms) cobre a diferença. O job `perf` do CI roda nos três
+sistemas com limite de 250 ms; a meta de 100 ms se confere localmente com
+`PRELO_PERF_LIMIT_MS=100`.
+
 ## Riscos
 
 - **API do `typst-ide`** muda entre versões do Typst. Mitigação: versão travada (`=0.15.1`),
@@ -315,6 +348,10 @@ de E2E (SC-006).
   de saída do `typst-svg`; se não for estável, alternativa é renderizar a imagem à parte e
   posicioná-la por cima. Medido pela tarefa de desempenho com imagens grandes.
 - **Threads abandonadas** (R9) podem acumular CPU; o teste de compilação sem fim conta
-  threads vivas.
+  threads vivas. **T078**: a agenda mantém no máximo 3 threads de compilação vivas por
+  projeto aberto (`MAX_COMPILE_THREADS`), contando as presas; atingido o limite, cada edição
+  recebe na hora o diagnóstico "compilação suspensa" e a mais nova compila quando uma thread
+  presa terminar. Um plugin que nunca retorna ainda prende até 3 núcleos até o app fechar;
+  compilar em processo filho continua sendo a alternativa se isso aparecer no uso real.
 - **Diferenças de fonte** entre Prelo e `typst` CLI padrão (R6) podem surpreender quem compila
   fora do Prelo; o README e a tela "Sobre" explicam.

@@ -26,8 +26,9 @@ use std::thread;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tauri::http::{header, Method, Request, Response, StatusCode};
+use typst::foundations::{Bytes, Smart};
 use typst::layout::{Frame, FrameItem};
-use typst::visualize::Image;
+use typst::visualize::{Image, ImageScaling, SvgImage};
 use typst_layout::{Page, PagedDocument};
 use typst_svg::{SvgOptions, WebImage};
 
@@ -137,6 +138,45 @@ impl Assets {
             self.by_sha.insert(asset.sha256.clone(), Arc::clone(asset));
         }
     }
+}
+
+/// Imagem SVG minúscula que ocupa o lugar da imagem `sha256` na geração do SVG da página: a
+/// `data:` URL dela é única por imagem e curta, e vira `prelo-asset://<sha256>`. O tamanho na
+/// página vem do item do quadro, não da imagem; `scaling` é mantido porque vira estilo no SVG.
+fn stand_in(sha256: &str, scaling: Smart<ImageScaling>) -> Option<Image> {
+    let data = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\" id=\"prelo-{sha256}\"/>"
+    );
+    let svg = SvgImage::new(Bytes::from_string(data)).ok()?;
+    Some(Image::new(svg, None, scaling))
+}
+
+/// Troca, no quadro e nos grupos dentro dele, cada imagem com substituta em `stand_ins`
+/// (chave: `hash128` da imagem). Só os quadros com imagem são copiados.
+fn swap_images(frame: &mut Frame, stand_ins: &HashMap<u128, Image>) {
+    if !has_image(frame) {
+        return;
+    }
+    frame.retain(|item| {
+        match item {
+            FrameItem::Group(group) => swap_images(&mut group.frame, stand_ins),
+            FrameItem::Image(image, _, _) => {
+                if let Some(small) = stand_ins.get(&typst::utils::hash128(&*image)) {
+                    *image = small.clone();
+                }
+            }
+            _ => {}
+        }
+        true
+    });
+}
+
+fn has_image(frame: &Frame) -> bool {
+    frame.items().any(|(_, item)| match item {
+        FrameItem::Group(group) => has_image(&group.frame),
+        FrameItem::Image(..) => true,
+        _ => false,
+    })
 }
 
 /// Chama `f` para cada imagem do quadro, inclusive dentro de grupos.
@@ -340,9 +380,13 @@ impl PreviewHub {
     /// SVG da página atual `index` com o hash `hash`, com cada imagem citada por
     /// `prelo-asset://<sha256>` em vez da `data:` URL. O SVG e o sha256 de uma imagem nova são
     /// calculados fora da trava; o sha256 fica guardado enquanto a imagem estiver no documento.
+    ///
+    /// T076 (SC-002): o SVG é gerado com cada imagem trocada por uma substituta minúscula
+    /// ([`stand_in`]) do mesmo tamanho na página. Com a imagem original, o `typst-svg` escreveria
+    /// a `data:` URL inteira (dezenas de MB para uma foto de 4000×3000 px) só para ela ser
+    /// trocada em seguida, e isso custava mais que a compilação a cada edição na página.
     pub fn page_svg(&self, index: usize, hash: &str) -> Result<String, &'static str> {
-        let page = self.page(index, hash)?;
-        let mut svg = render_svg(&page);
+        let mut page = self.page(index, hash)?;
         let mut done = HashSet::new();
         let mut images = Vec::new();
         for_each_image(&page.frame, &mut |image| {
@@ -350,6 +394,8 @@ impl PreviewHub {
                 images.push(image.clone());
             }
         });
+        let mut urls = Vec::with_capacity(images.len());
+        let mut stand_ins = HashMap::with_capacity(images.len());
         for image in images {
             let key = typst::utils::hash128(&image);
             let known = self.lock().preview.assets.by_image.get(&key).cloned();
@@ -362,11 +408,22 @@ impl PreviewHub {
                 self.lock().preview.assets.insert(key, &asset);
                 asset
             });
-            // Memorizado pelo Typst: é a mesma `data:` URL que o `typst-svg` escreveu.
-            let url = asset.image.to_base64_url();
-            svg = svg.replace(url.as_str(), &format!("{ASSET_PREFIX}{}", asset.sha256));
+            let reference = format!("{ASSET_PREFIX}{}", asset.sha256);
+            match stand_in(&asset.sha256, image.scaling()) {
+                Some(small) => {
+                    // Memorizado pelo Typst: é a mesma `data:` URL que o `typst-svg` escreve.
+                    urls.push((WebImage::new(&small).to_base64_url(), reference));
+                    stand_ins.insert(key, small);
+                }
+                // Sem substituta (não acontece com o SVG fixo de `stand_in`): a imagem
+                // original vai para o SVG e a `data:` URL dela é trocada.
+                None => urls.push((asset.image.to_base64_url(), reference)),
+            }
         }
-        Ok(svg)
+        if !stand_ins.is_empty() {
+            swap_images(&mut page.frame, &stand_ins);
+        }
+        Ok(replace_data_urls(&render_svg(&page), &urls))
     }
 
     fn asset(&self, sha256: &str) -> Option<Arc<Asset>> {
@@ -414,6 +471,37 @@ impl PreviewHub {
             })
             .expect("falha ao criar a thread da prévia");
     }
+}
+
+/// Troca, num passo só, cada valor de atributo `"data:…"` do SVG que seja exatamente uma das
+/// `urls` pelo substituto dela; o resto do SVG fica igual.
+///
+/// T076: `str::replace` com a `data:` URL inteira como padrão (dezenas de MB para uma imagem de
+/// 4000×3000 px) levava minutos por página: o buscador de substring prepara o padrão inteiro e
+/// varre o SVG com ele. Aqui cada valor `data:` é delimitado pelas aspas (busca de um byte) e
+/// comparado por tamanho e conteúdo, sem preparar nada.
+fn replace_data_urls(svg: &str, urls: &[(impl AsRef<str>, String)]) -> String {
+    const START: &str = "\"data:";
+    if urls.is_empty() {
+        return svg.to_owned();
+    }
+    let mut out = String::with_capacity(svg.len());
+    let mut rest = svg;
+    while let Some(at) = rest.find(START) {
+        let value = at + 1;
+        let Some(len) = rest[value..].find('"') else {
+            break;
+        };
+        let candidate = &rest[value..value + len];
+        out.push_str(&rest[..value]);
+        match urls.iter().find(|(url, _)| url.as_ref() == candidate) {
+            Some((_, replacement)) => out.push_str(replacement),
+            None => out.push_str(candidate),
+        }
+        rest = &rest[value + len..];
+    }
+    out.push_str(rest);
+    out
 }
 
 /// Nome do protocolo próprio das imagens da prévia (contracts/ipc.md).
@@ -903,5 +991,51 @@ mod tests {
             second.len()
         );
         assert!(hub.asset_data_url(&sha256_hex(PNG)).is_some());
+    }
+
+    #[test]
+    fn troca_so_valores_data_que_sao_exatamente_uma_das_urls() {
+        let urls = [
+            ("data:image/png;base64,AAAA", "prelo-asset://a".to_owned()),
+            ("data:image/png;base64,AAAAB", "prelo-asset://b".to_owned()),
+        ];
+        let svg = concat!(
+            r#"<svg><image xlink:href="data:image/png;base64,AAAA" width="1"/>"#,
+            r#"<image xlink:href="data:image/png;base64,AAAAB"/>"#,
+            r#"<image xlink:href="data:image/png;base64,AAA"/>"#,
+            r#"<image xlink:href="data:image/png;base64,AAAA"/>"#,
+            r#"<text>data:image/png;base64,AAAA</text></svg>"#,
+        );
+        assert_eq!(
+            replace_data_urls(svg, &urls),
+            concat!(
+                r#"<svg><image xlink:href="prelo-asset://a" width="1"/>"#,
+                r#"<image xlink:href="prelo-asset://b"/>"#,
+                r#"<image xlink:href="data:image/png;base64,AAA"/>"#,
+                r#"<image xlink:href="prelo-asset://a"/>"#,
+                r#"<text>data:image/png;base64,AAAA</text></svg>"#,
+            )
+        );
+        // Sem urls, ou com valor `data:` sem aspas de fechamento, nada muda.
+        let none: [(&str, String); 0] = [];
+        assert_eq!(replace_data_urls(svg, &none), svg);
+        let open = r#"<image xlink:href="data:image/png;base64,AAAA"#;
+        assert_eq!(replace_data_urls(open, &urls), open);
+    }
+
+    /// T076: imagem grande (dezenas de MB em base64) na página editada. Com `str::replace`, a
+    /// troca da `data:` URL levava minutos; agora é uma varredura linear.
+    #[test]
+    fn troca_data_url_grande_sem_custo_quadratico() {
+        let big = format!("data:image/png;base64,{}", "QUJD".repeat(2_000_000));
+        let svg = format!(r#"<svg><image xlink:href="{big}"/><path d="M0 0"/></svg>"#);
+        let started = std::time::Instant::now();
+        let out = replace_data_urls(&svg, &[(big.as_str(), "prelo-asset://x".to_owned())]);
+        assert_eq!(
+            out,
+            r#"<svg><image xlink:href="prelo-asset://x"/><path d="M0 0"/></svg>"#
+        );
+        // Folga larga para build de depuração em CI lento; o problema antigo levava minutos.
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
     }
 }
