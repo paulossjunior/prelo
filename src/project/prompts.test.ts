@@ -9,6 +9,7 @@ import {
   mountPackageActions,
   tamperedPackage,
   watchExternalChanges,
+  watchCopyOffers,
   watchPluginApprovals,
 } from "./prompts";
 
@@ -290,5 +291,104 @@ describe("pacote adulterado: Baixar de novo", () => {
     actions.update([]);
     expect(buttons(box)).toHaveLength(0);
     expect(box.hidden).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------- cópia para o projeto (D-13)
+
+describe("watchCopyOffers", () => {
+  const offer = { requested: "../compartilhado/refs.bib" };
+  const copied = { path: "refs.bib", updated: [{ path: "main.typ", version: 3 }] };
+
+  function setup(result: unknown = copied) {
+    const core = fakeCore({ copy_into_project: () => result });
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    const beforeCopy = vi.fn(async () => {});
+    const onCopied = vi.fn();
+    const onError = vi.fn();
+    return { core, parent, beforeCopy, onCopied, onError };
+  }
+
+  it("mostra o caminho pedido e explica que a cópia fica no projeto", async () => {
+    const { core, parent } = setup();
+    await watchCopyOffers({ ipc: core.ipc, parent });
+    core.emit("copy_into_project_offer", offer);
+    await settle();
+    const dialog = parent.querySelector("[role=alertdialog]");
+    expect(dialog?.textContent).toContain("../compartilhado/refs.bib");
+    expect(dialog?.textContent).toMatch(/fora da pasta do projeto/);
+    expect(core.calls("copy_into_project")).toHaveLength(0);
+  });
+
+  it("copiar envia só { requested }, depois de gravar o editor, e avisa o resultado", async () => {
+    const { core, parent, beforeCopy, onCopied } = setup();
+    await watchCopyOffers({ ipc: core.ipc, parent, beforeCopy, onCopied });
+    core.emit("copy_into_project_offer", offer);
+    await settle();
+    byText(parent, /^Escolher arquivo/)!.click();
+    await settle();
+    expect(beforeCopy).toHaveBeenCalled();
+    expect(core.calls("copy_into_project")[0]?.args).toEqual({ requested: "../compartilhado/refs.bib" });
+    expect(onCopied).toHaveBeenCalledWith(copied);
+    expect(parent.querySelector("[role=alertdialog]")).toBeNull();
+  });
+
+  it("'Agora não' não chama o núcleo", async () => {
+    const { core, parent, onCopied } = setup();
+    await watchCopyOffers({ ipc: core.ipc, parent, onCopied });
+    core.emit("copy_into_project_offer", offer);
+    await settle();
+    byText(parent, /Agora não/)!.click();
+    await settle();
+    expect(core.calls("copy_into_project")).toHaveLength(0);
+    expect(onCopied).not.toHaveBeenCalled();
+    expect(parent.querySelector("[role=alertdialog]")).toBeNull();
+  });
+
+  it("diálogo nativo cancelado (null) não avisa cópia", async () => {
+    const { core, parent, onCopied } = setup(null);
+    await watchCopyOffers({ ipc: core.ipc, parent, onCopied });
+    core.emit("copy_into_project_offer", offer);
+    await settle();
+    byText(parent, /^Escolher arquivo/)!.click();
+    await settle();
+    expect(core.calls("copy_into_project")).toHaveLength(1);
+    expect(onCopied).not.toHaveBeenCalled();
+  });
+
+  it("uma pergunta por caminho; evento malformado é ignorado", async () => {
+    const { core, parent } = setup();
+    await watchCopyOffers({ ipc: core.ipc, parent });
+    core.emit("copy_into_project_offer", offer);
+    core.emit("copy_into_project_offer", offer);
+    core.emit("copy_into_project_offer", { requested: 1 });
+    core.emit("copy_into_project_offer", { requested: "" });
+    core.emit("copy_into_project_offer", null);
+    await settle();
+    expect(parent.querySelectorAll("[role=alertdialog]")).toHaveLength(1);
+  });
+
+  it("caminho entra como texto", async () => {
+    const { core, parent } = setup();
+    await watchCopyOffers({ ipc: core.ipc, parent });
+    core.emit("copy_into_project_offer", { requested: "../<img src=x>.png" });
+    await settle();
+    expect(parent.querySelector("img")).toBeNull();
+    expect(parent.textContent).toContain("../<img src=x>.png");
+  });
+
+  it("falha do núcleo (ex.: já existe) vai para onError", async () => {
+    const { core, parent, onError, onCopied } = setup();
+    core.on("copy_into_project", () => {
+      throw "already_exists";
+    });
+    await watchCopyOffers({ ipc: core.ipc, parent, onError, onCopied });
+    core.emit("copy_into_project_offer", offer);
+    await settle();
+    byText(parent, /^Escolher arquivo/)!.click();
+    await settle();
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ code: "already_exists" }));
+    expect(onCopied).not.toHaveBeenCalled();
   });
 });

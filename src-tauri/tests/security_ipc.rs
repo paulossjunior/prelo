@@ -677,3 +677,39 @@ fn plugins_e_pacotes_nao_aceitam_caminho_nem_hash_inventado() {
     );
     h.still_alive();
 }
+
+/// `copy_into_project` (D-13, FR-023) recebe só `{ requested }`: o arquivo de origem é escolhido
+/// no diálogo nativo do núcleo, nunca enviado pela webview. `source` (ou qualquer campo a
+/// mais) é recusado, e pedido que o núcleo não ofereceu é recusado antes de qualquer diálogo,
+/// sem gravar nada no projeto.
+#[test]
+fn copy_into_project_nao_aceita_origem_da_webview_nem_pedido_nao_oferecido() {
+    let h = Harness::new();
+    let secret = h.outside.secret().to_string_lossy().into_owned();
+    let before = std::fs::read_dir(h.project.root()).unwrap().count();
+    for args in [
+        json!({ "requested": "../x/refs.bib", "source": secret }),
+        json!({ "source": secret }),
+        json!({ "requested": 1 }),
+        json!({}),
+    ] {
+        assert_eq!(
+            h.call("copy_into_project", args.clone()),
+            Err(json!("invalid_arguments")),
+            "{args}"
+        );
+    }
+    for requested in ["../x/refs.bib", secret.as_str(), "/etc/passwd", "main.typ"] {
+        assert_eq!(
+            h.call("copy_into_project", json!({ "requested": requested })),
+            Err(json!("not_offered")),
+            "{requested:?}"
+        );
+    }
+    assert_eq!(
+        std::fs::read_dir(h.project.root()).unwrap().count(),
+        before,
+        "nada gravado no projeto"
+    );
+    h.still_alive();
+}
