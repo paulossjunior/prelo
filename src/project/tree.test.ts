@@ -224,7 +224,8 @@ describe("criar arquivo e pasta", () => {
   });
 
   it.each([
-    ["already_exists", "Já existe um arquivo ou pasta com esse nome."],
+    ["already_exists", "Já existe um arquivo com esse nome."],
+    ["not_found", "A pasta de destino não existe."],
     ["invalid_name", ERROR_MESSAGES.invalid_name],
     ["path_outside_project", "Acesso recusado: o caminho fica fora da pasta do projeto."],
   ])("recusa %s vira mensagem em português e mantém o campo", async (code, message) => {
@@ -238,6 +239,108 @@ describe("criar arquivo e pasta", () => {
     expect(parent.querySelector(".pt-new [role=alert]")?.textContent).toBe(message);
     expect(nameInput(parent)?.value).toBe("main.typ");
     expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it("already_exists com uma pasta de mesmo nome diz que é pasta", async () => {
+    const { parent } = await setupCreate({
+      create_file: () => {
+        throw "already_exists";
+      },
+    });
+    action(parent, "new-file")!.click();
+    await type(parent, "capitulos");
+    expect(parent.querySelector(".pt-new [role=alert]")?.textContent).toBe("Já existe uma pasta com esse nome.");
+  });
+
+  // Pasta de destino (bug do dono, 2026-11-23: "Novo arquivo em plugin/" num projeto chamado
+  // `plugin` sem subpasta `plugin` → `not_found`). O caminho é sempre relativo à raiz.
+  it("sem nada escolhido, o destino é a raiz", async () => {
+    const { parent, core } = await setupCreate();
+    action(parent, "new-file")!.click();
+    expect(parent.querySelector(".pt-new-label")?.textContent).toBe("Novo arquivo na raiz do projeto");
+    await type(parent, "main2.typ");
+    expect(core.calls("create_file").map((c) => c.args)).toEqual([{ path: "main2.typ" }]);
+  });
+
+  it("pasta aninhada escolhida é o destino", async () => {
+    const { parent, core } = await setupCreate();
+    core.on("list_tree", () => [
+      { name: "a", path: "a", kind: "dir", children: [{ name: "b", path: "a/b", kind: "dir", children: [] }] },
+    ]);
+    await handle!.refresh();
+    item(parent, "a/b")!.click();
+    action(parent, "new-file")!.click();
+    expect(parent.querySelector(".pt-new-label")?.textContent).toBe("Novo arquivo em a/b/");
+    await type(parent, "x.typ");
+    expect(core.calls("create_file").map((c) => c.args)).toEqual([{ path: "a/b/x.typ" }]);
+  });
+
+  it("arquivo escolhido: o destino é a pasta dele; da raiz, a raiz", async () => {
+    const { parent, core } = await setupCreate();
+    item(parent, "capitulos")!.click();
+    item(parent, "capitulos/intro.typ")!.click();
+    action(parent, "new-file")!.click();
+    await type(parent, "b.typ");
+    item(parent, "capitulos")!.click();
+    item(parent, "main.typ")!.click();
+    action(parent, "new-file")!.click();
+    expect(parent.querySelector(".pt-new-label")?.textContent).toBe("Novo arquivo na raiz do projeto");
+    await type(parent, "c.typ");
+    expect(core.calls("create_file").map((c) => c.args)).toEqual([{ path: "capitulos/b.typ" }, { path: "c.typ" }]);
+  });
+
+  it("pasta escolhida que deixou de existir não vira destino", async () => {
+    const { parent, core } = await setupCreate();
+    item(parent, "capitulos")!.click();
+    core.on("list_tree", () => [{ name: "main.typ", path: "main.typ", kind: "file" }]);
+    await handle!.refresh();
+    action(parent, "new-file")!.click();
+    await type(parent, "x.typ");
+    expect(core.calls("create_file").map((c) => c.args)).toEqual([{ path: "x.typ" }]);
+  });
+
+  it("outro projeto começa limpo: sem campo, sem erro, destino na raiz, pastas do projeto novo", async () => {
+    // Projeto A tem a pasta `plugin`; o B se chama `plugin` e não tem essa subpasta.
+    const storage = {
+      data: new Map<string, string>([["prelo.tree:plugin", JSON.stringify(["docs"])]]),
+      getItem(k: string) {
+        return this.data.get(k) ?? null;
+      },
+      setItem(k: string, v: string) {
+        this.data.set(k, v);
+      },
+    };
+    const core = fakeCore({
+      list_tree: () => [{ name: "plugin", path: "plugin", kind: "dir", children: [{ name: "p.typ", path: "plugin/p.typ", kind: "file" }] }],
+      create_file: () => {
+        throw "not_found";
+      },
+    });
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    handle = mountTree(parent, { ipc: core.ipc, onOpen: vi.fn(), storage, key: "artigo", current: "plugin/p.typ" });
+    await handle.refresh();
+    item(parent, "plugin")!.click();
+    action(parent, "new-file")!.click();
+    await type(parent, "main.typ");
+    expect(parent.querySelector(".pt-new [role=alert]")?.hidden).toBe(false);
+
+    core.on("list_tree", () => [
+      { name: "docs", path: "docs", kind: "dir", children: [{ name: "d.typ", path: "docs/d.typ", kind: "file" }] },
+      { name: "main.typ", path: "main.typ", kind: "file" },
+    ]);
+    core.on("create_file", (a) => ({ path: a.path }));
+    handle.resetForProject("plugin");
+    await handle.refresh();
+    expect(parent.querySelector(".pt-new")).toBeNull();
+    expect(parent.querySelector("[role=alert]")).toBeNull();
+    expect(parent.querySelector("[aria-current]")).toBeNull();
+    expect(item(parent, "docs")?.getAttribute("aria-expanded")).toBe("false");
+    action(parent, "new-file")!.click();
+    expect(parent.querySelector(".pt-new-label")?.textContent).toBe("Novo arquivo na raiz do projeto");
+    expect(nameInput(parent)?.value).toBe("");
+    await type(parent, "main2.typ");
+    expect(core.calls("create_file").at(-1)?.args).toEqual({ path: "main2.typ" });
   });
 
   it("nome digitado é texto, nunca marcação", async () => {
@@ -491,7 +594,7 @@ describe("pastas recolhíveis", () => {
     expect(item(b.parent, "figuras")?.getAttribute("aria-expanded")).toBe("false");
     expect(item(b.parent, "capitulos/partes")?.getAttribute("aria-expanded")).toBe("false");
     expect(item(b.parent, "capitulos")?.getAttribute("aria-expanded")).toBe("true");
-    b.tree.setKey("outro");
+    b.tree.resetForProject("outro");
     await b.tree.refresh();
     expect(item(b.parent, "figuras")?.getAttribute("aria-expanded")).toBe("true");
   });
