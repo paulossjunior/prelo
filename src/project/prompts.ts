@@ -7,7 +7,19 @@
 // Também os pedidos de plugin e de pacote (T049; FR-018, FR-019): `plugin_approval_needed`
 // abre a confirmação com caminho, origem e tamanho, e a decisão vai em `decide_plugin`; o
 // diagnóstico de pacote adulterado ganha a ação "Baixar de novo" (`redownload_package`).
-import { toIpcError, type Diagnostic, type Ipc, type IpcError, type PluginApprovalNeeded } from "../ipc";
+//
+// E a oferta de cópia para o projeto (T059; D-13, FR-023): `copy_into_project_offer` traz só o
+// caminho pedido no `.typ`; a pessoa decide, e "Escolher arquivo…" chama `copy_into_project`
+// com `{ requested }`. O arquivo de origem é escolhido no diálogo nativo do núcleo: a webview
+// nunca manda caminho de fora do projeto.
+import {
+  toIpcError,
+  type CopiedIntoProject,
+  type Diagnostic,
+  type Ipc,
+  type IpcError,
+  type PluginApprovalNeeded,
+} from "../ipc";
 
 export type Keep = "mine" | "disk";
 
@@ -274,4 +286,95 @@ export function mountPackageActions(box: HTMLElement, opts: PackageActionsOption
       box.hidden = rows.length === 0;
     },
   };
+}
+
+// ---------------------------------------------------------------- cópia para o projeto (D-13)
+
+/** Pergunta se a pessoa quer trazer o arquivo para o projeto; `true` = escolher o arquivo. */
+export function askCopyIntoProject(parent: HTMLElement, requested: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "ws-backdrop";
+    const dialog = document.createElement("div");
+    dialog.className = "ws-modal";
+    dialog.setAttribute("role", "alertdialog");
+    dialog.setAttribute("aria-modal", "true");
+    const title = document.createElement("h2");
+    title.id = `ws-copy-${Math.random().toString(36).slice(2)}`;
+    title.textContent = "Trazer o arquivo para o projeto?";
+    dialog.setAttribute("aria-labelledby", title.id);
+
+    const body = document.createElement("p");
+    const code = document.createElement("code");
+    code.textContent = requested;
+    body.append(
+      "O documento pede ",
+      code,
+      ", que fica fora da pasta do projeto. O Prelo só lê arquivos de dentro do projeto, para que ele compile igual no computador de todos os coautores.",
+    );
+    const note = document.createElement("p");
+    note.textContent =
+      "Você pode escolher esse arquivo para o Prelo copiar para dentro do projeto, ao lado do .typ que o pede; o caminho no .typ passa a apontar para a cópia. Nada é sobrescrito.";
+
+    const actions = document.createElement("div");
+    actions.className = "ws-modal-actions";
+    const choice = (label: string, copy: boolean, cls: string) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = cls;
+      b.textContent = label;
+      b.addEventListener("click", () => {
+        backdrop.remove();
+        resolve(copy);
+      });
+      return b;
+    };
+    const copy = choice("Escolher arquivo para copiar…", true, "btn primary");
+    actions.append(copy, choice("Agora não", false, "btn"));
+    dialog.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") e.preventDefault();
+    });
+    dialog.append(title, body, note, actions);
+    backdrop.append(dialog);
+    parent.append(backdrop);
+    copy.focus();
+  });
+}
+
+function isCopyOffer(e: unknown): e is { requested: string } {
+  if (typeof e !== "object" || e === null) return false;
+  const requested = (e as Record<string, unknown>).requested;
+  return typeof requested === "string" && requested.length > 0;
+}
+
+export interface CopyOfferOptions {
+  ipc: Ipc;
+  parent: HTMLElement;
+  /** Antes de copiar: o texto digitado chega ao núcleo (ele pode trocar o caminho no `.typ`). */
+  beforeCopy?: () => Promise<void>;
+  /** A cópia foi feita; `updated` lista os arquivos cujo texto o núcleo mudou. */
+  onCopied?: (result: CopiedIntoProject) => void;
+  onError?: (err: IpcError) => void;
+}
+
+/** Escuta `copy_into_project_offer`: uma pergunta por caminho de cada vez; devolve quem para. */
+export function watchCopyOffers(opts: CopyOfferOptions): Promise<() => void> {
+  const pending = new Set<string>();
+  return opts.ipc.onCopyIntoProjectOffer((e: unknown) => {
+    if (!isCopyOffer(e) || pending.has(e.requested)) return;
+    const { requested } = e;
+    pending.add(requested);
+    void (async () => {
+      try {
+        if (!(await askCopyIntoProject(opts.parent, requested))) return;
+        await opts.beforeCopy?.();
+        const result = await opts.ipc.copyIntoProject(requested);
+        if (result) opts.onCopied?.(result);
+      } catch (err) {
+        opts.onError?.(toIpcError(err));
+      } finally {
+        pending.delete(requested);
+      }
+    })();
+  });
 }

@@ -32,9 +32,9 @@ pub fn configure_with_state<R: Runtime>(
 ) -> Builder<R> {
     builder
         // Diálogos nativos chamados só pelo núcleo (`open_project_dialog`,
-        // `create_project_dialog`, `export_pdf_dialog`). Os comandos `plugin:dialog|*` ficam
-        // fora do alcance da webview: nenhuma capability concede `dialog:`
-        // (tests/security_config.rs, tests/security_ipc.rs).
+        // `create_project_dialog`, `export_pdf_dialog`, `copy_into_project`). Os comandos
+        // `plugin:dialog|*` ficam fora do alcance da webview: nenhuma capability concede
+        // `dialog:` (tests/security_config.rs, tests/security_ipc.rs).
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .register_uri_scheme_protocol(compile::preview::ASSET_SCHEME, asset_protocol)
@@ -62,6 +62,7 @@ pub fn configure_with_state<R: Runtime>(
             commands::preview_asset,
             commands::decide_plugin,
             commands::redownload_package,
+            commands::copy_into_project,
             compile::export::export_pdf_dialog
         ])
 }
@@ -105,6 +106,7 @@ pub fn configure_with_state<R: Runtime>(
             commands::preview_asset,
             commands::decide_plugin,
             commands::redownload_package,
+            commands::copy_into_project,
             compile::export::export_pdf_dialog,
             self_test::self_test_report,
             self_test::self_test_open_project,
@@ -199,6 +201,13 @@ fn connect_trust<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
                 eprintln!("prelo: pedido de confirmação de plugin não entregue: {e}");
             }
         }));
+    // Ofertas de cópia para o projeto (D-13): `copy_into_project_offer { requested }`.
+    let handle = app.clone();
+    state.set_copy_offer_listener(std::sync::Arc::new(move |offer| {
+        if let Err(e) = handle.emit(fs::copy_into::COPY_OFFER, offer) {
+            eprintln!("prelo: oferta de cópia para o projeto não entregue: {e}");
+        }
+    }));
     Ok(())
 }
 
