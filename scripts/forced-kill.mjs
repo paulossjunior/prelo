@@ -48,7 +48,10 @@ export function checkReopened({ marks, killedAt, original, reopened, maxLossMs =
   const failures = [];
   if (marks.length === 0) return ["nenhuma marca foi digitada antes da morte do processo"];
   if (typeof reopened !== "string") return ["o app reaberto não mostrou o arquivo principal"];
-  if (!reopened.startsWith(original.trimEnd())) {
+  // O editor mostra o texto com `\n` (CodeMirror e o núcleo normalizam `\r\n` e `\r`); o
+  // arquivo original vem do disco, com `\r\n` num checkout do Windows (core.autocrlf).
+  const lf = original.replace(/\r\n?/g, "\n");
+  if (!reopened.startsWith(lf.trimEnd())) {
     failures.push("o texto reaberto não começa com o conteúdo original do arquivo");
   }
   // Cada marca numa linha própria (`marca-1` não pode casar com `marca-10`).

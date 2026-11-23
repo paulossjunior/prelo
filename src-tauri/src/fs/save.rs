@@ -10,6 +10,7 @@
 //! os últimos [`MAX_UNSAVED`] de digitação (SC-009, T077), e não tudo o que foi digitado desde a
 //! última pausa.
 
+use std::borrow::Cow;
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -81,6 +82,33 @@ pub fn apply_changes(text: &str, changes: &[Change]) -> Result<String, &'static 
     Ok(out)
 }
 
+/// Fim de linha do arquivo no disco.
+///
+/// O CodeMirror lê `\r\n` e `\r` como uma quebra de linha só e conta posições sobre o texto
+/// com `\n`. O núcleo guarda o texto do mesmo jeito ([`decode`]), senão as posições de
+/// `edit_file` e dos diagnósticos caem no lugar errado em arquivos `\r\n` (o padrão no
+/// Windows); ao gravar, as quebras voltam a ser `\r\n` ([`OpenFile::disk_bytes`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum LineEnding {
+    Lf,
+    Crlf,
+}
+
+/// Bytes do disco → texto com `\n` e o fim de linha a restaurar na gravação (`\r\n` se o
+/// arquivo tinha algum). Bytes que não são UTF-8 → `not_utf8`.
+pub(super) fn decode(bytes: Vec<u8>) -> Result<(String, LineEnding), &'static str> {
+    let text = String::from_utf8(bytes).map_err(|_| NOT_UTF8)?;
+    if !text.contains('\r') {
+        return Ok((text, LineEnding::Lf));
+    }
+    let ending = if text.contains("\r\n") {
+        LineEnding::Crlf
+    } else {
+        LineEnding::Lf
+    };
+    Ok((text.replace("\r\n", "\n").replace('\r', "\n"), ending))
+}
+
 /// Arquivo aberto no editor: overlay em memória do que está no disco.
 ///
 /// Estados (data-model.md): `Limpo → (edição) → Sujo → (1,5 s desde a primeira edição não
@@ -98,13 +126,15 @@ pub struct OpenFile {
     /// Mudança externa à espera da escolha da pessoa ([`super::watch`]): enquanto `true`, nada
     /// é gravado por cima do disco.
     pub(super) conflict: bool,
+    /// Fim de linha do disco; `text` tem sempre `\n`.
+    pub(super) line_ending: LineEnding,
 }
 
 impl OpenFile {
     /// Arquivo lido do disco, limpo e na versão 0. Bytes que não são UTF-8 → `not_utf8`.
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, &'static str> {
         let last_saved_hash = sha256(&bytes);
-        let text = String::from_utf8(bytes).map_err(|_| NOT_UTF8)?;
+        let (text, line_ending) = decode(bytes)?;
         Ok(Self {
             text: text.into(),
             version: 0,
@@ -112,7 +142,16 @@ impl OpenFile {
             last_saved_hash,
             unsaved_since: Instant::now(),
             conflict: false,
+            line_ending,
         })
+    }
+
+    /// O texto como vai para o disco: com o fim de linha original do arquivo.
+    pub(super) fn disk_bytes(&self) -> Cow<'_, [u8]> {
+        match self.line_ending {
+            LineEnding::Lf => Cow::Borrowed(self.text.as_bytes()),
+            LineEnding::Crlf => Cow::Owned(self.text.replace('\n', "\r\n").into_bytes()),
+        }
     }
 
     pub fn text(&self) -> &str {
@@ -186,10 +225,10 @@ impl OpenFile {
         if self.conflict {
             return Err(super::watch::CONFLICT);
         }
-        let bytes = self.text.as_bytes();
-        match write_atomic_with(path, |file| fill(file, bytes)) {
+        let bytes = self.disk_bytes().into_owned();
+        match write_atomic_with(path, |file| fill(file, &bytes)) {
             Ok(()) => {
-                self.last_saved_hash = sha256(bytes);
+                self.last_saved_hash = sha256(&bytes);
                 self.dirty = false;
                 Ok(())
             }
@@ -311,6 +350,37 @@ mod tests {
         assert!(!file.is_dirty());
         assert_eq!(file.last_saved_hash(), sha("= Título\n".as_bytes()));
         assert!(!file.autosave_due(Instant::now() + AUTOSAVE_DELAY * 10));
+    }
+
+    /// Arquivo `\r\n` (padrão no Windows): o editor conta posições sobre o texto com `\n`;
+    /// a edição no fim cai no fim e a gravação devolve `\r\n`.
+    #[test]
+    fn arquivo_crlf_edita_nas_posicoes_do_editor_e_grava_crlf() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("main.typ");
+        let disk = "= Título\r\n\r\nVer @fim.\r\n";
+        std::fs::write(&path, disk).unwrap();
+        let mut file = OpenFile::from_bytes(std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(file.text(), "= Título\n\nVer @fim.\n");
+        assert_eq!(file.last_saved_hash(), sha(disk.as_bytes()));
+        // Fim do documento no CodeMirror: comprimento em UTF-16 do texto com `\n`.
+        let end = file.text().encode_utf16().count();
+        file.edit(0, &[change(end, end, "\nNovo.\n")]).unwrap();
+        assert_eq!(file.text(), "= Título\n\nVer @fim.\n\nNovo.\n");
+        file.save(&path).unwrap();
+        let written = "= Título\r\n\r\nVer @fim.\r\n\r\nNovo.\r\n";
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), written);
+        assert_eq!(file.last_saved_hash(), sha(written.as_bytes()));
+    }
+
+    #[test]
+    fn quebras_soltas_viram_lf_como_no_editor() {
+        let file = OpenFile::from_bytes(b"a\rb\nc".to_vec()).unwrap();
+        assert_eq!(file.text(), "a\nb\nc");
+        assert_eq!(&*file.disk_bytes(), b"a\nb\nc");
+        let mixed = OpenFile::from_bytes(b"a\r\nb\nc".to_vec()).unwrap();
+        assert_eq!(mixed.text(), "a\nb\nc");
+        assert_eq!(&*mixed.disk_bytes(), b"a\r\nb\r\nc");
     }
 
     #[test]

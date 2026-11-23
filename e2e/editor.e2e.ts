@@ -3,6 +3,10 @@
 // como diagnóstico no editor. Linux e Windows; no macOS o autoteste cobre o mesmo roteiro.
 import { $, $$, browser, expect } from "@wdio/globals";
 
+// A prévia tem um `.pv-page` por página e carrega a imagem só das visíveis e vizinhas; a
+// fixture tem várias páginas, então o seletor aponta a primeira pelo índice.
+const FIRST_PAGE_IMG = ".pv-page[data-page-index='0'] img";
+
 async function pageSources(): Promise<string> {
   const srcs: string[] = [];
   for (const img of await $$(".pv-page img")) srcs.push(String(await img.getAttribute("src")));
@@ -15,7 +19,8 @@ describe("editor com prévia ao vivo (US1)", () => {
       wait: 10_000,
     });
     await expect($(".cm-content")).toHaveText(expect.stringContaining("Artigo básico"), { wait: 10_000 });
-    await $(".pv-page img").waitForExist({ timeout: 20_000 });
+    await $(FIRST_PAGE_IMG).waitForExist({ timeout: 20_000 });
+    await expect($(FIRST_PAGE_IMG)).toHaveAttribute("alt", "Página 1");
     await expect($(".ws-compiler")).toHaveText(expect.stringContaining("Typst 0.15.1"));
   });
 
@@ -36,6 +41,8 @@ describe("editor com prévia ao vivo (US1)", () => {
     await browser.keys("#funcao-inexistente-do-e2e()\n");
     await $(".cm-lintRange-error").waitForExist({ timeout: 20_000 });
     await expect($(".pv-error")).toBeDisplayed();
-    await expect($(".ws-compile")).toHaveText(expect.stringMatching(/erro/));
+    // Barra de status: "<n> erro(s) no documento", e o botão marcado como erro.
+    await expect($(".ws-compile")).toHaveText(expect.stringMatching(/\d+ erros? no documento/));
+    await expect($(".ws-compile")).toHaveElementClass("is-err");
   });
 });

@@ -8,7 +8,8 @@ import { describe, expect, it } from "vitest";
 import { parse } from "yaml";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
-const read = (...p: string[]) => readFileSync(join(root, ...p), "utf8");
+// Com `core.autocrlf` (padrão no Windows) o checkout tem `\r\n`; o conteúdo é o mesmo.
+const read = (...p: string[]) => readFileSync(join(root, ...p), "utf8").replace(/\r\n/g, "\n");
 const ci = () => parse(read(".github", "workflows", "ci.yml"));
 
 interface Step {
