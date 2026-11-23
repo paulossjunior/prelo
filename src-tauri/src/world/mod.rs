@@ -388,10 +388,10 @@ const EVICT_AFTER: usize = 30;
 /// Mensagem do Typst para arquivo que não é UTF-8 (`FileError::InvalidUtf8`).
 const INVALID_UTF8: &str = "file is not valid UTF-8";
 
-/// Biblioteca padrão do Typst com os padrões de fonte do Prelo.
+/// Biblioteca padrão do Typst, sem estilos a mais: com as fontes do `typst` CLI embutidas,
+/// matemática e `raw` usam os padrões do próprio Typst (D-15, emenda de 2026-11-23).
 fn library() -> Arc<LazyHash<Library>> {
-    let mut library = Library::builder().with_inputs(Dict::new()).build();
-    library.styles.apply(fonts::default_styles());
+    let library = Library::builder().with_inputs(Dict::new()).build();
     Arc::new(LazyHash::new(library))
 }
 

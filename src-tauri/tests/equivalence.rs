@@ -6,11 +6,13 @@
 //! ```text
 //! typst compile --ignore-system-fonts --ignore-embedded-fonts \
 //!   --font-path src-tauri/fonts --font-path <projeto>/fonts --root <projeto> \
-//!   .prelo-equivalence.typ out.pdf
+//!   main.typ out.pdf
 //! ```
 //!
-//! (`.prelo-equivalence.typ` só põe os padrões de fonte de matemática e `raw` do Prelo antes de
-//! incluir o `main.typ`; ver [`cli_entry`]) são abertos pelo mesmo leitor (o PDF entra como imagem num documento Typst, `support/pdf.rs`),
+//! `src-tauri/fonts/` contém as fontes que o CLI embute (mesmos bytes do `typst-assets` 0.15.1)
+//! mais as Libertinus Sans/Math/Mono, e o Prelo usa os padrões de fonte do próprio Typst; o
+//! `main.typ` vai direto ao CLI, sem arquivo de entrada extra (D-15, emenda de 2026-11-23).
+//! Os dois PDFs são abertos pelo mesmo leitor (o PDF entra como imagem num documento Typst, `support/pdf.rs`),
 //! renderizados com `typst-render` e comparados página a página: mesmo número de páginas, mesmo
 //! tamanho e os mesmos pixels.
 //!
@@ -61,25 +63,9 @@ fn prelo_pdf(root: &Path) -> Vec<u8> {
     prelo_lib::compile::export::pdf(&document).expect("PDF do Prelo")
 }
 
-/// Ponto de entrada do CLI: os padrões de fonte do Prelo para matemática e `raw`
-/// (`world::fonts::default_styles`, research R6) e o `main.typ` do projeto. O Prelo aplica essas
-/// regras como estilos da biblioteca, por fora do documento; o CLI não tem opção para isso, então
-/// elas vêm de um arquivo de entrada que inclui o principal sem alterá-lo. Qualquer regra do
-/// próprio documento continua vencendo, nos dois lados.
-fn cli_entry() -> String {
-    format!(
-        "#show math.equation: set text(font: \"{}\")\n\
-         #show raw: set text(font: \"{}\")\n\
-         #include \"main.typ\"\n",
-        prelo_lib::world::fonts::MATH_FAMILY,
-        prelo_lib::world::fonts::RAW_FAMILY
-    )
-}
-
-/// PDF do `typst` CLI com o mesmo conjunto de fontes e os mesmos padrões de fonte.
+/// PDF do `typst` CLI com o mesmo conjunto de fontes.
 fn cli_pdf(cli: &Path, root: &Path) -> Vec<u8> {
-    let entry = root.join(".prelo-equivalence.typ");
-    std::fs::write(&entry, cli_entry()).expect("gravar entrada do CLI");
+    let entry = root.join("main.typ");
     let out = root.join("cli.pdf");
     let output = Command::new(cli)
         .arg("compile")

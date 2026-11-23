@@ -27,10 +27,10 @@ O Prelo abre uma pasta de projeto e compila com o Typst **0.15.1** embutido no a
 
 O Prelo só usa duas fontes de fontes (decisão [D-15](docs/adrs/D-15-fontes-embutidas-e-do-projeto.md)). Nenhuma fonte instalada no sistema é lida.
 
-1. **Fontes embutidas:** a família [Libertinus](https://github.com/alerque/libertinus) 7.051 (Serif, Sans, Math e Mono), sob a licença SIL Open Font License 1.1. Os arquivos, o [`OFL.txt`](src-tauri/fonts/OFL.txt) e o aviso de copyright de cada um ([`licenses.toml`](src-tauri/fonts/licenses.toml)) ficam em [`src-tauri/fonts/`](src-tauri/fonts/). A tela **Sobre** lista essas fontes com a licença. A auditoria (`npm run audit`) falha se houver arquivo de fonte sem entrada no `licenses.toml` ou com licença fora da lista permitida.
+1. **Fontes embutidas:** a família [Libertinus](https://github.com/alerque/libertinus) 7.051 (Serif, Sans, Math e Mono), sob a licença SIL Open Font License 1.1, e as mesmas fontes que o `typst` 0.15.1 de linha de comando embute: New Computer Modern 10 e New Computer Modern Math (GUST Font License; o NewCM10-Regular sob GPL-3.0+ com Font Exception e Distribution Exception) e DejaVu Sans Mono (licença Bitstream Vera). Os arquivos, o texto de cada licença ([`OFL.txt`](src-tauri/fonts/OFL.txt), [`GUST-FONT-LICENSE.txt`](src-tauri/fonts/GUST-FONT-LICENSE.txt), [`LICENSE-NewCM10-Regular.txt`](src-tauri/fonts/LICENSE-NewCM10-Regular.txt), [`LICENSE-DejaVu.txt`](src-tauri/fonts/LICENSE-DejaVu.txt)) e o aviso de copyright de cada arquivo ([`licenses.toml`](src-tauri/fonts/licenses.toml)) ficam em [`src-tauri/fonts/`](src-tauri/fonts/). A tela **Sobre** lista essas fontes com a licença. A auditoria (`npm run audit`) falha se houver arquivo de fonte sem entrada no `licenses.toml` ou com licença fora da lista permitida.
 2. **Fontes do projeto:** todo `.ttf`, `.otf`, `.ttc` e `.otc` dentro de `fonts/` na raiz do projeto, inclusive em subpastas (até 16 níveis e 2 000 arquivos). Fonte malformada vira diagnóstico e não derruba a compilação.
 
-Quando o `.typ` não pede fonte, matemática usa Libertinus Math e blocos de código usam Libertinus Mono. O Prelo define esse padrão sem escrever nada no `.typ`.
+Quando o `.typ` não pede fonte, valem os padrões do Typst, iguais aos do `typst` de linha de comando: Libertinus Serif no texto, New Computer Modern Math na matemática e DejaVu Sans Mono no código.
 
 ### Compilar fora do Prelo
 

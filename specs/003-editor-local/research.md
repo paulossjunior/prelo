@@ -105,6 +105,18 @@ levantar licenças antes do plano; o resultado está em R12.
 
 ## R6. Fontes (D-15)
 
+> **Emenda proposta em 2026-11-23** (aguarda aprovação; ver D-15, "Emenda de 2026-11-23"): o
+> app passa a embutir também as fontes do `typst` CLI 0.15.1, com os mesmos bytes do
+> `typst-assets` 0.15.1 — New Computer Modern 10 (Regular, Bold, Italic, BoldItalic; GUST, e
+> GPL-3.0+ com Font Exception e Distribution Exception no Regular), New Computer Modern Math
+> (Regular, Book, Bold; GUST) e DejaVu Sans Mono (Regular, Bold, Oblique, BoldOblique;
+> Bitstream Vera). O World deixa de trocar a fonte de matemática e de `raw`, e valem os padrões
+> do Typst; o teste de equivalência compila o `main.typ` direto, ainda com
+> `--ignore-system-fonts --ignore-embedded-fonts --font-path <fontes do Prelo>`. Motivo:
+> paridade com o CLI para templates acadêmicos (ex.: `@preview/stellar-springer-nature` pede
+> New Computer Modern e recebia `unknown font family`). Custo: +7,8 MB no binário. A decisão
+> abaixo é o texto original de 2026-11-19.
+
 - **Decision**: o app embute a família **Libertinus** 7.051 (Serif, Sans, Math, Mono; SIL
   OFL-1.1), com os arquivos em `src-tauri/fonts/` junto do `OFL.txt` e do aviso de copyright.
   `typst-assets` entra **sem** a feature `fonts`. O resolvedor de fontes carrega (a) as fontes
@@ -400,4 +412,5 @@ um limite por sistema.
   presa terminar. Um plugin que nunca retorna ainda prende até 3 núcleos até o app fechar;
   compilar em processo filho continua sendo a alternativa se isso aparecer no uso real.
 - **Diferenças de fonte** entre Prelo e `typst` CLI padrão (R6) podem surpreender quem compila
-  fora do Prelo; o README e a tela "Sobre" explicam.
+  fora do Prelo; o README e a tela "Sobre" explicam. Com a emenda de 2026-11-23 da D-15, as
+  fontes do CLI ficam embutidas e a diferença some.

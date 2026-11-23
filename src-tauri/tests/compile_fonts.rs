@@ -222,7 +222,11 @@ fn template_academico_com_new_computer_modern_compila_sem_aviso() {
     let (doc, diagnostics) = compile(&project.root());
     assert!(diagnostics.is_empty(), "{diagnostics:?}");
     let used = used_families(&doc);
-    for family in ["New Computer Modern", "New Computer Modern Math", "DejaVu Sans Mono"] {
+    for family in [
+        "New Computer Modern",
+        "New Computer Modern Math",
+        "DejaVu Sans Mono",
+    ] {
         assert!(used.contains(family), "{family} não usada: {used:?}");
     }
     assert!(
@@ -251,7 +255,10 @@ fn compiler_info_lista_cada_fonte_embutida_com_licenca() {
         } else if family == "DejaVu Sans Mono" {
             ("Bitstream-Vera", "Bitstream")
         } else if font["file"] == "NewCM10-Regular.otf" {
-            ("LicenseRef-NewCM-GPL-3.0-or-later-FE-DE", "Antonis Tsolomitis")
+            (
+                "LicenseRef-NewCM-GPL-3.0-or-later-FE-DE",
+                "Antonis Tsolomitis",
+            )
         } else if family.starts_with("New Computer Modern") {
             ("LicenseRef-GUST-Font-License", "Antonis Tsolomitis")
         } else {

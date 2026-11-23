@@ -125,7 +125,10 @@ fn matematica_e_raw_usam_os_padroes_do_typst_cli() {
     let (_project, mut world) = single_file("Texto $x^2 + y$ e `codigo`.");
     let used = families(&mut world);
     assert!(used.contains(&"Libertinus Serif".to_string()), "{used:?}");
-    assert!(used.contains(&"New Computer Modern Math".to_string()), "{used:?}");
+    assert!(
+        used.contains(&"New Computer Modern Math".to_string()),
+        "{used:?}"
+    );
     assert!(used.contains(&"DejaVu Sans Mono".to_string()), "{used:?}");
 }
 

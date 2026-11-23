@@ -71,8 +71,16 @@ export function licenseViolations(packages, allow) {
 
 // Arquivos embutidos (D-15, D-16) ------------------------------------------------------
 
-// OFL-1.1 vale só para arquivos de fonte embutidos (D-15), nunca para dependências.
-const FONT_ONLY_LICENSES = ["OFL-1.1"];
+// Licenças aceitas só para arquivos de fonte embutidos (D-15), nunca para dependências:
+// OFL-1.1 (Libertinus e fontes da interface) e as das fontes que o `typst` CLI 0.15.1 embute
+// (emenda de 2026-11-23): GUST Font License (New Computer Modern), GPL-3.0-or-later com Font
+// Exception e Distribution Exception (só NewCM10-Regular) e Bitstream Vera (DejaVu Sans Mono).
+const FONT_ONLY_LICENSES = [
+  "OFL-1.1",
+  "LicenseRef-GUST-Font-License",
+  "LicenseRef-NewCM-GPL-3.0-or-later-FE-DE",
+  "Bitstream-Vera",
+];
 const FONT_FILE = /\.(ttf|otf|ttc|otc|woff2?)$/i;
 
 /** Pastas com arquivos de fonte do app, cada uma com o seu licenses.toml: as do compilador

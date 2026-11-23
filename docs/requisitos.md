@@ -276,7 +276,7 @@ nas issues do GitHub ([backlog.md](backlog.md)).
 - **RNF-03 Desempenho**: prévia em menos de 100 ms após uma edição; sincronização de um Salvar em cerca de 1 s em rede comum.
 - **RNF-04 Robustez**: fechar o app ou perder a conexão nunca perde trabalho. A fila offline fica no disco.
 - **RNF-05 Interoperabilidade**: o `.typ` no repositório é sempre Typst puro, compilável fora do Prelo.
-- **RNF-06 Licenças**: só dependências com licenças permissivas (Apache-2.0, MIT). Arquivos de fonte embutidos no app também podem usar OFL-1.1 (D-15).
+- **RNF-06 Licenças**: só dependências com licenças permissivas (Apache-2.0, MIT). Arquivos de fonte embutidos no app também podem usar OFL-1.1 (D-15); pela emenda proposta de 2026-11-23, também GUST Font License, GPL-3.0+ com Font Exception e Distribution Exception e Bitstream Vera, só para as fontes que o `typst` CLI embute.
 
 ## 4. Regras de revisão
 
