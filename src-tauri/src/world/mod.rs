@@ -3,7 +3,8 @@
 //! `CompilerUniverse` do `tinymist-world` montado com:
 //! - o [`AccessModel`] do Prelo como único `PathAccessModel` do VFS (RF-08);
 //! - só as fontes embutidas e as de `fonts/` do projeto, lidas pelo mesmo modelo de acesso
-//!   ([`fonts`]), com os padrões de matemática e `raw` do Prelo;
+//!   ([`fonts`]); as embutidas incluem as do `typst` CLI, então valem os padrões de fonte do
+//!   próprio Typst;
 //! - o registro de pacotes `@preview` do Prelo ([`packages`]), com cache e verificação;
 //! - plugins WASM barrados até a pessoa aprovar ([`plugins`], no modelo de acesso).
 //!
@@ -204,8 +205,7 @@ where
         });
     }
 
-    /// Instantâneo do World para compilar ou analisar (`typst-ide`), com a biblioteca e os
-    /// padrões de fonte do Prelo.
+    /// Instantâneo do World para compilar ou analisar (`typst-ide`), com a biblioteca do Prelo.
     pub fn snapshot(&self) -> CompilerWorld<PreloFeat<M>> {
         let mut world = self.universe.snapshot();
         world.library = self.library.clone();
