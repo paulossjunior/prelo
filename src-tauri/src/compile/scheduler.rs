@@ -13,6 +13,9 @@
 //! Atingido o limite, a agenda fica suspensa: cada edição é respondida na hora com um
 //! diagnóstico ([`suspended_diagnostic`]) e a mais nova fica pendente; quando uma thread presa
 //! termina, uma thread nova compila essa edição.
+//!
+//! "Compilar" (FR-014a): [`Scheduler::compile_now`] abandona na hora a compilação em
+//! andamento, dentro do mesmo limite de threads, e recusa com a agenda suspensa.
 
 use std::panic::{self, AssertUnwindSafe};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -234,10 +237,35 @@ impl<C: Compiler> Scheduler<C> {
         id
     }
 
-    /// Compilação forçada ("Compilar", FR-014a): ainda não implementada (T101).
+    /// Compilação forçada ("Compilar", FR-014a): põe `input` na fila, como [`submit`], e, se
+    /// há uma compilação em andamento (talvez presa, ainda abaixo do limite de tempo),
+    /// abandona-a na hora e compila numa thread nova com um World novo, sem esperar o vigia. O
+    /// resultado da abandonada é descartado, sem entrega de `Abandonada`. A thread abandonada
+    /// segue na conta até terminar, e nenhuma thread passa de [`MAX_COMPILE_THREADS`]: no
+    /// limite, a edição só espera na fila. Com a agenda suspensa, recusa com [`Suspended`]
+    /// sem criar thread; a edição fica pendente e compila quando uma presa terminar.
+    ///
+    /// [`submit`]: Scheduler::submit
     pub fn compile_now(&self, input: C::Input) -> Result<u64, Suspended> {
-        let _ = input;
-        Err(Suspended { stuck: 0 })
+        let mut state = self.shared.lock();
+        state.last_id += 1;
+        let id = state.last_id;
+        state.pending = Some((id, input));
+        if state.suspended {
+            return Err(Suspended {
+                stuck: state.threads,
+            });
+        }
+        if state.running.is_some() && state.threads < MAX_COMPILE_THREADS {
+            state.running = None;
+            state.generation += 1;
+            let generation = state.generation;
+            spawn_worker(&self.shared, &mut state, generation);
+        }
+        drop(state);
+        self.shared.work.notify_all();
+        self.shared.watch.notify_all();
+        Ok(id)
     }
 
     /// Threads de compilação vivas: a ativa e as abandonadas que seguem presas. Nunca passa de

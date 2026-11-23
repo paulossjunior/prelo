@@ -158,6 +158,8 @@ export const ERROR_MESSAGES = {
   no_project: "Nenhum projeto aberto. Abra ou crie um projeto.",
   not_implemented: "Recurso ainda não disponível nesta versão do Prelo.",
   invalid_arguments: "Pedido inválido da interface ao núcleo do Prelo.",
+  compile_suspended:
+    "Compilação suspensa: compilações anteriores excederam o limite de tempo e seguem presas; a prévia volta quando uma delas terminar.",
   already_exists: "Já existe um arquivo ou pasta com esse nome.",
   not_offered:
     "Esse arquivo não está mais pedido fora do projeto; nada foi copiado.",
@@ -242,7 +244,11 @@ export interface Ipc {
   jumpFromCursor(path: string, offset: number): Promise<PagePosition[]>;
   outline(): Promise<OutlineItem[]>;
   compilerInfo(): Promise<CompilerInfo>;
-  /** "Compilar" (FR-014a): ainda não implementado (T101). */
+  /**
+   * "Compilar" (FR-014a): relê do disco os arquivos não abertos e compila o principal na hora.
+   * Volta com o `compileId` posto na fila; o resultado chega por `subscribePreview`. Envie antes
+   * as edições pendentes do editor.
+   */
   compileNow(): Promise<{ compileId: number }>;
   exportPdfDialog(): Promise<{ path: string } | null>;
   /**
@@ -297,7 +303,7 @@ export function createIpc(transport: Transport): Ipc {
     jumpFromCursor: (path, offset) => call("jump_from_cursor", { path, offset }),
     outline: () => call("outline"),
     compilerInfo: () => call("compiler_info"),
-    compileNow: () => Promise.reject(new IpcError("not_implemented")),
+    compileNow: () => call("compile_now"),
     exportPdfDialog: () => call("export_pdf_dialog"),
     copyIntoProject: (requested) => call("copy_into_project", { requested }),
     decidePlugin: (sha256, approve) => call("decide_plugin", { sha256, approve }),
