@@ -165,11 +165,11 @@ conferir citações, figuras e fonte na prévia; contar decodificações ao edit
 
 ### Testes para User Story 3
 
-- [ ] T050 [P] [US3] Testes em `src-tauri/tests/compile_bibliography.rs`: `.bib`, `.yml`, vários arquivos, `.csl` do projeto e estilo embutido produzem citações e lista; editar o `.bib` e salvar recompila (FR-025)
+- [X] T050 [P] [US3] Testes em `src-tauri/tests/compile_bibliography.rs`: `.bib`, `.yml`, vários arquivos, `.csl` do projeto e estilo embutido produzem citações e lista; editar o `.bib` e salvar recompila (FR-025)
 - [X] T051 [P] [US3] Testes em `src-tauri/tests/compile_images.rs`: PNG, JPEG, GIF (estática), SVG, PDF e WebP aparecem; contador de decodificações = 1 por imagem ao longo de 20 edições de texto (FR-026, FR-027, FR-032)
 - [X] T052 [P] [US3] Testes em `src-tauri/tests/compile_fonts.rs`: fonte de `fonts/` é usada; fonte só instalada no sistema não é usada (aviso com o nome); `compiler_info.fonts` lista as Libertinus com OFL-1.1 (FR-016)
-- [ ] T053 [P] [US3] Teste em `src-tauri/tests/compile_packages.rs` com *fetcher* local: primeira compilação baixa o pacote; segunda, sem rede, usa o cache e gera a mesma prévia (US3 cenário 9)
-- [ ] T054 [P] [US3] Testes de cópia para o projeto em `src-tauri/tests/compile_copy_into_project.rs` (D-13, FR-023): `.typ` apontando para fora emite `copy_into_project_offer` só com o caminho pedido; `copy_into_project` copia só após escolha e a compilação passa; sem confirmação nada é copiado
+- [X] T053 [P] [US3] Teste em `src-tauri/tests/compile_packages.rs` com *fetcher* local: primeira compilação baixa o pacote; segunda, sem rede, usa o cache e gera a mesma prévia (US3 cenário 9)
+- [X] T054 [P] [US3] Testes de cópia para o projeto em `src-tauri/tests/compile_copy_into_project.rs` (D-13, FR-023): `.typ` apontando para fora emite `copy_into_project_offer` só com o caminho pedido; `copy_into_project` copia só após escolha e a compilação passa; sem confirmação nada é copiado
 - [X] T055 [P] [US3] Teste de protocolo `prelo-asset` em `src-tauri/src/compile/preview.rs` (módulo `tests`): `data:` URLs de imagem trocadas por `prelo-asset://<sha256>`; hash desconhecido → 404; editar texto na página da imagem não reenvia os bytes
 
 ### Implementação para User Story 3
@@ -177,8 +177,8 @@ conferir citações, figuras e fonte na prévia; contar decodificações ao edit
 - [X] T056 [US3] Completar `src-tauri/src/world/fonts.rs` com a leitura de `fonts/**/*.{ttf,otf,ttc,otc}` pelo `PathAccessModel` até T052 passar
 - [X] T057 [US3] Garantir cache de bytes e imagens decodificadas por conteúdo em `src-tauri/src/fs/access_model.rs` até T051 passar
 - [X] T058 [US3] Implementar o protocolo `prelo-asset` em `src-tauri/src/compile/preview.rs` e `src-tauri/src/lib.rs` até T055 passar
-- [ ] T059 [US3] Implementar `copy_into_project` e a oferta em `src-tauri/src/commands.rs` e `src/project/prompts.ts` até T054 passar
-- [ ] T060 [US3] Ligar à compilação os estilos `.csl` do projeto, a recompilação ao salvar `.bib`/`.yml` (`src-tauri/src/fs/save.rs`) e a resolução offline pelo cache (`src-tauri/src/world/packages.rs`) até T050 e T053 passarem
+- [X] T059 [US3] Implementar `copy_into_project` e a oferta em `src-tauri/src/commands.rs` e `src/project/prompts.ts` até T054 passar
+- [X] T060 [US3] Ligar à compilação os estilos `.csl` do projeto, a recompilação ao salvar `.bib`/`.yml` (`src-tauri/src/fs/save.rs`) e a resolução offline pelo cache (`src-tauri/src/world/packages.rs`) até T050 e T053 passarem
 
 **Checkpoint**: US3 funciona com US1; QA valida.
 

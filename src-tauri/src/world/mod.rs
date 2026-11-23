@@ -170,6 +170,17 @@ where
         }
     }
 
+    /// O arquivo `requested` (relativo à raiz, não aberto no editor) mudou no disco: a próxima
+    /// compilação o relê pela regra de escopo. Caminho recusado é ignorado.
+    pub fn reload_from_disk(&mut self, requested: &str) {
+        if self.access.is_open(requested) {
+            return;
+        }
+        if let Ok(path) = self.access.lexical_path(requested) {
+            self.invalidate(path.as_path());
+        }
+    }
+
     fn invalidate(&mut self, path: &Path) {
         let path: ImmutPath = path.into();
         self.universe.increment_revision(|universe| {
