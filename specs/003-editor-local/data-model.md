@@ -72,7 +72,7 @@ os que não vêm de arquivo do projeto (pacote) ficam de fora.
 
 ## Fontes
 
-`FontLicense` = `{ family, file, license, copyright }` (`license`: "OFL-1.1" ou, pela emenda proposta de 2026-11-23 da D-15, uma das licenças das fontes do `typst` CLI), de
+`FontLicense` = `{ family, file, license, copyright }` (`license`: "OFL-1.1" ou, pela emenda aceita de 2026-11-23 da D-15, uma das licenças das fontes do `typst` CLI), de
 `src-tauri/fonts/licenses.toml`. Fontes do projeto: lidas de `fonts/`; não auditadas (D-15).
 
 ## PackageCacheEntry — cache de pacotes (dados locais do app)

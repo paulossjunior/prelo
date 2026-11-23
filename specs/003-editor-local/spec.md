@@ -541,7 +541,7 @@ comando.
   MUST NOT ser usadas, para que todos os coautores compilem igual (D-10, D-15). Arquivos da
   pasta de fontes MUST seguir FR-021, e arquivo de fonte malformado MUST gerar diagnóstico.
   As fontes embutidas MUST ter licença permitida por RNF-06 ou OFL-1.1 (D-15), e o app MUST
-  exibir as licenças das fontes embutidas. (Emenda proposta de 2026-11-23 da D-15: as fontes
+  exibir as licenças das fontes embutidas. (Emenda aceita de 2026-11-23 da D-15: as fontes
   embutidas MUST incluir as do `typst` CLI na versão embutida, e para elas valem também GUST
   Font License, GPL-3.0+ com Font Exception e Distribution Exception e Bitstream Vera.)
 - **FR-017**: Pacotes `@preview` importados pelo `.typ` MUST ser baixados sob demanda do

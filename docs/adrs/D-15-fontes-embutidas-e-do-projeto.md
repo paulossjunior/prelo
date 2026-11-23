@@ -1,6 +1,6 @@
 # D-15 — Fontes: embutidas + pasta do projeto; licença OFL-1.1 aceita só para arquivos de fonte
 
-- **Status:** aceita · 2026-11-19 · decisor: dono do projeto (clarificação Q1 da feature 003) · **emenda proposta · 2026-11-23** (embutir as fontes do `typst` CLI; aguarda aprovação do dono, ver [Emenda de 2026-11-23](#emenda-de-2026-11-23-proposta-paridade-de-fontes-com-o-typst-cli))
+- **Status:** aceita · 2026-11-19 · decisor: dono do projeto (clarificação Q1 da feature 003) · **emenda aceita · 2026-11-23** (embutir as fontes do `typst` CLI; aprovada pelo dono do projeto, ver [Emenda de 2026-11-23](#emenda-de-2026-11-23-aceita-paridade-de-fontes-com-o-typst-cli))
 - **Contexto:** o `.typ` pede fontes pelo nome; quem decide quais existem é o World do núcleo ([arquitetura.md §6.5](../arquitetura.md#65-fontes-e-pacotes)). D-10 quer que todos os coautores compilem igual, o que fontes do sistema impedem. Quase todas as fontes livres têm licença própria, em geral SIL OFL-1.1, que RNF-06 não cita. As fontes que o Typst traz embutidas (crate `typst-assets` 0.15.1) têm licenças variadas: Libertinus Serif sob OFL-1.1; New Computer Modern sob GUST Font License (LPPL) e, no caso de NewCM10-Regular, GPL-3.0 com Font Exception; DejaVu Sans Mono sob a licença Bitstream Vera.
 - **Decisão:**
   - O World entrega só (a) as fontes embutidas no app e (b) os arquivos de fonte da pasta `fonts/` do projeto, que segue RF-08. Fontes instaladas no sistema nunca são lidas.
@@ -18,9 +18,9 @@
   - (−) A OFL-1.1 exige distribuir o aviso de copyright e o texto da licença junto com as fontes; o app precisa exibi-los.
   - (−) A auditoria de licenças por crate não enxerga arquivos de fonte embutidos; é preciso uma verificação própria desses arquivos.
 
-## Emenda de 2026-11-23 (proposta): paridade de fontes com o `typst` CLI
+## Emenda de 2026-11-23 (aceita): paridade de fontes com o `typst` CLI
 
-- **Status:** proposta · 2026-11-23 · aguarda aprovação do dono do projeto. Enquanto não for aprovada, vale o texto original acima.
+- **Status:** aceita · 2026-11-23 · decisor: dono do projeto (aprovada para a release 1.0.0). Substitui a lista de fontes e de licenças do texto original acima.
 - **Contexto:** modelos acadêmicos do Typst Universe (por exemplo `@preview/stellar-springer-nature`) pedem "New Computer Modern" para o texto e deixam matemática e código nos padrões do Typst. No Prelo, sem essas fontes, o texto saía na fonte de reserva com o aviso `unknown font family: new computer modern`, matemática em Libertinus Math e código em Libertinus Mono; no `typst` CLI o mesmo `.typ` sai em New Computer Modern, New Computer Modern Math e DejaVu Sans Mono. O artigo ficava diferente do que o autor vê fora do Prelo, o que contraria o Princípio I e a equivalência de FR-031.
 - **Decisão (emenda):**
   - O Prelo embute, além das Libertinus, exatamente as fontes que o `typst` CLI 0.15.1 embute (crate `typst-assets` 0.15.1, feature `fonts`), com os mesmos bytes: New Computer Modern 10 (NewCM10-Regular, -Bold, -Italic, -BoldItalic), New Computer Modern Math (NewCMMath-Regular, -Book, -Bold) e DejaVu Sans Mono (Regular, Bold, Oblique, BoldOblique). Os arquivos ficam em `src-tauri/fonts/` com o texto de cada licença e uma entrada por arquivo no `licenses.toml`.

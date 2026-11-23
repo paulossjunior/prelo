@@ -105,7 +105,7 @@ levantar licenças antes do plano; o resultado está em R12.
 
 ## R6. Fontes (D-15)
 
-> **Emenda proposta em 2026-11-23** (aguarda aprovação; ver D-15, "Emenda de 2026-11-23"): o
+> **Emenda aceita em 2026-11-23** (ver D-15, "Emenda de 2026-11-23"): o
 > app passa a embutir também as fontes do `typst` CLI 0.15.1, com os mesmos bytes do
 > `typst-assets` 0.15.1 — New Computer Modern 10 (Regular, Bold, Italic, BoldItalic; GUST, e
 > GPL-3.0+ com Font Exception e Distribution Exception no Regular), New Computer Modern Math

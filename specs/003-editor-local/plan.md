@@ -10,7 +10,7 @@
 Editor Typst local sobre o esqueleto de 001: o núcleo Rust embute o `typst` 0.15.1 (com `typst-ide`
 para a análise do editor, D-17) e o Tinymist 0.15 (World, VFS e pacotes) como bibliotecas, com um World próprio cujo único ponto de leitura de disco
 aplica as regras de escopo de RF-08 (conferência no descritor aberto), as fontes de D-15
-(Libertinus OFL e, pela emenda proposta de 2026-11-23, as fontes do `typst` CLI embutidas + `fonts/` do projeto, sem fontes do sistema), o cache de pacotes
+(Libertinus OFL e, pela emenda aceita de 2026-11-23, as fontes do `typst` CLI embutidas + `fonts/` do projeto, sem fontes do sistema), o cache de pacotes
 `@preview` validado com hash e a confirmação de plugins WASM. A interface usa CodeMirror 6 com
 realce, autocompletar e diagnósticos vindos do núcleo, e uma prévia SVG por página enviada
 incrementalmente; clique na prévia e "localizar na prévia" usam `typst-ide`. Exportação de PDF
@@ -27,7 +27,7 @@ Detalhes em [research.md](research.md).
 com a suíte verde; `tinymist-query` fora por D-17);
 `ureq` 3.5 + `rustls` (ring) + `rustls-native-certs`; `flate2`, `tar`, `sha2`,
 `tempfile`, `notify` 8, `dirs` 6, `tauri-plugin-dialog` 2 (só do lado Rust); CodeMirror 6
-(`@codemirror/*`); fontes Libertinus 7.051 (OFL-1.1) e, pela emenda proposta de 2026-11-23
+(`@codemirror/*`); fontes Libertinus 7.051 (OFL-1.1) e, pela emenda aceita de 2026-11-23
 da D-15, as do `typst` CLI 0.15.1 (New Computer Modern, DejaVu Sans Mono). Licenças em research R12.
 
 **Storage**: arquivos do projeto no disco; `.prelo/project.json`; nos dados locais do app,
@@ -71,7 +71,7 @@ segurança geradas em teste
 | Restrições: compilação embutida | ✅ | Prévia, diagnósticos, autocompletar e PDF do mesmo World; com versão registrada ≠ embutida o projeto não compila até a pessoa atualizar o registro (FR-012), então nada sai de versão diferente da registrada; E2E sem `typst` no PATH |
 | Restrições: plataformas | ✅ | CI nos três sistemas; regras de link/junção por sistema (R11) |
 | Restrições: desempenho | ✅ | Teste `perf_preview` (R13) |
-| Restrições: licenças (RNF-06) | ✅ | Fontes só OFL-1.1 por D-15 (emenda proposta de 2026-11-23: também GUST, GPL-3.0+ com FE/DE e Bitstream Vera, só para as fontes do `typst` CLI); dados CC-BY-4.0/W3C só como exceção da crate `typst-assets` (D-16); `webpki-roots` excluído |
+| Restrições: licenças (RNF-06) | ✅ | Fontes só OFL-1.1 por D-15 (emenda aceita de 2026-11-23: também GUST, GPL-3.0+ com FE/DE e Bitstream Vera, só para as fontes do `typst` CLI); dados CC-BY-4.0/W3C só como exceção da crate `typst-assets` (D-16); `webpki-roots` excluído |
 | Fluxo: feature cita requisitos | ✅ | Spec cita RF/RNF/D |
 | Fluxo: ordem das fases | ✅ | Fase 1 do plano |
 
