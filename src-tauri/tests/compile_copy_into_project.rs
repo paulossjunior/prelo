@@ -170,7 +170,11 @@ fn copia_so_depois_da_escolha_troca_o_caminho_e_a_compilacao_passa() {
     cite(&project, &requested);
     let s = Session::open(project);
     s.wait(false);
-    assert_eq!(s.root_names(), vec!["main.typ"], "nada copiado antes da escolha");
+    assert_eq!(
+        s.root_names(),
+        vec!["main.typ"],
+        "nada copiado antes da escolha"
+    );
 
     let copied = s
         .state
@@ -185,7 +189,11 @@ fn copia_so_depois_da_escolha_troca_o_caminho_e_a_compilacao_passa() {
         BIB,
         "cópia fiel"
     );
-    assert_eq!(std::fs::read_to_string(shared.file()).unwrap(), BIB, "origem intacta");
+    assert_eq!(
+        std::fs::read_to_string(shared.file()).unwrap(),
+        BIB,
+        "origem intacta"
+    );
     let main = s.state.open_file("main.typ").unwrap();
     assert_eq!(main.version, 1);
     assert!(
@@ -306,7 +314,10 @@ fn link_dentro_do_projeto_para_fora_nao_gera_oferta() {
     let shared = Shared::new();
     let project = TempProject::empty();
     support::symlink(&shared.file(), &project.path("refs.bib")).unwrap();
-    project.write("main.typ", "Segundo @souza2021.\n#bibliography(\"refs.bib\")\n");
+    project.write(
+        "main.typ",
+        "Segundo @souza2021.\n#bibliography(\"refs.bib\")\n",
+    );
     let s = Session::open(project);
     s.wait(false);
     assert!(s.offers().is_empty(), "{:?}", s.offers());

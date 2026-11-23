@@ -15,26 +15,33 @@
 //! [`AppState::handle_disk_change`], que recarrega ou marca conflito; `resolve_external_change`
 //! aplica a escolha da pessoa. Arquivo aberto e gravação (`open_file`, `edit_file`, `save_file`,
 //! salvamento automático e último Salvar ao fechar; T033) moram em [`crate::fs::save`].
+//! Arquivo não aberto que muda no disco (um `.bib` exportado por outro programa) é relido na
+//! compilação seguinte ([`DiskChanges`]). Cópia para o projeto (D-13, T059): a compilação que
+//! recusa um caminho de fora gera a oferta ([`crate::fs::copy_into`]); `copy_into_project`
+//! recebe só o caminho pedido e o arquivo de origem vem do diálogo nativo do núcleo.
 
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError, RwLock};
 use std::time::{Instant, SystemTime};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::ipc::{Channel, InvokeBody, Request};
-use tauri::State;
+use tauri::{Runtime, State, Window};
+use tauri_plugin_dialog::DialogExt;
 
 use typst_layout::PagedDocument;
 
 use crate::compile::export::{ExportError, ExportSource, Exported};
 use crate::compile::preview::{render_svg, PreviewHub, PreviewUpdate};
-use crate::compile::project::{CompileInput, ProjectCompiler};
+use crate::compile::project::{CompileInput, DiskChanges, ProjectCompiler};
 use crate::compile::scheduler::Scheduler;
+use crate::fs::copy_into::{self, CopyOffers, UpdatedFile, NOT_OFFERED};
+pub use crate::fs::copy_into::{CopiedIntoProject, CopyIntoProjectOffer};
 use crate::fs::create::{self, NewItem};
 pub use crate::fs::save::{apply_changes, Change};
 use crate::fs::save::{format_utc, OpenFile};
@@ -246,6 +253,8 @@ struct OpenProject {
     /// O arquivo principal (registrado ou `main.typ`) não existe: aviso `main_file_missing`
     /// até `choose_main_file` (a compilação responde com o diagnóstico de arquivo ausente).
     main_missing: bool,
+    /// Arquivos não abertos que mudaram no disco, para a próxima compilação reler.
+    disk: DiskChanges,
 }
 
 impl OpenProject {
@@ -295,6 +304,24 @@ impl OpenProject {
         if let Some(compiler) = &self.compiler {
             compiler.submit(self.input());
         }
+    }
+
+    /// Troca, no texto de `relative`, cada literal `requested` por `literal`, como uma edição
+    /// do arquivo aberto (abre se preciso; o salvamento automático grava). Devolve a versão
+    /// nova, ou `None` se o literal não está mais lá ou o arquivo não pôde ser lido.
+    fn replace_literal(&mut self, relative: &str, requested: &str, literal: &str) -> Option<u64> {
+        let path = validate_path(&self.scope, relative).ok()?;
+        if !self.files.contains_key(path.relative()) {
+            let bytes = self.scope.read(path.relative()).ok()?;
+            let file = OpenFile::from_bytes(bytes).ok()?;
+            self.files.insert(path.relative().to_owned(), file);
+        }
+        let file = self.files.get_mut(path.relative())?;
+        let changes = copy_into::literal_changes(file.text(), requested, literal);
+        if changes.is_empty() {
+            return None;
+        }
+        file.edit(file.version(), &changes).ok()
     }
 
     fn info(&self) -> ProjectInfo {
@@ -411,7 +438,13 @@ pub struct AppState {
     disk_rx: Mutex<Option<Receiver<String>>>,
     /// Decisões de plugin e cache de pacotes (dados locais do app).
     trust: Trust,
+    /// Ofertas de cópia para o projeto (D-13) e quem as recebe (em produção, o `emit`).
+    offers: Arc<Mutex<CopyOffers>>,
+    offer_listener: Arc<RwLock<Option<CopyOfferListener>>>,
 }
+
+/// Quem recebe cada oferta nova de cópia para o projeto.
+pub type CopyOfferListener = Arc<dyn Fn(&CopyIntoProjectOffer) + Send + Sync>;
 
 impl Default for AppState {
     fn default() -> Self {
@@ -430,7 +463,76 @@ impl AppState {
             disk_tx: Mutex::new(disk_tx),
             disk_rx: Mutex::new(Some(disk_rx)),
             trust: Trust::default(),
+            offers: Arc::default(),
+            offer_listener: Arc::default(),
         }
+    }
+
+    /// Quem recebe as ofertas novas de `copy_into_project_offer`.
+    pub fn set_copy_offer_listener(&self, listener: CopyOfferListener) {
+        *self
+            .offer_listener
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = Some(listener);
+    }
+
+    fn offers(&self) -> MutexGuard<'_, CopyOffers> {
+        self.offers.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Caminhos pedidos fora do projeto com oferta de cópia em aberto.
+    pub fn copy_offers(&self) -> Vec<String> {
+        self.offers().list()
+    }
+
+    /// Recusa (`not_offered`) o pedido de cópia que o núcleo não ofereceu no projeto aberto.
+    /// O comando confere antes de mostrar o diálogo.
+    pub fn check_copy_offer(&self, requested: &str) -> Result<(), String> {
+        if self.lock().is_none() {
+            return Err(NO_PROJECT.into());
+        }
+        match self.offers().referrers(requested) {
+            Some(_) => Ok(()),
+            None => Err(NOT_OFFERED.into()),
+        }
+    }
+
+    /// Copia `source` (escolhido pela pessoa no diálogo nativo de `copy_into_project`; nunca
+    /// vem da interface) para dentro do projeto como a cópia de `requested`, troca o caminho
+    /// nos `.typ` que o pediam e recompila (D-13, FR-023). Só para oferta em aberto; nunca
+    /// sobrescreve.
+    pub fn copy_into_project(
+        &self,
+        requested: &str,
+        source: &Path,
+    ) -> Result<CopiedIntoProject, String> {
+        let mut guard = self.lock();
+        let project = guard.as_mut().ok_or(NO_PROJECT)?;
+        let referrers = self
+            .offers()
+            .referrers(requested)
+            .cloned()
+            .ok_or(NOT_OFFERED)?;
+        let destination = copy_into::destination(&referrers, requested)?;
+        let bytes = copy_into::read_source(source)?;
+        let created = copy_into::write_new(&project.scope, &destination, &bytes)?;
+        let mut updated = Vec::new();
+        for referrer in &referrers {
+            let literal = copy_into::literal_for(referrer, &created);
+            if let Some(version) = project.replace_literal(referrer, requested, &literal) {
+                updated.push(UpdatedFile {
+                    path: referrer.clone(),
+                    version,
+                });
+            }
+        }
+        self.offers().remove(requested);
+        project.disk.push(created.clone());
+        project.recompile();
+        Ok(CopiedIntoProject {
+            path: created,
+            updated,
+        })
     }
 
     /// Decisões de plugin e cache de pacotes.
@@ -482,6 +584,7 @@ impl AppState {
             compiler: None,
             _watcher: watcher,
             main_missing: false,
+            disk: DiskChanges::default(),
         };
         project.create_missing_record();
         project.main_missing = !project.main_exists();
@@ -531,7 +634,27 @@ impl AppState {
         let Some(project) = guard.as_mut() else {
             return DiskChange::Ignored;
         };
-        let Ok(path) = validate_path(&project.scope, relative) else {
+        let path = validate_path(&project.scope, relative);
+        let is_open = path
+            .as_ref()
+            .is_ok_and(|p| project.files.contains_key(p.relative()));
+        let (Ok(path), true) = (&path, is_open) else {
+            // Arquivo não aberto (ex.: `.bib` exportado pelo gerenciador de referências),
+            // removido ou trocado por link: a compilação seguinte relê o disco pela regra de
+            // escopo (FR-025). Nada a avisar à interface. Itens ocultos (`.prelo/`, `.git/`)
+            // não entram na compilação.
+            if !is_absolute(relative)
+                && !relative.split(['/', '\\']).any(|c| c.starts_with('.'))
+                && !project.files.contains_key(relative)
+            {
+                project.disk.push(relative);
+                if let Ok(path) = &path {
+                    if path.relative() != relative {
+                        project.disk.push(path.relative());
+                    }
+                }
+                project.recompile();
+            }
             return DiskChange::Ignored;
         };
         let Some(file) = project.files.get_mut(path.relative()) else {
@@ -594,10 +717,51 @@ impl AppState {
         let root = project.scope.root().to_owned();
         let main = project.record.record.main_or_default().to_owned();
         let env = self.trust.env();
-        let (scheduler, compilations) =
-            Scheduler::new(move || ProjectCompiler::with_env(root.clone(), &main, env.clone()));
+        let disk = project.disk.clone();
+        let (scheduler, compilations) = Scheduler::new(move || {
+            ProjectCompiler::with_env(root.clone(), &main, env.clone())
+                .with_disk_changes(disk.clone())
+        });
+        let compilations = self.watch_offers(generation, compilations);
         self.preview.spawn_pump(generation, compilations);
         project.compiler = Some(scheduler);
+    }
+
+    /// Repassa as compilações à prévia e, no caminho, atualiza as ofertas de cópia para o
+    /// projeto (D-13) e avisa as novas. Termina quando a agenda é largada.
+    fn watch_offers(
+        &self,
+        generation: u64,
+        compilations: Receiver<crate::compile::scheduler::Compilation<PagedDocument>>,
+    ) -> Receiver<crate::compile::scheduler::Compilation<PagedDocument>> {
+        self.offers().reset(generation);
+        let offers = self.offers.clone();
+        let listener = self.offer_listener.clone();
+        let (tx, rx) = mpsc::channel();
+        std::thread::Builder::new()
+            .name(format!("prelo-offers-{generation}"))
+            .spawn(move || {
+                for compilation in compilations {
+                    let new = offers
+                        .lock()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .update(generation, &compilation);
+                    if tx.send(compilation).is_err() {
+                        break;
+                    }
+                    let listener = listener
+                        .read()
+                        .unwrap_or_else(PoisonError::into_inner)
+                        .clone();
+                    if let Some(listener) = listener {
+                        for offer in &new {
+                            listener(offer);
+                        }
+                    }
+                }
+            })
+            .expect("falha ao criar a thread das ofertas de cópia");
+        rx
     }
 
     /// Assina a prévia: `sink` recebe cada `PreviewUpdate`, e logo a prévia atual, se houver.
@@ -931,6 +1095,39 @@ pub fn decide_plugin(state: State<'_, AppState>, request: Request<'_>) -> Result
 pub fn redownload_package(state: State<'_, AppState>, request: Request<'_>) -> Result<(), String> {
     let a: SpecArgs = args(&request)?;
     state.redownload_package(&a.spec)
+}
+
+/// Corpo de `copy_into_project`: só o caminho pedido no `.typ`. O arquivo de origem nunca vem
+/// da interface (`source` ou outro campo → `invalid_arguments`).
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RequestedArgs {
+    requested: String,
+}
+
+/// "Escolher arquivo para copiar…" da oferta `copy_into_project_offer` (D-13, FR-023): confere
+/// a oferta, mostra o diálogo nativo do núcleo para a pessoa escolher o arquivo e copia.
+/// Cancelado → `null`.
+#[tauri::command(async)]
+pub fn copy_into_project<R: Runtime>(
+    window: Window<R>,
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<Option<CopiedIntoProject>, String> {
+    let a: RequestedArgs = args(&request)?;
+    state.check_copy_offer(&a.requested)?;
+    let name = a.requested.rsplit(['/', '\\']).next().unwrap_or_default();
+    let Some(file) = window
+        .dialog()
+        .file()
+        .set_parent(&window)
+        .set_title(format!("Escolher o arquivo para copiar como “{name}”"))
+        .blocking_pick_file()
+    else {
+        return Ok(None);
+    };
+    let source = file.into_path().map_err(|_| NOT_FOUND.to_owned())?;
+    state.copy_into_project(&a.requested, &source).map(Some)
 }
 
 #[derive(Deserialize)]

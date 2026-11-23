@@ -83,10 +83,27 @@ sem recompilar, e é gravado de forma atômica.
 | evento `external_change_conflict` | `{ path }` |
 | evento `external_change_reloaded` | `{ path, version }` |
 | evento `copy_into_project_offer` | `{ requested }` (D-13; só caminho pedido) |
-| `copy_into_project` | `{ requested, source }` — `source` escolhido em diálogo nativo do núcleo |
+| `copy_into_project` | `{ requested }` → `{ path, updated: {path, version}[] }` ou `null` (diálogo cancelado); erros `not_offered`, `already_exists`, `invalid_name`, `not_found`, `too_large`, `write_failed`, `no_project` |
 | evento `plugin_approval_needed` | `{ path, origin: "project" \| "package", package?: string, sizeBytes, sha256 }` |
 | `decide_plugin` | `{ sha256, approve: boolean }` → recompila |
 | `redownload_package` | `{ spec }` → recompila; erros `network_unavailable`, `package_rejected` |
+
+Cópia para o projeto (D-13, FR-023): quando uma compilação recusa um caminho que, escrito no
+`.typ`, sai da raiz por `..` (`#bibliography("../comum/refs.bib")`), o núcleo emite
+`copy_into_project_offer` uma vez por caminho, com **só** o caminho como foi escrito (nunca o
+caminho real). Link simbólico dentro do projeto que aponta para fora não gera oferta (a cópia
+cairia no lugar do link). `copy_into_project` recebe **só** `{ requested }`: a webview nunca
+manda o arquivo de origem (`source` ou qualquer outro campo → `invalid_arguments`), porque
+isso permitiria copiar qualquer arquivo do disco para o projeto. O núcleo confere que
+`requested` é uma oferta em aberto do projeto (senão `not_offered`, antes de qualquer
+diálogo), mostra o diálogo nativo para a pessoa escolher o arquivo e o copia para a pasta do
+`.typ` que o pediu, com o nome do último componente de `requested`, em criação exclusiva
+(nunca sobrescreve: `already_exists`; regras de nome de FR-035: `invalid_name`). A origem
+precisa ser arquivo comum até 256 MB (`not_found`, `too_large`). Depois troca, em cada `.typ`
+que pedia `requested`, o literal pelo caminho da cópia (relativo ao `.typ`, ou `/` + caminho
+na raiz se o `.typ` estiver em outra pasta), como uma edição do arquivo aberto (versão nova,
+gravada pelo salvamento automático), e recompila. `updated` lista esses arquivos com a versão
+nova; a interface os recarrega como em `external_change_reloaded`.
 
 Mudança externa (FR-008): com alteração local pendente o núcleo emite
 `external_change_conflict` e espera `resolve_external_change`; sem alteração local recarrega o
@@ -96,6 +113,10 @@ diálogo e sem enviar edição; evento de arquivo que não está no editor, ou c
 editor já tem, é ignorado. O evento não leva o texto: arquivos vão até 256 MB, eventos são
 difundidos a toda a webview, e `open_file` já é a fonte única do estado do arquivo (vários
 avisos seguidos resultam numa só leitura do texto mais novo).
+Arquivo **não aberto** que muda no disco (um `.bib` exportado pelo gerenciador de referências,
+uma figura trocada) não gera evento: o núcleo descarta o conteúdo que a compilação guardava
+dele e recompila, relendo pela regra de escopo (FR-025). Itens ocultos (`.prelo/`, `.git/`)
+não disparam compilação.
 
 ## Permissões da janela
 

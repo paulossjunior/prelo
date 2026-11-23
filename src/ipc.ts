@@ -114,6 +114,15 @@ export interface CopyIntoProjectOffer {
   requested: string;
 }
 
+/**
+ * Resultado de `copy_into_project` (D-13): a cópia (`path`, relativo à raiz) e os arquivos em
+ * que o núcleo trocou o caminho pedido pelo da cópia, com a versão nova de cada um.
+ */
+export interface CopiedIntoProject {
+  path: string;
+  updated: { path: string; version: number }[];
+}
+
 export interface PluginApprovalNeeded {
   path: string;
   origin: "project" | "package";
@@ -150,6 +159,8 @@ export const ERROR_MESSAGES = {
   not_implemented: "Recurso ainda não disponível nesta versão do Prelo.",
   invalid_arguments: "Pedido inválido da interface ao núcleo do Prelo.",
   already_exists: "Já existe um arquivo ou pasta com esse nome.",
+  not_offered:
+    "Esse arquivo não está mais pedido fora do projeto; nada foi copiado.",
   invalid_name:
     'Nome inválido. Use um nome que não comece com ponto, sem caracteres como \\ : * ? " < > | e sem espaço ou ponto no fim.',
 } as const;
@@ -230,8 +241,11 @@ export interface Ipc {
   outline(): Promise<OutlineItem[]>;
   compilerInfo(): Promise<CompilerInfo>;
   exportPdfDialog(): Promise<{ path: string } | null>;
-  /** O arquivo de origem é escolhido no diálogo nativo do núcleo, nunca pela interface. */
-  copyIntoProject(requested: string): Promise<unknown>;
+  /**
+   * O arquivo de origem é escolhido no diálogo nativo do núcleo, nunca pela interface.
+   * `null`: a pessoa cancelou o diálogo.
+   */
+  copyIntoProject(requested: string): Promise<CopiedIntoProject | null>;
   decidePlugin(sha256: string, approve: boolean): Promise<unknown>;
   redownloadPackage(spec: string): Promise<unknown>;
   onExternalChangeConflict(handler: (e: ExternalChangeConflict) => void): Promise<() => void>;

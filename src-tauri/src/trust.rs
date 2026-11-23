@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError, RwLock};
 
 use typst::syntax::package::PackageSpec;
 
-use crate::world::packages::{HttpFetcher, PackageRefusal, PackageStore};
+use crate::world::packages::{Fetcher, HttpFetcher, PackageRefusal, PackageStore};
 use crate::world::plugins::{Decision, PluginApprovals, PluginRequest, PluginSink, WorldEnv};
 
 /// Nome do evento de confirmação de plugin.
@@ -29,6 +29,8 @@ pub struct Trust {
     data_dir: RwLock<Option<PathBuf>>,
     approvals: OnceLock<Arc<PluginApprovals>>,
     packages: OnceLock<Option<Arc<PackageStore>>>,
+    /// Quem baixa os pacotes; sem valor, [`HttpFetcher`] (os testes ligam um local).
+    fetcher: RwLock<Option<Arc<dyn Fetcher>>>,
     /// sha256 → pedido ainda sem decisão (do projeto aberto).
     pending: Arc<Mutex<HashMap<String, PluginRequest>>>,
     listener: Arc<RwLock<Option<PluginListener>>>,
@@ -51,6 +53,12 @@ impl Trust {
             .unwrap_or_else(PoisonError::into_inner) = Some(listener);
     }
 
+    /// Troca quem baixa os pacotes (testes com *fetcher* local, sem rede). Só vale antes do
+    /// primeiro uso do cache.
+    pub fn set_fetcher(&self, fetcher: Arc<dyn Fetcher>) {
+        *self.fetcher.write().unwrap_or_else(PoisonError::into_inner) = Some(fetcher);
+    }
+
     fn data_dir(&self) -> Option<PathBuf> {
         self.data_dir
             .read()
@@ -71,7 +79,13 @@ impl Trust {
         let dir = self.data_dir()?;
         self.packages
             .get_or_init(|| {
-                PackageStore::new(&dir, Arc::new(HttpFetcher::new()))
+                let fetcher = self
+                    .fetcher
+                    .read()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clone()
+                    .unwrap_or_else(|| Arc::new(HttpFetcher::new()));
+                PackageStore::new(&dir, fetcher)
                     .map(Arc::new)
                     .map_err(|e| eprintln!("prelo: cache de pacotes indisponível: {e}"))
                     .ok()

@@ -104,10 +104,22 @@ fn varios_arquivos_com_csl_do_projeto() {
     for title in ["colaborativa", "Tipografia", "Compiladores"] {
         assert!(text.contains(title), "{title} na lista: {text}");
     }
-    assert!(text.contains("AND Costa, 2020"), "citação pelo .csl: {text}");
-    assert!(text.contains("Lima, 2019"), "entrada do .yml pelo .csl: {text}");
-    assert!(text.contains("Silva, Ana AND Costa, Bruno"), "lista pelo .csl: {text}");
-    assert!(!text.contains("[1]"), "não é o estilo padrão (IEEE): {text}");
+    assert!(
+        text.contains("AND Costa, 2020"),
+        "citação pelo .csl: {text}"
+    );
+    assert!(
+        text.contains("Lima, 2019"),
+        "entrada do .yml pelo .csl: {text}"
+    );
+    assert!(
+        text.contains("Silva, Ana AND Costa, Bruno"),
+        "lista pelo .csl: {text}"
+    );
+    assert!(
+        !text.contains("[1]"),
+        "não é o estilo padrão (IEEE): {text}"
+    );
 }
 
 #[test]
@@ -119,7 +131,10 @@ fn estilo_embutido_e_csl_do_projeto_formatam_diferente() {
     let text = compiled_text(&p);
     assert!(text.contains("Silva"), "{text}");
     assert!(text.contains("2020"), "{text}");
-    assert!(!text.contains("AND"), "o estilo embutido não usa o .csl: {text}");
+    assert!(
+        !text.contains("AND"),
+        "o estilo embutido não usa o .csl: {text}"
+    );
 }
 
 // ------------------------------------------------------------- editar e salvar (FR-025)
@@ -224,7 +239,11 @@ fn bib_gravado_por_outro_programa_recompila_sem_estar_aberto() {
 
     let path = s.project.path("refs.bib");
     let bib = std::fs::read_to_string(&path).unwrap();
-    std::fs::write(&path, bib.replace("Edição colaborativa", "Escrita conjunta")).unwrap();
+    std::fs::write(
+        &path,
+        bib.replace("Edição colaborativa", "Escrita conjunta"),
+    )
+    .unwrap();
     // O observador avisa o núcleo do caminho alterado.
     s.state.handle_disk_change("refs.bib");
     s.wait_text("com o .bib do disco", |t| {

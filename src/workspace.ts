@@ -17,6 +17,7 @@ import { mountPreview, type BlobUrls, type PreviewHandle } from "./preview/previ
 import {
   conflictResolver,
   mountPackageActions,
+  watchCopyOffers,
   watchExternalChanges,
   watchPluginApprovals,
 } from "./project/prompts";
@@ -433,6 +434,23 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     watchPluginApprovals({ ipc, parent: app, onError: (err) => showError(err) }).then(
       (stop) => stops.push(stop),
       (err: unknown) => console.warn("plugins: sem escuta de eventos", err),
+    );
+    // Arquivo fora do projeto (D-13): oferta de cópia; o núcleo troca o caminho no `.typ`.
+    watchCopyOffers({
+      ipc,
+      parent: app,
+      beforeCopy: async () => {
+        await editor?.flush();
+      },
+      onCopied: (r) => {
+        showMessage(`Arquivo copiado para ${r.path}.`);
+        for (const u of r.updated) void externalReload(u.path, u.version);
+        void tree.refresh();
+      },
+      onError: (err) => showError(err),
+    }).then(
+      (stop) => stops.push(stop),
+      (err: unknown) => console.warn("cópia para o projeto: sem escuta de eventos", err),
     );
     ipc.onExternalChangeReloaded(({ path, version }) => void externalReload(path, version)).then(
       (stop) => stops.push(stop),

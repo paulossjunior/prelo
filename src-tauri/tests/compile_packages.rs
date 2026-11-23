@@ -7,7 +7,7 @@
 mod support;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -68,9 +68,13 @@ impl Fetcher for LocalFetcher {
 
 /// Núcleo com os dados locais em `data` e o *fetcher* dado; abre `project` e devolve a
 /// primeira prévia que terminou (ok ou com erro).
-fn open(data: &PathBuf, fetcher: &LocalFetcher, project: &TempProject) -> (AppState, PreviewUpdate) {
+fn open(
+    data: &Path,
+    fetcher: &LocalFetcher,
+    project: &TempProject,
+) -> (AppState, PreviewUpdate) {
     let state = AppState::default();
-    state.trust().set_data_dir(data.clone());
+    state.trust().set_data_dir(data.to_path_buf());
     state.trust().set_fetcher(Arc::new(fetcher.clone()));
     let (tx, updates): (_, Receiver<PreviewUpdate>) = mpsc::channel();
     state.subscribe_preview(move |u: &PreviewUpdate| {
@@ -107,7 +111,11 @@ fn primeira_compilacao_baixa_e_a_segunda_sem_rede_usa_o_cache_com_a_mesma_previa
     // Primeira sessão, com rede: baixa uma vez e compila.
     let (first_state, first) = open(&data, &fetcher, &project);
     assert!(first.ok, "{:?}", first.diagnostics);
-    assert_eq!(fetcher.asked(), vec![DEMO_URL.to_owned()], "baixou o pacote");
+    assert_eq!(
+        fetcher.asked(),
+        vec![DEMO_URL.to_owned()],
+        "baixou o pacote"
+    );
     assert!(
         data.join("packages/preview/demo/0.1.0/lib.typ").is_file(),
         "pacote no cache dos dados locais"
@@ -129,7 +137,11 @@ fn sem_rede_e_sem_cache_e_diagnostico_de_pacote() {
     let fetcher = LocalFetcher::default();
     let (_state, update) = open(&data, &fetcher, &importing());
     assert!(!update.ok);
-    let messages: Vec<_> = update.diagnostics.iter().map(|d| d.message.clone()).collect();
+    let messages: Vec<_> = update
+        .diagnostics
+        .iter()
+        .map(|d| d.message.clone())
+        .collect();
     assert!(
         messages
             .iter()
