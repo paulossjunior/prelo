@@ -44,6 +44,8 @@ export interface PreviewOptions {
   zoomKey?: string | null;
   /** Onde o zoom é lembrado; padrão `localStorage`. */
   storage?: ZoomStorage | null;
+  /** Botão "Ver os erros" na faixa de erro: abre o painel "Erros" (FR-006a). */
+  onShowErrors?: () => void;
 }
 
 export interface PreviewHandle {
@@ -447,6 +449,15 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
     lastCompileId = u.compileId;
     if (!u.ok) {
       band.textContent = errorText(u);
+      if (opts.onShowErrors) {
+        const show = opts.onShowErrors;
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "btn sm pv-error-show";
+        b.textContent = "Ver os erros";
+        b.addEventListener("click", () => show());
+        band.append(" ", b);
+      }
       band.hidden = false;
       return;
     }

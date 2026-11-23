@@ -9,16 +9,22 @@
 // Navegação (US4): clique na prévia abre o arquivo de origem na linha; "Localizar na prévia"
 // (cabeçalho do editor) rola a prévia até o trecho do cursor; o painel "Estrutura", abaixo dos
 // arquivos, leva editor e prévia a cada seção (src/preview/sync.ts, src/project/outline.ts).
+//
+// Erros (FR-006a): o painel "Erros" (src/editor/problems.ts), acima da barra de status, lista
+// todos os diagnósticos com o motivo em português; a contagem na barra de status e a faixa de
+// erro da prévia o abrem, e clicar num item abre o arquivo com o cursor no trecho.
 import { StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { compilerStatus, mountAbout, type AboutHandle } from "./about";
 import { mountAppInfo, type Invoke } from "./app-info";
 import { mountEditor, type EditorHandle } from "./editor/editor";
+import { mountProblems, type ProblemsHandle } from "./editor/problems";
 import { mountEditorZoom, type EditorZoomHandle } from "./editor/zoom";
 import { mountExport } from "./export";
 import {
   errorMessage,
   toIpcError,
+  type Diagnostic,
   type Ipc,
   type IpcError,
   type OutlineItem,
@@ -154,7 +160,9 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   body.append(treeCol, editorCol, previewCol);
 
   const status = el("footer", "ws-status");
-  const compileEl = el("span", "ws-compile", "Sem compilação");
+  // A contagem de erros abre o painel "Erros" (FR-006a).
+  const compileEl = button("Sem compilação", "ws-compile");
+  compileEl.title = "Mostrar o painel Erros";
   const saveEl = el("span", "ws-save");
   const compilerEl = el("span", "ws-compiler");
   const appInfoEl = el("span", "ws-appinfo");
@@ -165,6 +173,13 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
 
   app.append(top, message, exporter.errors, banner, packageBanner, body, status);
   root.replaceChildren(app);
+
+  // Painel "Erros" entre o corpo e a barra de status (FR-006a).
+  const problems: ProblemsHandle = mountProblems(app, {
+    onSelect: (d) => void revealDiagnostic(d),
+    textOf: (p) => (editor?.path === p ? editor.view.state.doc.toString() : null),
+  });
+  app.insertBefore(problems.element, status);
 
   // ---------------------------------------------------------------- estado
   let info: ProjectInfo | null = null;
@@ -196,7 +211,10 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     });
     return p;
   }
-  let preview: PreviewHandle = attachPreview(mountPreview(previewBox, { ipc, urls: opts.previewUrls }));
+  const showErrors = () => problems.open();
+  let preview: PreviewHandle = attachPreview(
+    mountPreview(previewBox, { ipc, urls: opts.previewUrls, onShowErrors: showErrors }),
+  );
   let last: PreviewUpdate | null = null;
   let opening = 0;
   const observers = new Set<(u: PreviewUpdate) => void>();
@@ -259,6 +277,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     last = u;
     preview.update(u);
     editor?.setDiagnostics(u.diagnostics);
+    problems.update(u.diagnostics);
     renderCompile(u);
     exporter.update(u);
     packages.update(u.diagnostics);
@@ -346,6 +365,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     await closeEditor();
     info = next;
     last = null;
+    problems.update([]);
     showMessage(null);
     exporter.reset();
     outline.clear();
@@ -353,7 +373,9 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     preview.destroy();
     // O zoom da prévia é lembrado por projeto (FR-013a); `ProjectInfo` não traz o caminho da
     // raiz, então a chave é o nome da pasta.
-    preview = attachPreview(mountPreview(previewBox, { ipc, urls: opts.previewUrls, zoomKey: next.name }));
+    preview = attachPreview(
+      mountPreview(previewBox, { ipc, urls: opts.previewUrls, zoomKey: next.name, onShowErrors: showErrors }),
+    );
     // O arranjo dos painéis também é lembrado por projeto (FR-013b).
     panes.setKey(next.name);
     editorZoom.setKey(next.name);
@@ -476,6 +498,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     tree.setCurrent(path);
     editorPath.textContent = path;
     if (last) handle.setDiagnostics(last.diagnostics);
+    // Com o arquivo aberto, o painel "Erros" passa a mostrar a coluna dos diagnósticos dele.
+    problems.refresh();
     refreshChooseMain();
     refreshLocate();
   }
@@ -490,6 +514,32 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     const anchor = offsetOf(view.state.doc.toString(), pos.line, pos.column);
     view.dispatch({
       selection: { anchor },
+      effects: EditorView.scrollIntoView(anchor, { y: "center" }),
+    });
+    view.focus();
+  }
+
+  /** Item do painel "Erros": abre o arquivo e seleciona o trecho (ou o início da linha). */
+  async function revealDiagnostic(d: Diagnostic) {
+    if (!d.path) return;
+    if (editor?.path !== d.path) await openFile(d.path);
+    const current = editor as EditorHandle | null;
+    if (current?.path !== d.path) return;
+    const view = current.view;
+    const doc = view.state.doc;
+    const clamp = (n: number) => Math.min(Math.max(0, Math.trunc(n)), doc.length);
+    let anchor: number;
+    let head: number;
+    if (d.range && Number.isFinite(d.range.from) && Number.isFinite(d.range.to)) {
+      anchor = clamp(d.range.from);
+      head = clamp(Math.max(d.range.from, d.range.to));
+    } else if (typeof d.line === "number" && Number.isFinite(d.line)) {
+      anchor = head = doc.line(Math.min(Math.max(1, Math.trunc(d.line)), doc.lines)).from;
+    } else {
+      return;
+    }
+    view.dispatch({
+      selection: { anchor, head },
       effects: EditorView.scrollIntoView(anchor, { y: "center" }),
     });
     view.focus();
@@ -510,6 +560,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   newBtn.addEventListener("click", () => void createProject());
   saveBtn.addEventListener("click", () => void editor?.save());
   aboutBtn.addEventListener("click", () => void about.open());
+  compileEl.addEventListener("click", showErrors);
 
   const ready = (async () => {
     const appReady = mountAppInfo(appInfoEl, opts.appInfo);
@@ -574,6 +625,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
       editorZoom.destroy();
       tree.destroy();
       outline.destroy();
+      problems.destroy();
       app.remove();
     },
   };

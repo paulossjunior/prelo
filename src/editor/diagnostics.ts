@@ -1,11 +1,12 @@
 // Diagnósticos do núcleo no editor (T037; FR-006, cenário 4 de US1), pelo `@codemirror/lint`.
 // O núcleo manda `Diagnostic` com `range` (deslocamentos UTF-16 no texto atual, como as
 // edições) ou só `line` (1-based). Diagnóstico de outro arquivo ou sem posição não é marcado
-// aqui; a faixa de erro da prévia e o painel de problemas mostram esses.
+// aqui; a faixa de erro da prévia e o painel "Erros" (src/editor/problems.ts) mostram esses.
 import { lintGutter, setDiagnostics, type Diagnostic as LintDiagnostic } from "@codemirror/lint";
 import type { Extension, Text } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import type { Diagnostic } from "../ipc";
+import { explanationNode } from "./problems";
 
 function clamp(n: number, max: number): number {
   return Math.min(Math.max(0, Math.trunc(n)), max);
@@ -38,6 +39,10 @@ export function toLintDiagnostics(diags: Diagnostic[], path: string, doc: Text):
       severity: d.severity === "warning" ? "warning" : "error",
       source: d.kind === "typst" ? "Typst" : "Prelo",
       message,
+      // Tooltip ao passar o ponteiro no sublinhado: a mesma explicação do painel "Erros"
+      // (FR-006a). Só DOM com `textContent`; os estilos vêm de workspace.css e o tema do lint
+      // entra pelo nonce de estilo (EditorView.cspNonce, PR #187).
+      renderMessage: () => explanationNode(d),
     });
   }
   return out;
