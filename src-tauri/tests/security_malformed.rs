@@ -24,6 +24,8 @@ use prelo_lib::diagnostic::{Diagnostic, Kind};
 use prelo_lib::fs::access_model::AccessModel;
 use prelo_lib::fs::scope::{Scope, MAX_CSL_BYTES};
 use prelo_lib::project::record::{self, RecordState, RECORD_PATH};
+use prelo_lib::world::plugins::{sha256_hex, Decision, PluginApprovals};
+use prelo_lib::world::WorldEnv;
 use support::{fixtures_dir, TempProject};
 use tinymist_vfs::PathAccessModel;
 use typst_layout::PagedDocument;
@@ -49,9 +51,14 @@ struct Live {
 
 impl Live {
     fn new(project: TempProject, timeout: Duration) -> Self {
+        Self::with_env(project, timeout, WorldEnv::default())
+    }
+
+    /// Com decisões de plugin (e cache de pacotes) dados.
+    fn with_env(project: TempProject, timeout: Duration, env: WorldEnv) -> Self {
         let root: PathBuf = project.root();
         let (scheduler, results) = Scheduler::with_timeout(
-            move || ProjectCompiler::new(root.clone(), "main.typ"),
+            move || ProjectCompiler::with_env(root.clone(), "main.typ", env.clone()),
             timeout,
         );
         Self {
@@ -375,18 +382,29 @@ fn laco_infinito() {
 
 #[test]
 fn plugin_aprovado_que_nao_retorna_e_abandonado() {
-    // Até T047, todo plugin roda sem pedir confirmação; este é o caso do plugin aprovado.
+    // Plugin aprovado pelo mecanismo de T047 (decisão nos dados locais do app, FR-019).
     let wasm = std::fs::read(fixtures_dir().join("plugin/teste.wasm")).unwrap();
-    let live = Live::with_timeout(
-        &[
-            (
-                "main.typ",
-                b"#let p = plugin(\"teste.wasm\")\n#p.forever()\n",
-            ),
-            ("teste.wasm", &wasm),
-        ],
-        SHORT_TIMEOUT,
+    let project = TempProject::empty();
+    project.write(
+        "main.typ",
+        b"#let p = plugin(\"teste.wasm\")\n#p.forever()\n",
     );
+    project.write("teste.wasm", &wasm);
+    let data = tempfile::tempdir().unwrap();
+    let approvals = Arc::new(PluginApprovals::load(data.path()));
+    approvals
+        .decide(
+            &project.root(),
+            &sha256_hex(&wasm),
+            "teste.wasm",
+            Decision::Approved,
+        )
+        .unwrap();
+    let env = WorldEnv {
+        approvals: Some(approvals),
+        ..WorldEnv::default()
+    };
+    let live = Live::with_env(project, SHORT_TIMEOUT, env);
     let compilation = live.compile_disk();
     assert_eq!(compilation.status, Status::Abandonada);
     let diag = compilation

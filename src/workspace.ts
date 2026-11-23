@@ -14,7 +14,12 @@ import { mountExport } from "./export";
 import { errorMessage, toIpcError, type Ipc, type IpcError, type PreviewUpdate, type ProjectInfo } from "./ipc";
 import { mountPanes, type PanesHandle } from "./panes";
 import { mountPreview, type BlobUrls, type PreviewHandle } from "./preview/preview";
-import { conflictResolver, watchExternalChanges } from "./project/prompts";
+import {
+  conflictResolver,
+  mountPackageActions,
+  watchExternalChanges,
+  watchPluginApprovals,
+} from "./project/prompts";
 import { mountTree, type TreeHandle } from "./project/tree";
 import "./workspace.css";
 
@@ -93,6 +98,9 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   message.hidden = true;
   const banner = el("div", "ws-banner");
   banner.hidden = true;
+  // Pacote adulterado: ação "Baixar de novo" (FR-018).
+  const packageBanner = el("div", "ws-banner");
+  const packages = mountPackageActions(packageBanner, { ipc, onError: (err) => showError(err) });
 
   // Cada painel numa coluna com cabeçalho e botão de recolher (FR-013b); a prévia usa a própria
   // barra como cabeçalho.
@@ -123,7 +131,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
 
   status.insertBefore(exporter.status, compilerEl.previousSibling);
 
-  app.append(top, message, exporter.errors, banner, body, status);
+  app.append(top, message, exporter.errors, banner, packageBanner, body, status);
   root.replaceChildren(app);
 
   // ---------------------------------------------------------------- estado
@@ -204,6 +212,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     editor?.setDiagnostics(u.diagnostics);
     renderCompile(u);
     exporter.update(u);
+    packages.update(u.diagnostics);
     for (const cb of [...observers]) cb(u);
   }
 
@@ -420,6 +429,10 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     watchExternalChanges(conflictOpts, resolveConflict).then(
       (stop) => stops.push(stop),
       (err: unknown) => console.warn("conflito externo: sem escuta de eventos", err),
+    );
+    watchPluginApprovals({ ipc, parent: app, onError: (err) => showError(err) }).then(
+      (stop) => stops.push(stop),
+      (err: unknown) => console.warn("plugins: sem escuta de eventos", err),
     );
     ipc.onExternalChangeReloaded(({ path, version }) => void externalReload(path, version)).then(
       (stop) => stops.push(stop),

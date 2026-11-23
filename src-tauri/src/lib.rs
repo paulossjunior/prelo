@@ -7,6 +7,7 @@ pub mod lang_service;
 pub mod project;
 #[cfg(feature = "self-test")]
 mod self_test;
+pub mod trust;
 
 // O autoteste encerra o app pelo IPC; nunca pode ir para uma build de release.
 #[cfg(all(feature = "self-test", not(debug_assertions)))]
@@ -53,6 +54,8 @@ pub fn configure_with_state<R: Runtime>(
             commands::jump_from_cursor,
             commands::subscribe_preview,
             commands::page_svg,
+            commands::decide_plugin,
+            commands::redownload_package,
             compile::export::export_pdf_dialog
         ])
 }
@@ -88,6 +91,8 @@ pub fn configure_with_state<R: Runtime>(
             commands::jump_from_cursor,
             commands::subscribe_preview,
             commands::page_svg,
+            commands::decide_plugin,
+            commands::redownload_package,
             compile::export::export_pdf_dialog,
             self_test::self_test_report,
             self_test::self_test_open_project,
@@ -157,6 +162,23 @@ fn notify_disk_change<R: Runtime>(app: &tauri::AppHandle<R>, path: &str) {
     }
 }
 
+/// Decisões de plugin e cache de pacotes nos dados locais do app; pedidos de confirmação
+/// viram o evento `plugin_approval_needed` (contracts/ipc.md).
+fn connect_trust<R: Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<()> {
+    let dir = app.path().app_local_data_dir()?;
+    let state = app.state::<commands::AppState>();
+    state.trust().set_data_dir(dir);
+    let handle = app.clone();
+    state
+        .trust()
+        .set_listener(std::sync::Arc::new(move |request| {
+            if let Err(e) = handle.emit(trust::PLUGIN_APPROVAL_NEEDED, request) {
+                eprintln!("prelo: pedido de confirmação de plugin não entregue: {e}");
+            }
+        }));
+    Ok(())
+}
+
 /// Último Salvar antes de fechar (Princípio III). `false` → manter a janela/o app aberto.
 fn may_close<R: Runtime>(app: &tauri::AppHandle<R>) -> bool {
     let ok = app.state::<commands::AppState>().flush_for_close();
@@ -178,6 +200,7 @@ pub fn run() {
             }
         })
         .setup(|app| {
+            connect_trust(app.handle())?;
             spawn_autosave(app.handle().clone());
             spawn_disk_changes(app.handle().clone());
             let config = app

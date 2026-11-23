@@ -614,3 +614,66 @@ fn criar_dentro_do_projeto_devolve_caminho_normalizado_sem_sobrescrever() {
     let opened = h.call("open_file", json!({ "path": "novo.typ" })).unwrap();
     assert_eq!(opened["text"], json!(""));
 }
+
+/// `decide_plugin` e `redownload_package` não recebem caminho: só um hash pedido pelo núcleo
+/// e um `@preview/<nome>:<versão>`. Caminho, hash inventado ou spec fora do formato são
+/// recusados sem tocar disco nem rede.
+#[test]
+fn plugins_e_pacotes_nao_aceitam_caminho_nem_hash_inventado() {
+    let h = Harness::new();
+    let secret = h.outside.secret().to_string_lossy().into_owned();
+    let upper = "A".repeat(64);
+    for sha in [
+        "../../etc/passwd",
+        "/etc/passwd",
+        secret.as_str(),
+        "",
+        upper.as_str(),
+    ] {
+        assert_eq!(
+            h.call("decide_plugin", json!({ "sha256": sha, "approve": true })),
+            Err(json!("invalid_arguments")),
+            "{sha:?}"
+        );
+    }
+    assert_eq!(
+        h.call(
+            "decide_plugin",
+            json!({ "sha256": "a".repeat(64), "approve": true })
+        ),
+        Err(json!("not_found")),
+        "hash que o núcleo não pediu"
+    );
+    assert_eq!(
+        h.call(
+            "decide_plugin",
+            json!({ "sha256": "a".repeat(64), "approve": true, "path": "main.typ" })
+        ),
+        Err(json!("invalid_arguments"))
+    );
+    for spec in [
+        "/etc/passwd",
+        "../x",
+        secret.as_str(),
+        "@preview/../x:1.0.0",
+        "@preview/x:1.0.0/../../y",
+        "@local/x:1.0.0",
+        "https://exemplo.com/x.tar.gz",
+    ] {
+        let res = h.call("redownload_package", json!({ "spec": spec }));
+        assert_eq!(res, Err(json!("invalid_arguments")), "{spec:?}");
+    }
+    assert_eq!(
+        h.call(
+            "redownload_package",
+            json!({ "spec": "@preview/x:1.0.0", "path": "a" })
+        ),
+        Err(json!("invalid_arguments"))
+    );
+    // Sem dados locais (app de teste), nada é baixado.
+    assert_eq!(
+        h.call("redownload_package", json!({ "spec": "@preview/x:1.0.0" })),
+        Err(json!("network_unavailable"))
+    );
+    h.still_alive();
+}
