@@ -20,14 +20,13 @@ use std::path::{Component, Path};
 
 use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 
-use super::save::{sha256, OpenFile};
+use super::save::{decode, sha256, OpenFile};
 use super::scope::MAX_FILE_BYTES;
 
 /// Código de erro de gravar um arquivo com conflito pendente (e nome do evento do contrato).
 pub const CONFLICT: &str = "external_change_conflict";
 /// Evento do contrato: o arquivo aberto foi recarregado do disco sem alteração local.
 pub const RELOADED: &str = "external_change_reloaded";
-const NOT_UTF8: &str = "not_utf8";
 const TOO_LARGE: &str = "too_large";
 
 /// O que a leitura do disco depois de um evento fez com o arquivo aberto.
@@ -65,7 +64,7 @@ impl OpenFile {
         if hash == self.last_saved_hash {
             return DiskChange::Ignored;
         }
-        if hash == sha256(self.text.as_bytes()) {
+        if hash == sha256(&self.disk_bytes()) {
             // O disco ficou igual ao texto em memória: nada a perder dos dois lados.
             self.last_saved_hash = hash;
             self.dirty = false;
@@ -113,8 +112,9 @@ impl OpenFile {
             return Err(TOO_LARGE);
         }
         let hash = sha256(&bytes);
-        let text = String::from_utf8(bytes).map_err(|_| NOT_UTF8)?;
+        let (text, line_ending) = decode(bytes)?;
         self.text = text.into();
+        self.line_ending = line_ending;
         // Versão nova: edição ainda baseada no texto anterior vira `version_mismatch`.
         self.version += 1;
         self.dirty = false;
@@ -228,6 +228,31 @@ mod tests {
         assert_eq!(file.version(), 1, "própria gravação não muda a versão");
         assert!(!file.is_dirty());
         assert!(!file.in_conflict());
+    }
+
+    #[test]
+    fn arquivo_crlf_reaberto_do_disco_fica_com_lf_e_volta_a_gravar_crlf() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("main.typ");
+        let mut file = opened("a\n");
+        assert_eq!(
+            file.disk_changed(b"b\r\nc\r\n".to_vec()),
+            DiskChange::Reloaded
+        );
+        assert_eq!(file.text(), "b\nc\n");
+        // O mesmo conteúdo do disco de novo não é mudança.
+        assert_eq!(
+            file.disk_changed(b"b\r\nc\r\n".to_vec()),
+            DiskChange::Ignored
+        );
+        file.edit(1, &[change(4, 4, "d\n")]).unwrap();
+        file.save(&path).unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"b\r\nc\r\nd\r\n");
+        assert_eq!(
+            file.disk_changed(std::fs::read(&path).unwrap()),
+            DiskChange::Ignored,
+            "a própria gravação em CRLF é reconhecida"
+        );
     }
 
     #[test]
