@@ -58,7 +58,7 @@ describe("painel Erros", () => {
     ]);
     const [a, b] = items(parent);
     expect(items(parent)).toHaveLength(2);
-    expect(a!.querySelector(".pb-icon")?.textContent).toBeTruthy();
+    expect(a!.querySelector(".prelo-icon.is-error svg")).not.toBeNull();
     expect(a!.classList.contains("is-error")).toBe(true);
     expect(a!.querySelector(".pb-loc")?.textContent).toBe("main.typ:4:6");
     expect(a!.querySelector(".pb-reason")?.textContent).toMatch(/`foo` não existe/);
@@ -67,6 +67,7 @@ describe("painel Erros", () => {
     expect(a!.querySelector(".pb-hint")?.textContent).toContain("did you mean `for`?");
     // Mensagem desconhecida: a original vira o texto principal, com as dicas; sem "Como corrigir".
     expect(b!.classList.contains("is-warning")).toBe(true);
+    expect(b!.querySelector(".prelo-icon.is-warning svg")).not.toBeNull();
     expect(b!.querySelector(".pb-loc")?.textContent).toBe("refs.bib:2");
     expect(b!.querySelector(".pb-reason")?.textContent).toBe("something new");
     expect(b!.querySelector(".pb-fix")).toBeNull();

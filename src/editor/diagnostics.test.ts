@@ -126,6 +126,26 @@ describe("diagnósticos no editor", () => {
     expect(mark?.textContent).toBe("#let");
   });
 
+  it("margem com ícone desenhado em SVG por severidade, sem o marcador `data:` do lint (regressão)", () => {
+    const { parent, editor } = mount();
+    editor.setDiagnostics([
+      diag({ range: { from: 10, to: 14 }, message: "expected expression" }),
+      diag({ severity: "warning", range: { from: 20, to: 24 }, message: "aviso" }),
+    ]);
+    // O marcador do @codemirror/lint usa `content: url(data:…)`, bloqueado pela CSP: no WebKit
+    // vira um quadrado vazio. Não deve existir.
+    expect(parent.querySelector(".cm-lint-marker")).toBeNull();
+    const err = parent.querySelector<HTMLElement>(".prelo-lint-gutter .prelo-icon.is-error");
+    const warn = parent.querySelector<HTMLElement>(".prelo-lint-gutter .prelo-icon.is-warning");
+    expect(err?.querySelector("svg")).not.toBeNull();
+    expect(warn?.querySelector("svg")).not.toBeNull();
+    expect(err?.getAttribute("title")).toBe("expected expression");
+    // Sem atributo `style` (CSP `style-src` sem 'unsafe-inline').
+    expect(err?.querySelector("[style]")).toBeNull();
+    editor.setDiagnostics([]);
+    expect(parent.querySelector(".prelo-lint-gutter .prelo-icon")).toBeNull();
+  });
+
   it("lista nova substitui a anterior; lista vazia limpa", () => {
     const { parent, editor } = mount();
     editor.setDiagnostics([diag({ range: { from: 0, to: 1 } })]);

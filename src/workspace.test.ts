@@ -183,6 +183,9 @@ describe("prévia e diagnósticos (cenários 2 e 4)", () => {
     expect(diagnosticCount(ws.editor()!.view.state)).toBe(1);
     expect(root.querySelector(".ws-compile")?.textContent).toMatch(/1 erro/);
     expect(root.querySelector(".pv-error")?.hasAttribute("hidden")).toBe(false);
+    // Ícone de erro na faixa da prévia e na contagem da barra de status.
+    expect(root.querySelector(".pv-error .prelo-icon.is-error svg")).not.toBeNull();
+    expect(root.querySelector(".ws-compile .prelo-icon.is-error svg")).not.toBeNull();
   });
 
   it("painel Erros lista os diagnósticos; status e faixa da prévia abrem o painel (FR-006a)", async () => {
