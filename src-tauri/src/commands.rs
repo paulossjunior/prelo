@@ -44,6 +44,7 @@ pub use crate::fs::watch::{DiskChange, Keep};
 use crate::lang_service::{Completion, LangService, Token};
 use crate::project::record::{self, LoadedRecord, RecordState};
 use crate::project::{CompilerInfo, MAIN_FILE_MISSING};
+use crate::trust::Trust;
 
 pub use crate::project::EMBEDDED_TYPST;
 
@@ -90,7 +91,10 @@ fn is_absolute(requested: &str) -> bool {
 fn refusal_code(refusal: &Refusal) -> &'static str {
     match refusal {
         Refusal::OutsideProject { .. } => OUTSIDE,
-        Refusal::NotFound { .. } | Refusal::SpecialFile { .. } => NOT_FOUND,
+        Refusal::NotFound { .. }
+        | Refusal::SpecialFile { .. }
+        | Refusal::PluginPending { .. }
+        | Refusal::PluginRejected { .. } => NOT_FOUND,
         Refusal::TooLarge { .. } => "too_large",
     }
 }
@@ -405,6 +409,8 @@ pub struct AppState {
     /// chama [`AppState::handle_disk_change`] ([`AppState::take_disk_changes`]).
     disk_tx: Mutex<Sender<String>>,
     disk_rx: Mutex<Option<Receiver<String>>>,
+    /// Decisões de plugin e cache de pacotes (dados locais do app).
+    trust: Trust,
 }
 
 impl Default for AppState {
@@ -423,7 +429,36 @@ impl AppState {
             close_refused: AtomicBool::new(false),
             disk_tx: Mutex::new(disk_tx),
             disk_rx: Mutex::new(Some(disk_rx)),
+            trust: Trust::default(),
         }
+    }
+
+    /// Decisões de plugin e cache de pacotes.
+    pub fn trust(&self) -> &Trust {
+        &self.trust
+    }
+
+    /// `decide_plugin`: grava a decisão sobre o pedido pendente `sha256` no projeto aberto e
+    /// recompila.
+    pub fn decide_plugin(&self, sha256: &str, approve: bool) -> Result<(), String> {
+        let guard = self.lock();
+        let project = guard.as_ref().ok_or(NO_PROJECT)?;
+        self.trust.decide(project.scope.root(), sha256, approve)?;
+        project.recompile();
+        Ok(())
+    }
+
+    /// `redownload_package`: baixa `spec` de novo (sem segurar a trava do projeto durante o
+    /// download) e recompila.
+    pub fn redownload_package(&self, spec: &str) -> Result<(), String> {
+        if self.lock().is_none() {
+            return Err(NO_PROJECT.into());
+        }
+        self.trust.redownload(spec)?;
+        if let Some(project) = self.lock().as_ref() {
+            project.recompile();
+        }
+        Ok(())
     }
 
     fn lock(&self) -> MutexGuard<'_, Option<OpenProject>> {
@@ -451,6 +486,7 @@ impl AppState {
         project.create_missing_record();
         project.main_missing = !project.main_exists();
         let mut guard = self.lock();
+        self.trust.reset_pending();
         // A prévia do projeto anterior deixa de valer antes de qualquer compilação nova.
         let generation = self.preview.reset();
         if !project.version_differs() {
@@ -557,8 +593,9 @@ impl AppState {
     fn start_compiler(&self, project: &mut OpenProject, generation: u64) {
         let root = project.scope.root().to_owned();
         let main = project.record.record.main_or_default().to_owned();
+        let env = self.trust.env();
         let (scheduler, compilations) =
-            Scheduler::new(move || ProjectCompiler::new(root.clone(), &main));
+            Scheduler::new(move || ProjectCompiler::with_env(root.clone(), &main, env.clone()));
         self.preview.spawn_pump(generation, compilations);
         project.compiler = Some(scheduler);
     }
@@ -866,6 +903,34 @@ pub(crate) fn no_args(request: &Request<'_>) -> Result<(), String> {
         InvokeBody::Json(Value::Object(map)) if map.is_empty() => Ok(()),
         _ => Err(invalid()),
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DecidePluginArgs {
+    sha256: String,
+    approve: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SpecArgs {
+    spec: String,
+}
+
+/// Decisão sobre `plugin_approval_needed` (FR-019) → recompila.
+#[tauri::command(async)]
+pub fn decide_plugin(state: State<'_, AppState>, request: Request<'_>) -> Result<(), String> {
+    let a: DecidePluginArgs = args(&request)?;
+    state.decide_plugin(&a.sha256, a.approve)
+}
+
+/// "Baixar de novo" um pacote adulterado (FR-018) → recompila. Erros: `network_unavailable`,
+/// `package_rejected`.
+#[tauri::command(async)]
+pub fn redownload_package(state: State<'_, AppState>, request: Request<'_>) -> Result<(), String> {
+    let a: SpecArgs = args(&request)?;
+    state.redownload_package(&a.spec)
 }
 
 #[derive(Deserialize)]

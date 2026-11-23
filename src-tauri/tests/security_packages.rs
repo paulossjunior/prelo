@@ -187,7 +187,9 @@ fn pacote_valido_e_baixado_verificado_e_guardado() {
     assert_eq!(entry.state, State::Available);
     let sha = entry.sha256.expect("hash gravado no índice");
     assert_eq!(sha.len(), 64);
-    assert!(sha.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+    assert!(sha
+        .chars()
+        .all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
     assert!(entry.downloaded_at.is_some());
 
     let index: serde_json::Value = serde_json::from_slice(
@@ -211,8 +213,14 @@ fn url_pedida_contem_so_nome_e_versao() {
     let root = project.root();
     let name = root.file_name().unwrap().to_string_lossy().into_owned();
     for url in fetcher.asked() {
-        assert!(!url.contains(&name), "a URL não leva nada do projeto: {url}");
-        assert!(!url.contains("main"), "a URL não leva nada do projeto: {url}");
+        assert!(
+            !url.contains(&name),
+            "a URL não leva nada do projeto: {url}"
+        );
+        assert!(
+            !url.contains("main"),
+            "a URL não leva nada do projeto: {url}"
+        );
     }
 }
 
@@ -299,8 +307,15 @@ fn assert_rejected(case: &str, bytes: Vec<u8>, limits: Limits) {
         other => panic!("{case}: pacote deveria ser recusado, veio {other:?}"),
     }
     assert_eq!(store.entry(&spec(DEMO)).state, State::Rejected, "{case}");
-    assert_eq!(store.entry(&spec(DEMO)).sha256, None, "{case}: fora do índice");
-    assert!(!data.package_dir().exists(), "{case}: pasta do pacote criada");
+    assert_eq!(
+        store.entry(&spec(DEMO)).sha256,
+        None,
+        "{case}: fora do índice"
+    );
+    assert!(
+        !data.package_dir().exists(),
+        "{case}: pasta do pacote criada"
+    );
     assert_eq!(
         data.cached_files(),
         Vec::<PathBuf>::new(),
@@ -448,10 +463,7 @@ fn limites_de_producao() {
 #[test]
 fn pacote_recusado_vira_diagnostico_de_pacote() {
     let data = AppData::new();
-    let fetcher = FakeFetcher::serving(
-        DEMO_URL,
-        with_extra(TarEntry::file("../fora.typ", "fora")),
-    );
+    let fetcher = FakeFetcher::serving(DEMO_URL, with_extra(TarEntry::file("../fora.typ", "fora")));
     let project = importing(DEMO);
     let mut world = world_with(&project, Arc::new(data.store(&fetcher)));
     let out = world.compile();
@@ -462,7 +474,8 @@ fn pacote_recusado_vira_diagnostico_de_pacote() {
         .find(|d| d.kind == Kind::Package)
         .unwrap_or_else(|| panic!("diagnóstico de pacote: {:?}", out.diagnostics));
     assert!(
-        diag.message.starts_with("o pacote `@preview/demo:0.1.0` foi recusado"),
+        diag.message
+            .starts_with("o pacote `@preview/demo:0.1.0` foi recusado"),
         "{diag:?}"
     );
 }
@@ -474,7 +487,11 @@ fn pacote_alterado_no_cache_e_adulterado_e_baixar_de_novo_resolve() {
     let data = AppData::new();
     let fetcher = FakeFetcher::serving(DEMO_URL, make_targz(&demo_entries()));
     data.store(&fetcher).resolve(&spec(DEMO)).unwrap();
-    std::fs::write(data.package_dir().join("lib.typ"), "#let saudacao = [mal]\n").unwrap();
+    std::fs::write(
+        data.package_dir().join("lib.typ"),
+        "#let saudacao = [mal]\n",
+    )
+    .unwrap();
 
     // Sessão nova: o hash não bate.
     let store = Arc::new(data.store(&fetcher));
@@ -524,7 +541,12 @@ fn arquivo_novo_ou_link_no_cache_tambem_e_adulteracao() {
     data.store(&fetcher).resolve(&spec(DEMO)).unwrap();
     let outside = Outside::new();
     std::fs::remove_file(data.package_dir().join("dados/nota.txt")).unwrap();
-    if symlink(&outside.secret(), &data.package_dir().join("dados/nota.txt")).is_err() {
+    if symlink(
+        &outside.secret(),
+        &data.package_dir().join("dados/nota.txt"),
+    )
+    .is_err()
+    {
         eprintln!("sem permissão para criar link; parte do teste pulada");
         return;
     }
@@ -541,10 +563,7 @@ fn arquivo_de_pacote_fora_da_pasta_do_pacote_e_fora_do_projeto() {
     let data = AppData::new();
     let outside = Outside::new();
     let mut entries = demo_entries();
-    entries[1] = TarEntry::file(
-        "lib.typ",
-        "#let saudacao = [#read(\"dados/nota.txt\")]\n",
-    );
+    entries[1] = TarEntry::file("lib.typ", "#let saudacao = [#read(\"dados/nota.txt\")]\n");
     let fetcher = FakeFetcher::serving(DEMO_URL, make_targz(&entries));
     let store = Arc::new(data.store(&fetcher));
     let project = importing(DEMO);

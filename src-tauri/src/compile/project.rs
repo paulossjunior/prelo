@@ -14,7 +14,7 @@ use typst_layout::PagedDocument;
 
 use super::scheduler::{Compiler, Outcome};
 use crate::diagnostic::Diagnostic;
-use crate::world::ProjectWorld;
+use crate::world::{ProjectWorld, WorldEnv};
 
 /// Estado da edição a compilar.
 #[derive(Debug, Clone)]
@@ -29,17 +29,25 @@ pub struct CompileInput {
 pub struct ProjectCompiler {
     root: PathBuf,
     main: String,
+    env: WorldEnv,
     world: Result<ProjectWorld, Diagnostic>,
     /// Textos já aplicados ao World como arquivos abertos.
     applied: HashMap<String, Arc<str>>,
 }
 
 impl ProjectCompiler {
+    /// Sem decisões de plugin (todo plugin fica barrado) nem cache de pacotes.
     pub fn new(root: PathBuf, main: &str) -> Self {
-        let world = ProjectWorld::open(&root, main);
+        Self::with_env(root, main, WorldEnv::default())
+    }
+
+    /// Com decisões de plugin e cache de pacotes (o núcleo do app).
+    pub fn with_env(root: PathBuf, main: &str, env: WorldEnv) -> Self {
+        let world = ProjectWorld::open_with(&root, main, env.clone());
         Self {
             root,
             main: main.to_owned(),
+            env,
             world,
             applied: HashMap::new(),
         }
@@ -56,7 +64,7 @@ impl ProjectCompiler {
     /// A compilação e o serviço de linguagem (T036) partem daqui, então veem o mesmo texto.
     pub fn sync(&mut self, input: CompileInput) -> Result<&mut ProjectWorld, Diagnostic> {
         if input.main != self.main {
-            *self = Self::new(self.root.clone(), &input.main);
+            *self = Self::with_env(self.root.clone(), &input.main, self.env.clone());
         }
         let world = match &mut self.world {
             Ok(world) => world,

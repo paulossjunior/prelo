@@ -29,6 +29,11 @@ pub enum Refusal {
     SpecialFile { requested: String },
     /// `GrandeDemais`: acima de `limit` bytes.
     TooLarge { requested: String, limit: u64 },
+    /// `PluginNaoAprovado`: módulo WASM sem decisão para (projeto, sha256) (R8). Lido só para
+    /// calcular o hash; não é entregue.
+    PluginPending { requested: String },
+    /// Módulo WASM que a pessoa recusou neste projeto.
+    PluginRejected { requested: String },
 }
 
 impl Refusal {
@@ -38,7 +43,29 @@ impl Refusal {
             Refusal::NotFound { requested }
             | Refusal::OutsideProject { requested }
             | Refusal::SpecialFile { requested }
-            | Refusal::TooLarge { requested, .. } => requested,
+            | Refusal::TooLarge { requested, .. }
+            | Refusal::PluginPending { requested }
+            | Refusal::PluginRejected { requested } => requested,
+        }
+    }
+
+    /// Recusa de plugin (`Diagnostic.kind = plugin`), não de acesso.
+    pub fn is_plugin(&self) -> bool {
+        matches!(
+            self,
+            Refusal::PluginPending { .. } | Refusal::PluginRejected { .. }
+        )
+    }
+
+    /// A mesma recusa citando `requested` (o caminho como foi escrito no `.typ`).
+    pub fn with_requested(self, requested: String) -> Self {
+        match self {
+            Refusal::NotFound { .. } => Refusal::NotFound { requested },
+            Refusal::OutsideProject { .. } => Refusal::OutsideProject { requested },
+            Refusal::SpecialFile { .. } => Refusal::SpecialFile { requested },
+            Refusal::TooLarge { limit, .. } => Refusal::TooLarge { requested, limit },
+            Refusal::PluginPending { .. } => Refusal::PluginPending { requested },
+            Refusal::PluginRejected { .. } => Refusal::PluginRejected { requested },
         }
     }
 }
@@ -63,6 +90,13 @@ impl fmt::Display for Refusal {
                 f,
                 "arquivo grande demais: `{requested}` (limite {} MB)",
                 limit / (1024 * 1024)
+            ),
+            Refusal::PluginPending { requested } => {
+                write!(f, "plugin `{requested}` aguardando sua confirmação")
+            }
+            Refusal::PluginRejected { requested } => write!(
+                f,
+                "plugin `{requested}` recusado neste projeto; ele não é executado"
             ),
         }
     }

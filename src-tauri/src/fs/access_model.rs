@@ -6,8 +6,13 @@
 //!
 //! 1. devolve o texto do overlay se o arquivo está aberto no editor, sem tocar o disco;
 //! 2. caso contrário, lê pela regra de escopo ([`Scope::read`], passos 2–7);
-//! 3. guarda os bytes num cache por sha256 e devolve a cópia compartilhada, para que o Typst
+//! 3. barra módulo WASM (`\0asm`) sem aprovação para (raiz do projeto, sha256) (passo 8,
+//!    FR-019; [`crate::world::plugins`]);
+//! 4. guarda os bytes num cache por sha256 e devolve a cópia compartilhada, para que o Typst
 //!    reaproveite a imagem decodificada enquanto o conteúdo não muda (RF-51).
+//!
+//! Arquivos de pacote (`<cache>/packages/preview/<nome>/<versão>/…`) passam pela mesma regra
+//! de escopo, com a pasta do pacote como raiz (RF-08, FR-017).
 //!
 //! Toda recusa vira `FileError::Other` com a mensagem do contrato, citando o caminho relativo
 //! à raiz (nunca o real), e é registrada para que o World a reconheça na mensagem do Typst e a
@@ -24,6 +29,8 @@ use typst::diag::{FileError, FileResult};
 
 use super::scope::{Refusal, Scope};
 use crate::diagnostic::{Diagnostic, Kind};
+use crate::world::packages::PREVIEW;
+use crate::world::plugins::{is_wasm, Gate, WorldEnv};
 
 /// Overlay de arquivos abertos: caminho absoluto léxico sob a raiz → texto em memória.
 type Overlay = HashMap<PathBuf, Bytes>;
@@ -36,6 +43,7 @@ pub struct AccessModel {
     overlay: Arc<RwLock<Overlay>>,
     cache: Arc<Mutex<HashMap<[u8; 32], Bytes>>>,
     refusals: Arc<Mutex<HashMap<String, Refusal>>>,
+    env: WorldEnv,
 }
 
 impl fmt::Debug for AccessModel {
@@ -47,13 +55,26 @@ impl fmt::Debug for AccessModel {
 }
 
 impl AccessModel {
+    /// Modelo sem recursos de fora do projeto: todo plugin fica barrado e `@preview` não
+    /// resolve.
     pub fn new(scope: Scope) -> Self {
+        Self::with_env(scope, WorldEnv::default())
+    }
+
+    /// Modelo com decisões de plugin e cache de pacotes.
+    pub fn with_env(scope: Scope, env: WorldEnv) -> Self {
         Self {
             scope,
             overlay: Arc::default(),
             cache: Arc::default(),
             refusals: Arc::default(),
+            env,
         }
+    }
+
+    /// Decisões de plugin e cache de pacotes deste modelo.
+    pub fn env(&self) -> &WorldEnv {
+        &self.env
     }
 
     /// Regra de escopo do projeto.
@@ -152,6 +173,51 @@ impl AccessModel {
         }
     }
 
+    /// Escopo do pacote se `src` fica no cache de pacotes: (escopo com a pasta do pacote como
+    /// raiz, caminho pedido relativo a ela com `/` inicial, `@preview/<nome>:<versão>`).
+    fn package_scope(&self, src: &Path) -> Option<Result<(Scope, String, String), Refusal>> {
+        let store = self.env.packages.as_ref()?;
+        let rel = src.strip_prefix(store.dir()).ok()?;
+        let parts: Vec<String> = rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned())
+            .collect();
+        let requested = format!("/{}", parts.get(3..).unwrap_or_default().join("/"));
+        let not_found = || Refusal::NotFound {
+            requested: requested.clone(),
+        };
+        if parts.len() < 4 || parts[0] != PREVIEW {
+            return Some(Err(not_found()));
+        }
+        let package = format!("@{PREVIEW}/{}:{}", parts[1], parts[2]);
+        let root = store.dir().join(&parts[0]).join(&parts[1]).join(&parts[2]);
+        Some(
+            Scope::new(root)
+                .map(|scope| (scope, requested.clone(), package))
+                .map_err(|_| not_found()),
+        )
+    }
+
+    /// Passo 8: módulo WASM só sai com aprovação para (raiz do projeto, sha256).
+    fn gate(&self, requested: &str, package: Option<String>, bytes: &[u8]) -> FileResult<()> {
+        if !is_wasm(bytes) {
+            return Ok(());
+        }
+        let shown = requested.trim_start_matches('/');
+        match self
+            .env
+            .gate_plugin(self.scope.root(), shown, package, bytes)
+        {
+            Gate::Approved => Ok(()),
+            Gate::Pending => Err(self.refuse(Refusal::PluginPending {
+                requested: requested.into(),
+            })),
+            Gate::Rejected => Err(self.refuse(Refusal::PluginRejected {
+                requested: requested.into(),
+            })),
+        }
+    }
+
     fn refuse(&self, refusal: Refusal) -> FileError {
         let message = refusal.to_string();
         lock(&self.refusals).insert(message.clone(), refusal);
@@ -173,14 +239,31 @@ impl PathAccessModel for AccessModel {
     }
 
     fn content(&self, src: &Path) -> FileResult<Bytes> {
-        // Passo 1: overlay de arquivos abertos.
-        if let Some(text) = self.overlay_read().get(src) {
-            return Ok(text.clone());
+        // Passo 1: overlay de arquivos abertos (texto UTF-8 também pode ter a assinatura WASM).
+        let open = self.overlay_read().get(src).cloned();
+        if let Some(text) = open {
+            let requested = self.requested_for(src).map_err(|r| self.refuse(r))?;
+            self.gate(&requested, None, &text)?;
+            return Ok(text);
         }
 
-        // Passos 2–8: regra de escopo; toda leitura confere de novo, mesmo com cache.
-        let requested = self.requested_for(src).map_err(|r| self.refuse(r))?;
-        let bytes = self.scope.read(&requested).map_err(|r| self.refuse(r))?;
+        // Passos 2–7: regra de escopo; toda leitura confere de novo, mesmo com cache. Arquivo
+        // de pacote: a pasta do pacote é a raiz.
+        let (bytes, requested, package) = match self.package_scope(src) {
+            Some(Ok((scope, requested, package))) => {
+                let bytes = scope.read(&requested).map_err(|r| self.refuse(r))?;
+                (bytes, requested, Some(package))
+            }
+            Some(Err(refusal)) => return Err(self.refuse(refusal)),
+            None => {
+                let requested = self.requested_for(src).map_err(|r| self.refuse(r))?;
+                let bytes = self.scope.read(&requested).map_err(|r| self.refuse(r))?;
+                (bytes, requested, None)
+            }
+        };
+
+        // Passo 8: plugins.
+        self.gate(&requested, package, &bytes)?;
 
         // Passo 9: cache por conteúdo.
         let hash: [u8; 32] = Sha256::digest(&bytes).into();
@@ -195,7 +278,12 @@ impl PathAccessModel for AccessModel {
 /// Recusa de acesso como diagnóstico (`kind = access`), sem posição: `path` e a mensagem
 /// citam só o caminho pedido.
 pub fn access_diagnostic(refusal: &Refusal) -> Diagnostic {
-    let mut diag = Diagnostic::error(Kind::Access, refusal.to_string());
+    let kind = if refusal.is_plugin() {
+        Kind::Plugin
+    } else {
+        Kind::Access
+    };
+    let mut diag = Diagnostic::error(kind, refusal.to_string());
     diag.path = Some(refusal.requested().to_owned());
     diag
 }

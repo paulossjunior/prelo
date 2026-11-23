@@ -143,9 +143,16 @@ fn sem_aprovacao_o_plugin_nao_roda_e_a_confirmacao_e_pedida() {
     let out = world.compile();
 
     assert!(out.output.is_none());
-    assert_eq!(delivered.load(Ordering::SeqCst), 0, "plugin entregue ao compilador");
+    assert_eq!(
+        delivered.load(Ordering::SeqCst),
+        0,
+        "plugin entregue ao compilador"
+    );
     let diag = plugin_diag(&out.diagnostics);
-    assert_eq!(diag.message, "plugin `teste.wasm` aguardando sua confirmação");
+    assert_eq!(
+        diag.message,
+        "plugin `teste.wasm` aguardando sua confirmação"
+    );
     assert_eq!(diag.path.as_deref(), Some("main.typ"));
     assert_eq!(diag.line, Some(1));
 
@@ -189,7 +196,10 @@ fn sem_registro_de_decisoes_todo_plugin_fica_barrado() {
 fn wasm_lido_como_dado_tambem_pede_confirmacao() {
     let app = App::new();
     let project = TempProject::empty();
-    project.write("main.typ", "#let b = read(\"teste.wasm\", encoding: none)\n#b.len()\n");
+    project.write(
+        "main.typ",
+        "#let b = read(\"teste.wasm\", encoding: none)\n#b.len()\n",
+    );
     project.write("teste.wasm", wasm());
     let (mut world, delivered) = app.world(&project.root());
     let out = world.compile();
@@ -214,7 +224,10 @@ fn recusado_nao_roda_e_nao_pede_de_novo() {
         diag.message,
         "plugin `teste.wasm` recusado neste projeto; ele não é executado"
     );
-    assert!(app.requests().is_empty(), "recusa não pede confirmação de novo");
+    assert!(
+        app.requests().is_empty(),
+        "recusa não pede confirmação de novo"
+    );
 }
 
 #[test]
@@ -304,7 +317,10 @@ fn decisao_fica_gravada_nos_dados_locais_e_vale_na_sessao_seguinte() {
     let entries = saved.as_array().expect("lista de decisões");
     assert_eq!(entries.len(), 1, "a mesma chave é substituída: {saved}");
     let entry = &entries[0];
-    assert_eq!(entry["projectRoot"], project.root().to_string_lossy().as_ref());
+    assert_eq!(
+        entry["projectRoot"],
+        project.root().to_string_lossy().as_ref()
+    );
     assert_eq!(entry["sha256"], sha256_hex(&wasm()));
     assert_eq!(entry["decision"], "approved");
     assert_eq!(entry["path"], "teste.wasm");
@@ -328,7 +344,10 @@ fn registro_corrompido_vale_como_vazio_e_e_reescrito() {
     let file = app.data_dir().join(APPROVALS_FILE);
     std::fs::write(&file, b"{ isto nao e json").unwrap();
     let approvals = PluginApprovals::load(app.data_dir());
-    assert_eq!(approvals.decision(&project.root(), &sha256_hex(&wasm())), None);
+    assert_eq!(
+        approvals.decision(&project.root(), &sha256_hex(&wasm())),
+        None
+    );
     let rewritten: serde_json::Value =
         serde_json::from_slice(&std::fs::read(&file).unwrap()).expect("reescrito como JSON");
     assert_eq!(rewritten, serde_json::json!([]));
@@ -388,7 +407,10 @@ fn plugin_de_pacote_segue_a_mesma_regra() {
     assert!(out.output.is_none());
     assert_eq!(delivered.load(Ordering::SeqCst), 0);
     let diag = plugin_diag(&out.diagnostics);
-    assert_eq!(diag.message, "plugin `plugin.wasm` aguardando sua confirmação");
+    assert_eq!(
+        diag.message,
+        "plugin `plugin.wasm` aguardando sua confirmação"
+    );
     let bytes = wasm();
     assert_eq!(
         app.requests(),
@@ -403,9 +425,70 @@ fn plugin_de_pacote_segue_a_mesma_regra() {
 
     // Aprovação ligada a este projeto e ao conteúdo, como no plugin do projeto.
     app.approvals
-        .decide(&project.root(), &sha256_hex(&bytes), "plugin.wasm", Decision::Approved)
+        .decide(
+            &project.root(),
+            &sha256_hex(&bytes),
+            "plugin.wasm",
+            Decision::Approved,
+        )
         .unwrap();
     let out = world.compile();
     assert!(out.output.is_some(), "{:?}", out.diagnostics);
     assert!(delivered.load(Ordering::SeqCst) > 0);
+}
+
+// ------------------------------------------------------------------- pelo núcleo do app
+
+#[test]
+fn pelo_nucleo_o_pedido_chega_uma_vez_e_aprovar_recompila() {
+    use prelo_lib::commands::AppState;
+    use std::sync::mpsc;
+    use std::time::Duration;
+
+    let app = App::new();
+    let state = AppState::default();
+    state.trust().set_data_dir(app.data_dir().to_path_buf());
+    let (req_tx, requests) = mpsc::channel();
+    state
+        .trust()
+        .set_listener(Arc::new(move |r: &PluginRequest| {
+            let _ = req_tx.send(r.clone());
+        }));
+    let (tx, updates) = mpsc::channel();
+    state.subscribe_preview(move |u| {
+        let _ = tx.send((u.ok, u.diagnostics.clone()));
+    });
+    let project = plugin_project();
+    state.open_project(&project.root()).unwrap();
+
+    let wait = Duration::from_secs(30);
+    let request = requests.recv_timeout(wait).expect("pedido de confirmação");
+    assert_eq!(request.path, "teste.wasm");
+    let (ok, diagnostics) = updates.recv_timeout(wait).expect("prévia");
+    assert!(!ok);
+    plugin_diag(&diagnostics);
+
+    // Hash que o núcleo não pediu, ou fora do formato, é recusado.
+    assert_eq!(
+        state.decide_plugin(&"b".repeat(64), true),
+        Err("not_found".into())
+    );
+    assert_eq!(
+        state.decide_plugin("../../x", true),
+        Err("invalid_arguments".into())
+    );
+
+    state.decide_plugin(&request.sha256, true).unwrap();
+    let (ok, diagnostics) = updates
+        .recv_timeout(wait)
+        .expect("prévia depois de aprovar");
+    assert!(ok, "{diagnostics:?}");
+    assert!(
+        requests.recv_timeout(Duration::from_millis(200)).is_err(),
+        "um só pedido por plugin"
+    );
+    assert_eq!(
+        PluginApprovals::load(app.data_dir()).decision(&project.root(), &request.sha256),
+        Some(Decision::Approved)
+    );
 }
