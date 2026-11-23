@@ -1,5 +1,5 @@
 // Área de trabalho do editor local (T039; US1): barra com o projeto e as ações (Abrir projeto,
-// Salvar, Sobre), árvore | editor | prévia, e a barra de status com a compilação, o estado de
+// Novo projeto (US6), Salvar, Sobre), árvore | editor | prévia, e a barra de status com a compilação, o estado de
 // gravação, a versão do Typst e a do Prelo. Layout e linguagem visual de prototype/index.html.
 //
 // Fiação (PR #176): uma assinatura de `subscribe_preview` alimenta a prévia e os diagnósticos
@@ -69,6 +69,13 @@ function button(label: string, cls = "btn"): HTMLButtonElement {
   return b;
 }
 
+function newProjectButton(): HTMLButtonElement {
+  const b = button("Novo projeto…");
+  b.dataset.action = "new-project";
+  b.title = "Criar um projeto Typst mínimo numa pasta vazia";
+  return b;
+}
+
 function clock(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -84,6 +91,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   const projectEl = el("div", "ws-project");
   projectEl.append(el("strong", undefined, "Prelo"), el("small", undefined, "nenhum projeto aberto"));
   const openBtn = button("Abrir projeto…", "btn primary");
+  // "Novo projeto" (US6): o núcleo mostra o diálogo de pasta e cria o projeto mínimo.
+  const newBtn = newProjectButton();
   const saveBtn = button("Salvar");
   saveBtn.title = "Salvar (⌘S / Ctrl+S)";
   saveBtn.disabled = true;
@@ -91,7 +100,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   // "Exportar PDF" (US5): a ação principal da barra; o resto em src/export.ts.
   const exporter = mountExport({ ipc, onError: (err) => showError(err) });
   const topSpacer = el("div", "ws-spacer");
-  top.append(projectEl, topSpacer, openBtn, saveBtn, aboutBtn, exporter.button);
+  top.append(projectEl, topSpacer, openBtn, newBtn, saveBtn, aboutBtn, exporter.button);
 
   const message = el("div", "ws-message");
   message.setAttribute("role", "status");
@@ -171,7 +180,11 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     if (!info) {
       const b = button("Abrir projeto…", "btn primary");
       b.addEventListener("click", () => void openProject());
-      p.append(b);
+      const n = newProjectButton();
+      n.addEventListener("click", () => void createProject());
+      const actions = el("div", "ws-empty-actions");
+      actions.append(b, n);
+      p.append(actions);
     }
     editorBox.replaceChildren(p);
   }
@@ -329,6 +342,18 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     if (next) await showProject(next);
   }
 
+  /** "Novo projeto" (US6): pasta não vazia → aviso `folder_not_empty`, nada muda. */
+  async function createProject() {
+    let next: ProjectInfo | null;
+    try {
+      next = await ipc.createProjectDialog();
+    } catch (err) {
+      showError(toIpcError(err));
+      return;
+    }
+    if (next) await showProject(next);
+  }
+
   // ---------------------------------------------------------------- editor
   async function closeEditor() {
     if (!editor) return;
@@ -415,6 +440,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
 
   // ---------------------------------------------------------------- ações
   openBtn.addEventListener("click", () => void openProject());
+  newBtn.addEventListener("click", () => void createProject());
   saveBtn.addEventListener("click", () => void editor?.save());
   aboutBtn.addEventListener("click", () => void about.open());
 

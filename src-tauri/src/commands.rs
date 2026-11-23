@@ -465,6 +465,17 @@ impl AppState {
         self.project.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// "Novo projeto" (US6; FR-002): cria o projeto mínimo em `root` e o abre. Chamado pelo
+    /// diálogo nativo do núcleo (`create_project_dialog`) e pelos testes.
+    ///
+    /// Pasta não vazia → `folder_not_empty` sem escrever nada; o projeto aberto, se houver,
+    /// continua aberto em qualquer recusa.
+    pub fn create_project(&self, folder: &Path) -> Result<ProjectInfo, String> {
+        let root = crate::project::create::create_project(folder, EMBEDDED_TYPST)
+            .map_err(|e| e.code().to_owned())?;
+        self.open_project(&root).map_err(|_| "not_found".to_owned())
+    }
+
     /// Abre o projeto em `root` (canonicalizada uma vez). Chamado pelo diálogo nativo do
     /// núcleo (`open_project_dialog`) e pelos testes; nunca exposto à interface com caminho.
     ///
