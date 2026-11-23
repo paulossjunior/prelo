@@ -6,6 +6,9 @@
 //! - editar o `.bib` no Prelo e salvar recompila com as referências novas; o mesmo vale para
 //!   um `.bib` gravado por outro programa (gerenciador de referências) sem estar aberto.
 //!
+//! - bibliografia já processada não é processada de novo numa edição só de texto do `.typ`
+//!   (FR-027, RF-51); volta a ser processada quando o `.bib`/`.yml` muda.
+//!
 //! O texto da prévia sai das páginas do documento compilado (`TextItem.text`).
 
 mod support;
@@ -285,4 +288,121 @@ fn imagem_trocada_por_outro_programa_atualiza_a_previa() {
         before.pages[0].height_pt, after.pages[0].height_pt,
         "a página acompanha a imagem nova"
     );
+}
+
+// ------------------------------------------------- bibliografia já processada (FR-027)
+
+/// Identidade da bibliografia processada que o documento usa. O Typst guarda o resultado de
+/// `Bibliography::decode` (memorizado pelo comemo) num `Arc`: um acerto no cache devolve o
+/// mesmo `Arc`; processar de novo cria outro. O tipo é `Bibliography(Arc<..>)` com campo
+/// privado, por isso o endereço sai dos bytes do próprio valor (um ponteiro, conferido).
+fn bibliography_identity(doc: &PagedDocument) -> usize {
+    use typst::foundations::{NativeElement, Selector};
+    use typst::introspection::Introspector;
+    use typst::model::BibliographyElem;
+
+    let found = doc
+        .introspector()
+        .query(&Selector::Elem(BibliographyElem::ELEM, None));
+    assert_eq!(found.len(), 1, "uma bibliografia no documento");
+    let elem = found[0]
+        .to_packed::<BibliographyElem>()
+        .expect("BibliographyElem");
+    let bibliography = &elem.sources.derived;
+    assert_eq!(
+        std::mem::size_of_val(bibliography),
+        std::mem::size_of::<usize>(),
+        "Bibliography mudou de forma: rever esta identidade"
+    );
+    // SAFETY: o valor é um `Arc` (tamanho de um ponteiro, conferido acima); só os bytes do
+    // ponteiro são copiados, sem mexer na contagem de referências.
+    unsafe { std::mem::transmute_copy::<_, usize>(bibliography) }
+}
+
+fn compile_doc(world: &mut ProjectWorld) -> PagedDocument {
+    let out = world.compile();
+    out.output
+        .unwrap_or_else(|| panic!("compilação falhou: {:?}", out.diagnostics))
+}
+
+#[test]
+fn bibliografia_processada_uma_vez_em_20_edicoes_de_texto() {
+    let p = TempProject::from_fixture("bibliografia");
+    let base = std::fs::read_to_string(p.path("main.typ")).unwrap();
+    let bib = std::fs::read_to_string(p.path("refs.bib")).unwrap();
+    let yml = std::fs::read_to_string(p.path("refs.yml")).unwrap();
+
+    // Documentos guardados: nenhum endereço é reaproveitado entre compilações.
+    let mut docs = Vec::new();
+    let mut compile = |world: &mut ProjectWorld| {
+        let doc = compile_doc(world);
+        let id = bibliography_identity(&doc);
+        docs.push(doc);
+        id
+    };
+
+    // Abertura e 20 edições de texto não salvas, como a digitação as produz (cada uma muda um
+    // trecho só): as 10 primeiras escrevem um parágrafo antes de `#bibliography(...)`, as 10
+    // seguintes um depois. Os bytes do `.bib`/`.yml` não mudam. Limite do Typst: a chave do
+    // cache inclui o *span* do caminho em `#bibliography(...)`; uma única troca que mude
+    // trechos dos dois lados da chamada a renumera, e a bibliografia é processada de novo.
+    let typed = |edit: usize| {
+        let before = "Antes da lista "
+            .chars()
+            .cycle()
+            .take(edit.min(10))
+            .collect::<String>();
+        let after = "Depois da lista"
+            .chars()
+            .cycle()
+            .take(edit.saturating_sub(10))
+            .collect::<String>();
+        let text = base.replace(
+            "= Referências de teste",
+            &format!("= Referências de teste\n\n{before}"),
+        );
+        format!("{text}\n{after}\n")
+    };
+    // Abertura: o `main.typ` no disco já tem os dois parágrafos, vazios.
+    p.write("main.typ", typed(0));
+    let mut world = ProjectWorld::open(p.root(), "main.typ").expect("World");
+    let opened = compile(&mut world);
+    for edit in 1..=20 {
+        world
+            .set_open_file("main.typ", &typed(edit))
+            .expect("overlay");
+        let id = compile(&mut world);
+        assert_eq!(
+            id, opened,
+            "edição {edit}: bibliografia processada de novo numa edição só de texto (FR-027)"
+        );
+    }
+
+    // O `.bib` muda: processa de novo, e as edições de texto seguintes reaproveitam.
+    world
+        .set_open_file("refs.bib", &bib.replace("colaborativa", "distribuída"))
+        .expect("overlay .bib");
+    let new_bib = compile(&mut world);
+    assert_ne!(new_bib, opened, "o .bib mudou: processa de novo");
+    for edit in 21..=25 {
+        world
+            .set_open_file("main.typ", &typed(edit))
+            .expect("overlay");
+        assert_eq!(
+            compile(&mut world),
+            new_bib,
+            "edição {edit} depois do .bib novo"
+        );
+    }
+
+    // O mesmo para o `.yml` do Hayagriva.
+    world
+        .set_open_file("refs.yml", &yml.replace("Compiladores", "Montadores"))
+        .expect("overlay .yml");
+    let new_yml = compile(&mut world);
+    assert_ne!(new_yml, new_bib, "o .yml mudou: processa de novo");
+    world
+        .set_open_file("main.typ", &typed(26))
+        .expect("overlay");
+    assert_eq!(compile(&mut world), new_yml, "edição depois do .yml novo");
 }
