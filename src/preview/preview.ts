@@ -5,6 +5,10 @@
 // núcleo lista essas em `PreviewUpdate.changed`). Compilação com erro mantém as páginas e mostra
 // a faixa de erro.
 //
+// Imagens (T058; RF-51): o núcleo cita cada imagem da página por `prelo-asset://<sha256>` em vez
+// de mandar os bytes a cada SVG. A prévia pede cada hash uma vez (`preview_asset`) e devolve a
+// `data:` URL ao SVG antes de criar o blob; editar texto na página da imagem não reenvia a imagem.
+//
 // Zoom (T091; FR-013a): a barra da prévia tem "−", "+", a porcentagem e "Ajustar à largura"
 // (padrão). O zoom só muda a largura CSS das páginas; como cada página é um SVG, ela continua
 // nítida e nada é pedido de novo ao núcleo. Ao mudar o nível, o ponto da página sob o centro (ou
@@ -77,7 +81,12 @@ interface Slot {
   /** Hash cujo pedido falhou; só é pedido de novo com hash novo ou ao voltar à janela. */
   failedHash: string | null;
   removed: boolean;
+  /** Hashes de imagem (`prelo-asset`) do SVG mostrado. */
+  assets: string[];
 }
+
+/** Referência a imagem no SVG de `page_svg` (T058): `prelo-asset://<sha256>`. */
+const ASSET_REF = /prelo-asset:\/\/([0-9a-f]{64})/g;
 
 const defaultUrls: BlobUrls = {
   create: (b) => URL.createObjectURL(b),
@@ -145,6 +154,10 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
 
   const slots: Slot[] = [];
   const inflight = new Set<Promise<void>>();
+  /** `data:` URL (ou o pedido em curso) de cada imagem por sha256. */
+  const assets = new Map<string, Promise<string>>();
+  /** Hashes de SVGs ainda sendo montados (não saem do cache no meio do caminho). */
+  const resolving = new Map<string, number>();
   let lastCompileId = -Infinity;
   let visible: number[] = [0];
   let destroyed = false;
@@ -173,9 +186,54 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
     slot.url = null;
     slot.shownHash = null;
     slot.failedHash = null;
+    slot.assets = [];
+    pruneAssets();
   }
 
-  function show(slot: Slot, hash: string, svg: string) {
+  /** Solta as `data:` URLs que nenhuma página mostrada usa (a memória acompanha a janela). */
+  function pruneAssets() {
+    const used = new Set(slots.flatMap((s) => s.assets));
+    for (const sha of assets.keys()) if (!used.has(sha) && !resolving.has(sha)) assets.delete(sha);
+  }
+
+  /**
+   * Devolve ao SVG as imagens citadas por `prelo-asset://<sha256>`. Um SVG mostrado como <img>
+   * não carrega recurso de fora (nem do protocolo próprio), então cada imagem precisa voltar
+   * como `data:` URL; ela é pedida ao núcleo uma vez por hash (`preview_asset`) e reaproveitada
+   * enquanto alguma página mostrada a usar.
+   */
+  async function withAssets(svg: string): Promise<{ svg: string; shas: string[] }> {
+    const shas = [...new Set(Array.from(svg.matchAll(ASSET_REF), (m) => m[1]!))];
+    if (shas.length === 0) return { svg, shas };
+    const resolved = new Map<string, string>();
+    for (const sha of shas) resolving.set(sha, (resolving.get(sha) ?? 0) + 1);
+    try {
+      await Promise.all(
+        shas.map(async (sha) => {
+          let pending = assets.get(sha);
+          if (!pending) {
+            pending = ipc.previewAsset(sha);
+            assets.set(sha, pending);
+            pending.catch(() => {
+              if (assets.get(sha) === pending) assets.delete(sha);
+            });
+          }
+          resolved.set(sha, await pending);
+        }),
+      );
+    } finally {
+      for (const sha of shas) {
+        const n = (resolving.get(sha) ?? 1) - 1;
+        if (n > 0) resolving.set(sha, n);
+        else resolving.delete(sha);
+      }
+    }
+    return { svg: svg.replace(ASSET_REF, (_, sha: string) => resolved.get(sha)!), shas };
+  }
+
+  function show(slot: Slot, hash: string, svg: string, shas: string[]) {
+    slot.assets = shas;
+    pruneAssets();
     const url = urls.create(new Blob([svg], { type: "image/svg+xml" }));
     if (!slot.img) {
       const img = document.createElement("img");
@@ -203,11 +261,12 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
     slot.loadingHash = hash;
     const p = ipc
       .pageSvg(index, hash)
+      .then((svg) => (typeof svg === "string" ? withAssets(svg) : null))
       .then(
-        (svg) => {
+        (page) => {
           // Resposta de hash velho, página removida ou fora da janela: descarta.
           if (destroyed || slot.removed || slot.info.hash !== hash || !inWindow(index)) return;
-          if (typeof svg === "string") show(slot, hash, svg);
+          if (page) show(slot, hash, page.svg, page.shas);
         },
         (err: unknown) => {
           // `stale_page`: chegou compilação nova; `sync` abaixo pede com o hash atual (ou o
@@ -407,7 +466,7 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
         const el = document.createElement("div");
         el.className = "pv-page";
         pagesEl.append(el);
-        slot = { info, el, img: null, url: null, shownHash: null, loadingHash: null, failedHash: null, removed: false };
+        slot = { info, el, img: null, url: null, shownHash: null, loadingHash: null, failedHash: null, removed: false, assets: [] };
         slots.push(slot);
         observer?.observe(el);
       }
@@ -442,6 +501,7 @@ export function mountPreview(parent: HTMLElement, opts: PreviewOptions): Preview
       resizer?.disconnect();
       for (const slot of slots) release(slot);
       slots.length = 0;
+      assets.clear();
       root.remove();
     },
   };

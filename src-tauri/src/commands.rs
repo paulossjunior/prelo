@@ -39,7 +39,7 @@ use tauri_plugin_dialog::DialogExt;
 use typst_layout::PagedDocument;
 
 use crate::compile::export::{ExportError, ExportSource, Exported};
-use crate::compile::preview::{render_svg, PreviewHub, PreviewUpdate};
+use crate::compile::preview::{asset_response, PreviewHub, PreviewUpdate};
 use crate::compile::project::{CompileInput, Compiled, DiskChanges, ProjectCompiler};
 use crate::compile::scheduler::Scheduler;
 use crate::compile::sync::{OutlineItem, SourcePosition, Synced};
@@ -797,10 +797,33 @@ impl AppState {
     }
 
     /// SVG da página `index` da prévia atual, se `hash` for o atual; senão `stale_page`. O SVG
-    /// é gerado fora das travas.
+    /// é gerado fora das travas, com as imagens citadas por `prelo-asset://<sha256>` (T058).
     pub fn page_svg(&self, index: usize, hash: &str) -> Result<String, String> {
-        let page = self.preview.page(index, hash)?;
-        Ok(render_svg(&page))
+        Ok(self.preview.page_svg(index, hash)?)
+    }
+
+    /// `preview_asset`: imagem `sha256` citada num SVG da prévia atual, como `data:` URL.
+    /// Hash malformado → `invalid_arguments`; hash que não é de imagem da prévia atual →
+    /// `not_found`.
+    pub fn preview_asset(&self, sha256: &str) -> Result<String, String> {
+        if sha256.len() != 64
+            || !sha256
+                .bytes()
+                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        {
+            return Err(INVALID_ARGUMENTS.into());
+        }
+        self.preview
+            .asset_data_url(sha256)
+            .ok_or_else(|| NOT_FOUND.into())
+    }
+
+    /// Resposta do protocolo `prelo-asset` (ver [`asset_response`]).
+    pub fn preview_asset_response(
+        &self,
+        request: &tauri::http::Request<Vec<u8>>,
+    ) -> tauri::http::Response<Vec<u8>> {
+        asset_response(&self.preview, request)
     }
 
     /// Projeto aberto e o `path` validado.
@@ -1097,7 +1120,11 @@ impl AppState {
                 .lock()
                 .as_ref()
                 .and_then(|project| project.info().compiler.registered),
-            fonts: Vec::new(),
+            // Licenças das fontes embutidas (FR-016, tela "Sobre").
+            fonts: crate::world::fonts::licenses()
+                .iter()
+                .filter_map(|font| serde_json::to_value(font).ok())
+                .collect(),
         }
     }
 }
@@ -1224,6 +1251,12 @@ struct PageArgs {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AssetArgs {
+    sha256: String,
+}
+
+#[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct ClickArgs {
     page: usize,
@@ -1344,6 +1377,14 @@ pub fn subscribe_preview(
 pub fn page_svg(state: State<'_, AppState>, request: Request<'_>) -> Result<String, String> {
     let a: PageArgs = args(&request)?;
     state.page_svg(a.index, &a.hash)
+}
+
+/// Imagem citada no SVG da prévia (`prelo-asset://<sha256>`) como `data:` URL; a interface a
+/// devolve ao SVG antes de mostrá-lo. Erros: `invalid_arguments`, `not_found`.
+#[tauri::command(async)]
+pub fn preview_asset(state: State<'_, AppState>, request: Request<'_>) -> Result<String, String> {
+    let a: AssetArgs = args(&request)?;
+    state.preview_asset(&a.sha256)
 }
 
 #[tauri::command(async)]

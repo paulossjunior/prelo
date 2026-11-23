@@ -147,7 +147,10 @@ struct Session {
 
 impl Session {
     fn fixture(name: &str) -> Self {
-        let project = TempProject::from_fixture(name);
+        Self::open(TempProject::from_fixture(name))
+    }
+
+    fn open(project: TempProject) -> Self {
         let state = AppState::default();
         let (tx, updates) = mpsc::channel();
         state.subscribe_preview(move |update: &PreviewUpdate| {
@@ -249,4 +252,37 @@ fn bib_gravado_por_outro_programa_recompila_sem_estar_aberto() {
     s.wait_text("com o .bib do disco", |t| {
         t.contains("conjunta") && !t.contains("colaborativa")
     });
+}
+
+fn svg(height: u32) -> String {
+    format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"10\" height=\"{height}\"><rect width=\"10\" height=\"{height}\" fill=\"red\"/></svg>"
+    )
+}
+
+#[test]
+fn imagem_trocada_por_outro_programa_atualiza_a_previa() {
+    // Mesmo caminho da releitura do `.bib`: arquivo não aberto que muda no disco é relido
+    // (o cache de bytes por conteúdo não segura a versão velha).
+    let project = TempProject::empty();
+    project.write("fig.svg", svg(10));
+    project.write(
+        "main.typ",
+        "#set page(width: 4cm, height: auto, margin: 0pt)\n#image(\"fig.svg\", width: 2cm)\n",
+    );
+    let s = Session::open(project);
+    let wait_ok = || loop {
+        let u = s.updates.recv_timeout(WAIT).expect("prévia no prazo");
+        if u.ok {
+            return u;
+        }
+    };
+    let before = wait_ok();
+    std::fs::write(s.project.path("fig.svg"), svg(40)).unwrap();
+    s.state.handle_disk_change("fig.svg");
+    let after = wait_ok();
+    assert_ne!(
+        before.pages[0].height_pt, after.pages[0].height_pt,
+        "a página acompanha a imagem nova"
+    );
 }

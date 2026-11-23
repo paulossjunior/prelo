@@ -39,10 +39,7 @@ const FIXTURES: [&str; 4] = ["artigo-basico", "bibliografia", "imagens", "fontes
 /// Fixtures que ainda diferem por uma tarefa aberta, com o motivo. O teste exige que elas
 /// continuem diferentes: quando a tarefa entregar, ele falha e pede para tirar a fixture
 /// daqui, e a comparação passa a valer para ela também.
-const PENDING: [(&str, &str); 1] = [(
-    "fontes",
-    "T056 (#121): o Prelo ainda não lê as fontes de fonts/ do projeto",
-)];
+const PENDING: [(&str, &str); 0] = [];
 
 fn typst_cli() -> Option<PathBuf> {
     std::env::var_os("PRELO_TYPST_CLI")
