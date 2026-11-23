@@ -69,6 +69,7 @@ No Linux sem tela, rode os testes ponta a ponta sob `xvfb-run`.
   | `main` | PR da `dev` | `verify` completo | `verify` nos 3 sistemas |
   | tag `vX.Y.Z` | (na `main`) | `verify` completo | release nos 3 sistemas |
 
+- **Commits e PRs:** assunto em inglês (`<tipo>(<escopo>): <resumo>`), corpo em pt-BR explicando o porquê, e trailers `Task`/`Story`/`Epic` com as issues. O PR segue o [modelo](.github/pull_request_template.md), com resumo para humanos e links do Épico, da História e das Tasks. Detalhes e exemplo: [docs/contribuir.md](docs/contribuir.md).
 - **Push só com o verify verde.** O hook `.githooks/pre-push` escolhe o modo pelo destino; não use `--no-verify`.
 - **`main` e `dev` só por pull request**, inclusive para o dono do repositório.
   A proteção está em [`.github/branch-protection.json`](.github/branch-protection.json); para reaplicar:
