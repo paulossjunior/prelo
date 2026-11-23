@@ -194,13 +194,13 @@ linha; localizar a partir de linhas conhecidas; clicar em cada seção.
 
 ### Testes para User Story 4
 
-- [ ] T061 [P] [US4] Testes em `src-tauri/tests/compile_sync.rs`: `jump_from_click` em parágrafo do principal e de `.typ` incluído devolve arquivo e linha corretos; ponto sem origem no projeto (numeração, pacote) devolve `null`; `jump_from_cursor` devolve página e posição; `outline` em ordem e com nível, incluindo títulos de arquivo incluído ([data-model.md](data-model.md#outlineitem) `OutlineItem.level`) (FR-005, FR-020, SC-007)
-- [ ] T062 [P] [US4] Testes de interface em `src/preview/sync.test.ts` e `src/project/outline.test.ts`: clique converte pixels em pontos e abre o arquivo na linha; `null` mostra aviso e não move o cursor; localizar rola e destaca; clicar na seção move editor e prévia
+- [x] T061 [P] [US4] Testes em `src-tauri/tests/compile_sync.rs`: `jump_from_click` em parágrafo do principal e de `.typ` incluído devolve arquivo e linha corretos; ponto sem origem no projeto (numeração, pacote) devolve `null`; `jump_from_cursor` devolve página e posição; `outline` em ordem e com nível, incluindo títulos de arquivo incluído ([data-model.md](data-model.md#outlineitem) `OutlineItem.level`) (FR-005, FR-020, SC-007)
+- [x] T062 [P] [US4] Testes de interface em `src/preview/sync.test.ts` e `src/project/outline.test.ts`: clique converte pixels em pontos e abre o arquivo na linha; `null` mostra aviso e não move o cursor; localizar rola e destaca; clicar na seção move editor e prévia
 
 ### Implementação para User Story 4
 
-- [ ] T063 [US4] Implementar `src-tauri/src/compile/sync.rs` (`typst_ide::jump_from_click`, `jump_from_cursor`, outline pelo introspector) e os comandos `jump_from_click`, `jump_from_cursor`, `outline` com [data-model.md](data-model.md#outlineitem) `OutlineItem.level`, até T061 passar
-- [ ] T064 [US4] Implementar `src/preview/sync.ts` e `src/project/outline.ts` até T062 passar
+- [x] T063 [US4] Implementar `src-tauri/src/compile/sync.rs` (`typst_ide::jump_from_click`, `jump_from_cursor`, outline pelo introspector) e os comandos `jump_from_click`, `jump_from_cursor`, `outline` com [data-model.md](data-model.md#outlineitem) `OutlineItem.level`, até T061 passar
+- [x] T064 [US4] Implementar `src/preview/sync.ts` e `src/project/outline.ts` até T062 passar
 
 **Checkpoint**: US4 funciona com US1; QA valida.
 

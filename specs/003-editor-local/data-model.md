@@ -63,7 +63,11 @@ onde `kind` ∈ `typst`, `access` (recusas de file-access), `plugin`, `package`,
 
 ## OutlineItem
 
-`{ level, title, path, line, page, yPt }`, em ordem de documento.
+`{ level, title, path, line, page, yPt }`, em ordem de documento. `level` a partir de 1 (o
+nível resolvido do título); `title` com a numeração quando houver ("2.1 Coleta de dados");
+`path` relativo à raiz e `line` a partir de 1 (o título pode estar num `.typ` incluído);
+`page` a partir de 0 e `yPt` em pontos a partir do topo da página. Títulos `outlined: false` e
+os que não vêm de arquivo do projeto (pacote) ficam de fora.
 
 ## Fontes
 

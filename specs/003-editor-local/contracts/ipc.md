@@ -51,6 +51,10 @@ classe do `typst-syntax` sem o prefixo `typ-`: `heading`, `strong`, `key`, `func
 lista vazia. Ambos leem o mesmo estado que a prévia compila, inclusive texto não salvo; rótulos
 vêm da última prévia `Ok`.
 
+`jump_from_click`, `jump_from_cursor` e `outline` (US4) leem o documento da última prévia `Ok`
+**com o World que o compilou**: os *spans* do documento só valem nas fontes daquela compilação.
+Depois de uma edição que não compila, os saltos seguem as linhas da prévia mostrada.
+
 ## Compilação e prévia
 
 | Comando / evento | Conteúdo |
@@ -60,9 +64,9 @@ vêm da última prévia `Ok`.
 | `page_svg` | `{ index, hash }` → SVG da página (texto). `hash` velho → `stale_page` |
 | `Diagnostic.range` | `{ from, to }` em **unidades UTF-16** do texto atual do arquivo (as mesmas de `edit_file` e do CodeMirror); o núcleo converte os bytes do Typst |
 | `prelo-asset://<sha256>` | Protocolo próprio: bytes de imagem por hash; hash desconhecido → 404 |
-| `jump_from_click` | `{ page, xPt, yPt }` → `{ path, line, column }` ou `null` (sem origem) |
-| `jump_from_cursor` | `{ path, offset }` → `{ page, xPt, yPt }[]` |
-| `outline` | → `OutlineItem[]` |
+| `jump_from_click` | `{ page, xPt, yPt }` → `{ path, line, column }` ou `null` (sem origem). `page` a partir de 0 (o `index` de `PreviewUpdate.pages`); `xPt`/`yPt` em pontos a partir do canto superior esquerdo da página; `line` e `column` a partir de 1, `column` em unidades UTF-16. Link interno leva à origem do destino; link externo, conteúdo de pacote e ponto sem *span* (numeração de página, margem) → `null` |
+| `jump_from_cursor` | `{ path, offset }` → `{ page, xPt, yPt }[]` (mesmas unidades; `offset` em UTF-16). Cursor fora de texto que aparece na prévia → lista vazia |
+| `outline` | → `OutlineItem[]` (vazio antes da primeira prévia `Ok`) |
 | `compiler_info` | → `{ embedded: "0.15.1", registered: string \| null, fonts: FontLicense[] }` |
 
 ## Exportação
