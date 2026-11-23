@@ -197,6 +197,7 @@ body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
 .ws-preview { min-height: 0; overflow: hidden; }
 .ws-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); }
 .ws-empty p { margin: 0; }
+.ws-empty-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 .ws-status {
   display: flex; align-items: center; gap: 16px; padding: 4px 12px; font-size: 11.5px;
   color: var(--muted); background: var(--surface-2); border-top: 1px solid var(--line);

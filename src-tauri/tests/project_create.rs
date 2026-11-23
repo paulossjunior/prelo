@@ -153,7 +153,7 @@ fn main_typ_criado_compila_no_prelo_sem_erros() {
     AppState::default()
         .create_project(&project.root())
         .expect("criar projeto");
-    let mut world = ProjectWorld::open(&project.root(), "main.typ").expect("World");
+    let mut world = ProjectWorld::open(project.root(), "main.typ").expect("World");
     let outcome = world.compile();
     assert!(
         outcome.output.is_some(),

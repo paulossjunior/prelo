@@ -11,7 +11,7 @@ mostra o texto em português.
 | Comando | Argumentos | Sucesso | Erros |
 |---|---|---|---|
 | `open_project_dialog` | — | `ProjectInfo` ou `null` (cancelado) | `project_json_invalid` (abre com aviso, ver data-model) |
-| `create_project_dialog` | — | `ProjectInfo` ou `null` | `folder_not_empty` |
+| `create_project_dialog` | — | `ProjectInfo` ou `null` | `folder_not_empty`, `not_found`, `path_outside_project`, `write_failed` |
 | `choose_main_file` | `{ path }` | `ProjectInfo` | `not_a_typ_file`, `path_outside_project` |
 | `list_tree` | — | `TreeNode[]` | — |
 | `update_project_compiler_version` | — | `ProjectInfo` | — (só por ação explícita, FR-012) |
@@ -25,6 +25,12 @@ raiz; o último componente segue as regras de nome de FR-035 (`invalid_name`), e
 existe, inclusive como link, é `already_exists`. A resposta traz o caminho normalizado
 (relativo, com `/`). Regras completas em
 [file-access.md](file-access.md#criação-de-arquivo-e-pasta-fr-034-fr-035).
+
+`create_project_dialog` (US6, FR-002): o núcleo mostra o diálogo de pasta; a pasta MUST estar
+vazia (só `.DS_Store` é tolerado e fica intacto), senão `folder_not_empty` e nada é escrito.
+Nela nascem, em criação exclusiva e sem seguir link, `main.typ` mínimo e `.prelo/project.json`
+com `compiler.typst` = versão embutida e `main: "main.typ"`; depois o projeto abre como em
+`open_project_dialog`. Falha no meio desfaz o que foi criado.
 
 Com versão registrada ≠ embutida, `ProjectInfo.warnings` traz `compiler_version_mismatch`, nenhum `PreviewUpdate` é emitido e `export_pdf_dialog` responde `compiler_version_mismatch` até `update_project_compiler_version`.
 
