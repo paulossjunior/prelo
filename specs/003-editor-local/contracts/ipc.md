@@ -15,6 +15,16 @@ mostra o texto em português.
 | `choose_main_file` | `{ path }` | `ProjectInfo` | `not_a_typ_file`, `path_outside_project` |
 | `list_tree` | — | `TreeNode[]` | — |
 | `update_project_compiler_version` | — | `ProjectInfo` | — (só por ação explícita, FR-012) |
+| `create_file` | `{ path }` | `{ path }` | `already_exists`, `invalid_name`, `path_outside_project`, `not_found`, `write_failed` |
+| `create_dir` | `{ path }` | `{ path }` | `already_exists`, `invalid_name`, `path_outside_project`, `not_found`, `write_failed` |
+
+`create_file` cria um arquivo **vazio** (0 bytes, UTF-8 válido) e `create_dir` uma pasta vazia,
+ambos em criação exclusiva: nunca sobrescreve nem trunca (FR-034). `path` é relativo à raiz;
+a pasta-mãe MUST existir (`not_found` se não existir ou não for pasta) e resolver dentro da
+raiz; o último componente segue as regras de nome de FR-035 (`invalid_name`), e nome que já
+existe, inclusive como link, é `already_exists`. A resposta traz o caminho normalizado
+(relativo, com `/`). Regras completas em
+[file-access.md](file-access.md#criação-de-arquivo-e-pasta-fr-034-fr-035).
 
 Com versão registrada ≠ embutida, `ProjectInfo.warnings` traz `compiler_version_mismatch`, nenhum `PreviewUpdate` é emitido e `export_pdf_dialog` responde `compiler_version_mismatch` até `update_project_compiler_version`.
 

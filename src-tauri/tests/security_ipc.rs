@@ -202,6 +202,8 @@ fn path_commands(path: &str) -> Vec<(&'static str, Value)> {
         ("complete", json!({ "path": path, "offset": 0 })),
         ("semantic_tokens", json!({ "path": path })),
         ("jump_from_cursor", json!({ "path": path, "offset": 0 })),
+        ("create_file", json!({ "path": path })),
+        ("create_dir", json!({ "path": path })),
     ]
 }
 
@@ -519,4 +521,96 @@ fn arvore_nao_lista_links_para_fora_nem_pastas_ocultas() {
         !text.contains(root.to_string_lossy().as_ref()),
         "árvore revela caminho absoluto: {text}"
     );
+}
+
+/// Nomes da pasta: o que existe nela agora.
+fn entries(dir: &std::path::Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(dir)
+        .map(|it| {
+            it.flatten()
+                .map(|e| e.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default();
+    names.sort();
+    names
+}
+
+/// `create_file` e `create_dir` (FR-034, FR-035): nenhum pedido recusado cria algo ao lado da
+/// raiz ou na pasta de fora, nem altera o arquivo de fora.
+#[test]
+fn criar_nunca_cria_nada_fora_do_projeto() {
+    let h = Harness::new();
+    let links = h.links();
+    let parent = h.project.root().parent().unwrap().to_owned();
+    let before_outside = entries(&h.outside.root());
+    let mut paths = absolute_paths(&h);
+    paths.extend(dotdot_paths(&h));
+    paths.push("../novo-fora.typ".into());
+    paths.push(
+        h.outside
+            .root()
+            .join("novo.typ")
+            .to_string_lossy()
+            .into_owned(),
+    );
+    if links.is_some() {
+        paths.push("pasta-fora/novo.typ".into());
+        paths.push("link-fora.typ".into());
+    }
+    for path in &paths {
+        for cmd in ["create_file", "create_dir"] {
+            assert_eq!(
+                h.call(cmd, json!({ "path": path })),
+                Err(json!("path_outside_project")),
+                "{cmd} com {path:?}"
+            );
+        }
+    }
+    // A pasta temporária do sistema muda com os outros testes: confere os nomes pedidos.
+    for name in ["fora.typ", "novo-fora.typ", "novo.typ"] {
+        assert!(!parent.join(name).exists(), "criou {name} ao lado da raiz");
+    }
+    assert_eq!(
+        entries(&h.outside.root()),
+        before_outside,
+        "criou algo fora"
+    );
+    assert_eq!(
+        std::fs::read_to_string(h.outside.secret()).unwrap(),
+        SECRET,
+        "arquivo de fora foi alterado"
+    );
+    assert!(h.engine.calls().is_empty());
+    h.still_alive();
+}
+
+#[test]
+fn criar_dentro_do_projeto_devolve_caminho_normalizado_sem_sobrescrever() {
+    let h = Harness::new();
+    let main = std::fs::read(h.project.path("main.typ")).unwrap();
+    assert_eq!(
+        h.call("create_file", json!({ "path": "capitulos/../novo.typ" })),
+        Ok(json!({ "path": "novo.typ" }))
+    );
+    assert_eq!(
+        h.call("create_dir", json!({ "path": "./capitulos/anexos" })),
+        Ok(json!({ "path": "capitulos/anexos" }))
+    );
+    for cmd in ["create_file", "create_dir"] {
+        assert_eq!(
+            h.call(cmd, json!({ "path": "main.typ" })),
+            Err(json!("already_exists"))
+        );
+        assert_eq!(
+            h.call(cmd, json!({ "path": ".prelo/project.json" })),
+            Err(json!("invalid_name"))
+        );
+    }
+    assert_eq!(std::fs::read(h.project.path("main.typ")).unwrap(), main);
+    let tree = h.call("list_tree", json!({})).unwrap().to_string();
+    assert!(tree.contains("\"novo.typ\""), "{tree}");
+    assert!(tree.contains("capitulos/anexos"), "{tree}");
+    let opened = h.call("open_file", json!({ "path": "novo.typ" })).unwrap();
+    assert_eq!(opened["text"], json!(""));
 }
