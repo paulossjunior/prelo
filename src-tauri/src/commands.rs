@@ -64,6 +64,7 @@ const INVALID_ARGUMENTS: &str = "invalid_arguments";
 const NO_PROJECT: &str = "no_project";
 const NOT_IMPLEMENTED: &str = "not_implemented";
 const VERSION_MISMATCH: &str = "compiler_version_mismatch";
+const COMPILE_SUSPENDED: &str = "compile_suspended";
 
 /// Profundidade e quantidade máximas de nós de `list_tree` (pasta enorme não trava o núcleo).
 const TREE_MAX_DEPTH: usize = 32;
@@ -1054,6 +1055,26 @@ impl AppState {
         Ok(project.info())
     }
 
+    /// "Compilar" (FR-014a; contracts/ipc.md `compile_now`): a próxima compilação relê do
+    /// disco todos os arquivos não abertos, e o estado atual entra na fila na hora,
+    /// abandonando a compilação em andamento dentro do limite de threads
+    /// ([`Scheduler::compile_now`]). Devolve o `compileId` pedido; o resultado chega pela
+    /// prévia. Decisões de plugin e pacote não mudam. Sem projeto: `no_project`; versão
+    /// registrada diferente: `compiler_version_mismatch`; agenda suspensa:
+    /// `compile_suspended`.
+    pub fn compile_now(&self) -> Result<u64, String> {
+        let guard = self.lock();
+        let project = guard.as_ref().ok_or(NO_PROJECT)?;
+        let compiler = match &project.compiler {
+            Some(compiler) if !project.version_differs() => compiler,
+            _ => return Err(VERSION_MISMATCH.into()),
+        };
+        project.disk.reload_all();
+        compiler
+            .compile_now(project.input())
+            .map_err(|_| COMPILE_SUSPENDED.into())
+    }
+
     /// Cria um arquivo vazio em `requested` (FR-034, FR-035). Devolve o caminho normalizado.
     pub fn create_file(&self, requested: &str) -> Result<String, String> {
         self.create(requested, NewItem::File)
@@ -1421,6 +1442,24 @@ pub fn jump_from_click(
 ) -> Result<Option<SourcePosition>, String> {
     let a: ClickArgs = args(&request)?;
     state.jump_from_click(a.page, a.x_pt, a.y_pt)
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CompileNowResult {
+    compile_id: u64,
+}
+
+/// "Compilar" (FR-014a): sem argumentos; o resultado chega pelo canal da prévia.
+#[tauri::command(async)]
+pub fn compile_now(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<CompileNowResult, String> {
+    no_args(&request)?;
+    state
+        .compile_now()
+        .map(|compile_id| CompileNowResult { compile_id })
 }
 
 #[tauri::command(async)]

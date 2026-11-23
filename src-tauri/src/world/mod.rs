@@ -181,6 +181,20 @@ where
         }
     }
 
+    /// "Compilar" (FR-014a): descarta o conteúdo guardado de todos os arquivos lidos do disco
+    /// (figuras, bibliografia, estilos, dados, `.typ` incluídos, arquivos de pacote) e a
+    /// conferência de `fonts/`; a próxima compilação relê tudo pelo modelo de acesso, com a
+    /// mesma regra de escopo e as mesmas decisões de plugin e pacote. Arquivos abertos no
+    /// editor continuam vindo do overlay.
+    pub fn reload_all_from_disk(&mut self) {
+        // Trocar o registro (pelo mesmo) faz o universo zerar as leituras do VFS, como em
+        // `refresh_trust`.
+        let registry = self.registry.clone();
+        self.universe
+            .increment_revision(|universe| universe.set_package(registry));
+        self.fonts = fonts::ProjectFonts::default();
+    }
+
     fn invalidate(&mut self, path: &Path) {
         let path: ImmutPath = path.into();
         self.universe.increment_revision(|universe| {

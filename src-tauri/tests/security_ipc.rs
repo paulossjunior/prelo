@@ -456,7 +456,12 @@ fn argumentos_malformados_sao_recusados_sem_derrubar_o_nucleo() {
         InvokeBody::Raw(vec![1, 2, 3]),
     ] {
         assert!(h.invoke("list_tree", body.clone()).is_err());
-        assert!(h.invoke("outline", body).is_err());
+        assert!(h.invoke("outline", body.clone()).is_err());
+        // "Compilar" (FR-014a): corpo não vazio é recusado antes de compilar.
+        assert_eq!(
+            h.invoke("compile_now", body),
+            Err(json!("invalid_arguments"))
+        );
     }
     assert!(
         h.engine.calls().is_empty(),

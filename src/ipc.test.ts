@@ -78,6 +78,7 @@ const CALLS: [string, (ipc: Ipc) => Promise<unknown>, string, Record<string, unk
   ],
   ["outline", (i) => i.outline(), "outline", undefined],
   ["compilerInfo", (i) => i.compilerInfo(), "compiler_info", undefined],
+  ["compileNow", (i) => i.compileNow(), "compile_now", undefined],
   ["exportPdfDialog", (i) => i.exportPdfDialog(), "export_pdf_dialog", undefined],
   [
     "copyIntoProject",
@@ -141,6 +142,7 @@ describe("erros do núcleo", () => {
     "invalid_arguments",
     "already_exists",
     "invalid_name",
+    "compile_suspended",
   ];
 
   it.each(CODES)("%s tem mensagem em português", (code) => {

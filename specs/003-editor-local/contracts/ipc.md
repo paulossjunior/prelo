@@ -75,6 +75,23 @@ Depois de uma edição que não compila, os saltos seguem as linhas da prévia m
 | `jump_from_cursor` | `{ path, offset }` → `{ page, xPt, yPt }[]` (mesmas unidades; `offset` em UTF-16). Cursor fora de texto que aparece na prévia → lista vazia |
 | `outline` | → `OutlineItem[]` (vazio antes da primeira prévia `Ok`) |
 | `compiler_info` | → `{ embedded: "0.15.1", registered: string \| null, fonts: FontLicense[] }` |
+| `compile_now` | Sem argumentos (corpo vazio, como `list_tree`) → `{ compileId }`. Erros: `no_project`, `compiler_version_mismatch`, `compile_suspended`, `invalid_arguments` (corpo não vazio) |
+
+`compile_now` (FR-014a, "Compilar" / ⌘⇧B): a interface envia antes as edições pendentes
+(`edit_file`), então o núcleo compila exatamente o texto do editor. O núcleo descarta o conteúdo
+que o World guardava de **todo** arquivo não aberto no editor (figuras, `.bib`/`.yml`, `.csl`,
+fontes de `fonts/`, `.typ` incluídos, dados), que a compilação relê do disco pela regra de
+escopo de [file-access.md](file-access.md); arquivos abertos continuam vindo do texto do editor.
+Uma compilação em andamento é abandonada (o resultado dela é descartado, sem
+`PreviewUpdate` de abandono) e a pedida começa numa thread nova, desde que o total de threads
+vivas fique dentro de `MAX_COMPILE_THREADS` (T078); senão espera na fila de 1 como qualquer
+edição. Se a agenda está suspensa (todas as threads presas), responde `compile_suspended` sem
+criar thread; a edição fica pendente e compila quando uma presa terminar. A resposta volta
+quando a compilação está na fila: `compileId` é o id dela, e o resultado chega pelo canal de
+`subscribe_preview` como em qualquer compilação. Uma edição seguinte pode substituir a pedida
+na fila de 1; por isso a interface trata como resposta qualquer `PreviewUpdate` com
+`compileId` igual ou maior. Decisões de segurança não mudam: plugin recusado continua recusado
+e não gera outro `plugin_approval_needed`; pacote recusado continua recusado.
 
 ## Exportação
 

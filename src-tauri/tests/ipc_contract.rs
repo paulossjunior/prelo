@@ -97,6 +97,26 @@ fn corpo_de_tipo_errado_e_rejeitado() {
     get_app_info_ok(&window);
 }
 
+/// FR-014a: `compile_now` está registrado, aceita só corpo vazio e, sem projeto aberto,
+/// responde `no_project`; o núcleo segue funcionando.
+#[test]
+fn compile_now_sem_argumentos_e_sem_projeto_e_no_project() {
+    let (_app, window) = app();
+    assert_eq!(
+        invoke(&window, "compile_now", InvokeBody::Json(json!({}))),
+        Err(json!("no_project"))
+    );
+    assert_eq!(
+        invoke(
+            &window,
+            "compile_now",
+            InvokeBody::Json(json!({ "extra": 1 }))
+        ),
+        Err(json!("invalid_arguments"))
+    );
+    get_app_info_ok(&window);
+}
+
 /// T015: sem a feature `self-test`, o comando de autoteste não existe (nunca em release).
 #[cfg(not(feature = "self-test"))]
 #[test]

@@ -13,6 +13,9 @@
 // Erros (FR-006a): o painel "Erros" (src/editor/problems.ts), acima da barra de status, lista
 // todos os diagnósticos com o motivo em português; a contagem na barra de status e a faixa de
 // erro da prévia o abrem, e clicar num item abre o arquivo com o cursor no trecho.
+//
+// Compilar (FR-014a): botão na barra da prévia e ⌘⇧B / Ctrl+Shift+B (src/preview/compile-now.ts);
+// envia as edições pendentes e pede `compile_now`; desativado sem projeto e com versão diferente.
 import { StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import { compilerStatus, mountAbout, type AboutHandle } from "./about";
@@ -34,6 +37,7 @@ import {
   type SourcePosition,
 } from "./ipc";
 import { mountPanes, type PanesHandle } from "./panes";
+import { mountCompileNow, type CompileNowHandle } from "./preview/compile-now";
 import { mountPreview, type BlobUrls, type PreviewHandle } from "./preview/preview";
 import { mountSync, offsetOf, type SyncHandle } from "./preview/sync";
 import { mountOutline, type OutlineHandle } from "./project/outline";
@@ -198,8 +202,14 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   });
   topSpacer.after(panes.modeControl);
   let sync: SyncHandle | null = null;
+  // "Compilar" (FR-014a): na barra da prévia; ⌘⇧B / Ctrl+Shift+B em qualquer lugar da janela.
+  const compileNow: CompileNowHandle = mountCompileNow({
+    ipc,
+    flush: () => editor?.flush() ?? Promise.resolve(),
+    onError: (err) => showError(err),
+  });
   function attachPreview(p: PreviewHandle): PreviewHandle {
-    p.bar.append(panes.previewButton);
+    p.bar.append(compileNow.button, panes.previewButton);
     // Clique na prévia → código; cursor → prévia (US4).
     sync?.destroy();
     sync = mountSync({
@@ -285,6 +295,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     problems.update(u.diagnostics);
     renderCompile(u);
     exporter.update(u);
+    compileNow.update(u);
     packages.update(u.diagnostics);
     // A estrutura vem do último documento bom: só muda quando a compilação dá certo.
     if (u.ok) void outline.refresh();
@@ -300,6 +311,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     compilerEl.textContent = st.label;
     compilerEl.classList.toggle("is-warn", st.mismatch);
     exporter.setProject(info);
+    // Sem compilação com versão diferente (FR-012): "Compilar" também fica desativado.
+    compileNow.setAvailable(!info.warnings.includes(VERSION_MISMATCH));
     renderBanner();
   }
 
@@ -349,6 +362,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   async function updateVersion() {
     try {
       info = await ipc.updateProjectCompilerVersion();
+      // O núcleo liga uma agenda nova: os `compileId` recomeçam.
+      compileNow.reset();
       renderProject();
     } catch (err) {
       showError(toIpcError(err));
@@ -373,6 +388,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     problems.update([]);
     showMessage(null);
     exporter.reset();
+    compileNow.reset();
     outline.clear();
     // O núcleo recomeça a prévia ao abrir outro projeto: a interface também.
     preview.destroy();
@@ -628,6 +644,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
       editor?.destroy();
       editor = null;
       sync?.destroy();
+      compileNow.destroy();
       preview.destroy();
       panes.destroy();
       editorZoom.destroy();

@@ -9,6 +9,7 @@
 //! Arquivo **não aberto** que mudou no disco (um `.bib` exportado pelo gerenciador de
 //! referências, a cópia de `copy_into_project`) entra em [`DiskChanges`]: antes de compilar, o
 //! World descarta o conteúdo que guardava dele e o relê pela regra de escopo (FR-025).
+//! "Compilar" (FR-014a) pede o mesmo para todos os arquivos não abertos de uma vez.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -39,22 +40,38 @@ pub struct CompileInput {
 }
 
 /// Caminhos (relativos à raiz) de arquivos não abertos que mudaram no disco desde a última
-/// compilação. O núcleo anota; a compilação seguinte consome. Fica fora de [`CompileInput`]
-/// porque a agenda descarta entradas intermediárias, e um aviso perdido deixaria o World com o
-/// conteúdo velho.
+/// compilação, ou o pedido de reler **todos** ("Compilar", FR-014a). O núcleo anota; a
+/// compilação seguinte consome. Fica fora de [`CompileInput`] porque a agenda descarta entradas
+/// intermediárias, e um aviso perdido deixaria o World com o conteúdo velho.
 #[derive(Debug, Clone, Default)]
-pub struct DiskChanges(Arc<Mutex<Vec<String>>>);
+pub struct DiskChanges(Arc<Mutex<Pending>>);
+
+#[derive(Debug, Default)]
+struct Pending {
+    paths: Vec<String>,
+    all: bool,
+}
 
 impl DiskChanges {
     pub fn push(&self, relative: impl Into<String>) {
-        self.lock().push(relative.into());
+        self.lock().paths.push(relative.into());
     }
 
-    fn take(&self) -> Vec<String> {
-        std::mem::take(&mut *self.lock())
+    /// A compilação seguinte descarta o conteúdo guardado de todo arquivo não aberto e o relê
+    /// do disco pela regra de escopo (figuras, bibliografia, estilos, fontes, `.typ` incluídos).
+    pub fn reload_all(&self) {
+        self.lock().all = true;
     }
 
-    fn lock(&self) -> std::sync::MutexGuard<'_, Vec<String>> {
+    fn take(&self) -> (Vec<String>, bool) {
+        let mut pending = self.lock();
+        (
+            std::mem::take(&mut pending.paths),
+            std::mem::take(&mut pending.all),
+        )
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Pending> {
         self.0.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
@@ -110,12 +127,15 @@ impl ProjectCompiler {
             *self = Self::with_env(self.root.clone(), &input.main, self.env.clone())
                 .with_disk_changes(disk);
         }
-        let changed = self.disk.take();
+        let (changed, all) = self.disk.take();
         let world = match &mut self.world {
             Ok(world) => world,
             Err(diag) => return Err(diag.clone()),
         };
         let wanted: HashMap<String, Arc<str>> = input.files.into_iter().collect();
+        if all {
+            world.reload_all_from_disk();
+        }
         for path in changed.iter().filter(|p| !wanted.contains_key(*p)) {
             world.reload_from_disk(path);
         }
