@@ -81,6 +81,14 @@ diagnóstico na linha certa e que a versão do compilador aparece no app.
     continuam alinhados, a quebra de linha é refeita, o cursor e a seleção não mudam e a linha
     que estava no topo continua no topo; "100%" (ou ⌘/Ctrl + `0`) volta ao padrão; ao reabrir
     o projeto, o zoom do editor volta (FR-013c; emenda de 2026-11-22).
+13. **Given** uma edição que introduz um erro de Typst (por exemplo, uma variável que não existe
+    ou um colchete sem fechar), **When** a compilação termina, **Then** o painel "Erros" abaixo
+    da área de trabalho lista cada diagnóstico com o ícone de gravidade, `arquivo:linha:coluna`,
+    uma explicação em português do motivo e uma sugestão "Como corrigir", com a mensagem
+    original do Typst e as dicas dele logo abaixo; passar o ponteiro sobre o trecho sublinhado no
+    editor mostra a mesma explicação; clicar no item abre o arquivo com o cursor no trecho; e a
+    contagem de erros na barra de status ou na faixa vermelha da prévia abre o painel (FR-006a;
+    emenda de 2026-11-23).
 
 ---
 
@@ -293,6 +301,9 @@ comando.
 - **Zoom da prévia nos limites** (FR-013a): em 50 % o "−" fica desativado e em 300 % o "+";
   atalho, roda ou pinça além do limite param no limite, sem erro. Com zoom maior que a largura
   do painel, a prévia rola na horizontal dentro do próprio painel; a janela não rola.
+- **Erro sem explicação conhecida ou fora de arquivo** (FR-006a): o painel mostra a mensagem
+  original e as dicas do Typst; diagnóstico sem arquivo (ex.: fonte ou projeto) aparece no
+  painel sem botão de navegação.
 - **Zoom pelo teclado e foco**: ⌘/Ctrl + `+`/`-`/`0` mudam o zoom do painel que está com o foco:
   a prévia (FR-013a) ou o editor (FR-013c); com o foco em outro lugar (árvore, barra), nada muda.
   O mapa de teclas do editor não usa essas combinações.
@@ -376,6 +387,19 @@ comando.
 
 - **FR-006**: O editor MUST oferecer realce de sintaxe Typst, autocompletar e diagnósticos
   (erros e avisos) posicionados no trecho de origem (RF-01).
+- **FR-006a**: Ao achar um erro, o app MUST identificar o erro e mostrar o motivo para a pessoa
+  conseguir corrigi-lo (emenda de 2026-11-23, pedido do dono: "Ao achar um erro, identifique o
+  erro e mostre o motivo do erro para o usuário acertar"). Um painel "Erros", recolhível, abaixo
+  da área de trabalho e acima da barra de status, MUST listar todos os diagnósticos atuais com
+  ícone de gravidade, `arquivo:linha:coluna` (a coluna quando o arquivo está aberto no editor),
+  uma explicação em português e uma sugestão "Como corrigir"; a mensagem original do Typst e as
+  dicas dele MUST continuar visíveis como texto secundário. Mensagens sem explicação conhecida
+  MUST mostrar a original com as dicas. Clicar num item MUST abrir o arquivo com o cursor no
+  trecho; a contagem de erros na barra de status e a faixa de erro da prévia MUST abrir o
+  painel. O sublinhado no editor MUST mostrar a mesma explicação ao passar o ponteiro, sem
+  `'unsafe-inline'` na CSP. Os itens MUST ser botões com nome acessível, e a mudança da
+  contagem MUST ser anunciada numa região viva. O contrato IPC não muda: a explicação é feita
+  na interface a partir de `Diagnostic.message` e `Diagnostic.kind`.
 - **FR-007**: Alterações MUST ser gravadas no disco ao Salvar (⌘S / Ctrl+S), ao fechar o app e
   automaticamente pouco depois de a pessoa parar de digitar, de modo que um encerramento
   inesperado perca no máximo os últimos segundos de digitação (Princípio III, RNF-04).
@@ -595,7 +619,7 @@ comando.
   PDF em até 5 minutos no primeiro uso, sem consultar documentação.
 - **SC-009**: Nenhum trabalho salvo é perdido em testes de encerramento forçado do app; no
   máximo os últimos 2 s de digitação não salvos (Princípio III).
-- **SC-010**: Cada requisito funcional de comportamento (FR-001 a FR-029, FR-034 e FR-035) tem ao menos um teste
+- **SC-010**: Cada requisito funcional de comportamento (FR-001 a FR-029, FR-006a, FR-034 e FR-035) tem ao menos um teste
   automatizado que falhou antes da implementação (Princípio VI).
 
 ## Assumptions
