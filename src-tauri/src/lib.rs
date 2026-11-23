@@ -37,6 +37,7 @@ pub fn configure_with_state<R: Runtime>(
         // (tests/security_config.rs, tests/security_ipc.rs).
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
+        .register_uri_scheme_protocol(compile::preview::ASSET_SCHEME, asset_protocol)
         .invoke_handler(tauri::generate_handler![
             app_info::get_app_info,
             commands::list_tree,
@@ -58,6 +59,7 @@ pub fn configure_with_state<R: Runtime>(
             commands::outline,
             commands::subscribe_preview,
             commands::page_svg,
+            commands::preview_asset,
             commands::decide_plugin,
             commands::redownload_package,
             compile::export::export_pdf_dialog
@@ -78,6 +80,7 @@ pub fn configure_with_state<R: Runtime>(
         // (tests/security_config.rs, tests/security_ipc.rs).
         .plugin(tauri_plugin_dialog::init())
         .manage(state)
+        .register_uri_scheme_protocol(compile::preview::ASSET_SCHEME, asset_protocol)
         .invoke_handler(tauri::generate_handler![
             app_info::get_app_info,
             commands::list_tree,
@@ -99,6 +102,7 @@ pub fn configure_with_state<R: Runtime>(
             commands::outline,
             commands::subscribe_preview,
             commands::page_svg,
+            commands::preview_asset,
             commands::decide_plugin,
             commands::redownload_package,
             compile::export::export_pdf_dialog,
@@ -107,6 +111,17 @@ pub fn configure_with_state<R: Runtime>(
             self_test::self_test_write_external
         ])
         .manage(self_test::FixtureCopy::default())
+}
+
+/// Protocolo `prelo-asset` (contracts/ipc.md; T058): imagens da prévia atual por sha256,
+/// 404 para qualquer outra coisa ([`compile::preview::asset_response`]).
+fn asset_protocol<R: Runtime>(
+    ctx: tauri::UriSchemeContext<'_, R>,
+    request: tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    ctx.app_handle()
+        .state::<commands::AppState>()
+        .preview_asset_response(&request)
 }
 
 /// Intervalo em que o núcleo confere se há arquivo para o salvamento automático.
