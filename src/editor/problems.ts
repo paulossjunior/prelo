@@ -31,6 +31,26 @@ export function location(d: Diagnostic, text: string | null): Location | null {
   return null;
 }
 
+/** Pacote baixado (`@ns/nome:versão`) e o arquivo dentro dele. */
+export interface PackagePath {
+  spec: string;
+  file: string;
+}
+
+/**
+ * `@preview/nome:0.1.0/lib.typ` → `{ spec: "@preview/nome:0.1.0", file: "lib.typ" }`; caminho
+ * do projeto → `null`. Arquivos de pacote não abrem no editor (o núcleo só abre os do projeto).
+ */
+export function packagePath(path: string): PackagePath | null {
+  const m = /^(@[^/]+\/[^/:]+:[^/]+)\/(.+)$/.exec(path);
+  return m ? { spec: m[1]!, file: m[2]! } : null;
+}
+
+/** Caminho que não deve ir ao `open_file`: tudo que começa com `@` é de pacote. */
+export function isPackagePath(path: string): boolean {
+  return path.startsWith("@");
+}
+
 function span(cls: string, text: string): HTMLSpanElement {
   const s = document.createElement("span");
   s.className = cls;
@@ -153,10 +173,17 @@ export function mountProblems(parent: HTMLElement, opts: ProblemsOptions): Probl
     list.replaceChildren(
       ...diags.map((d) => {
         const li = document.createElement("li");
-        const loc = d.path ? location(d, opts.textOf?.(d.path) ?? null) : null;
-        const where = d.path ? [d.path, loc?.line, loc?.column].filter((x) => x !== undefined).join(":") : "";
-        const item = d.path ? document.createElement("button") : document.createElement("div");
-        item.className = `pb-item is-${d.severity}`;
+        // Arquivo de pacote baixado: mostra onde está, mas não é link (não abre no editor).
+        const inPackage = d.path ? isPackagePath(d.path) : false;
+        const loc = d.path ? location(d, inPackage ? null : (opts.textOf?.(d.path) ?? null)) : null;
+        let where = d.path ? [d.path, loc?.line, loc?.column].filter((x) => x !== undefined).join(":") : "";
+        if (d.path && inPackage) {
+          const pkg = packagePath(d.path);
+          const file = pkg ? [pkg.file, loc?.line].filter((x) => x !== undefined).join(":") : where;
+          where = pkg ? `pacote ${pkg.spec} · ${file}` : `pacote ${where}`;
+        }
+        const item = d.path && !inPackage ? document.createElement("button") : document.createElement("div");
+        item.className = `pb-item is-${d.severity}${inPackage ? " is-package" : ""}`;
         const icon = severityIcon(d.severity === "error" ? "error" : "warning");
         icon.classList.add("pb-icon");
         const body = span("pb-body", "");
