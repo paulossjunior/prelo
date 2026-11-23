@@ -10,6 +10,11 @@
 //!   ([`VISIBLE`]). É o número que vale para SC-001/SC-002. O tempo para gerar o SVG de todas as
 //!   páginas alteradas também é impresso, só como referência.
 //!
+//! Para achar a fase que pesa, o relatório separa a **compilação** (`duration_ms` do evento,
+//! medido na thread de compilação, em ms inteiros) da **entrega** (o resto até o
+//! `PreviewUpdate`: diff de páginas e envio ao assinante). `PRELO_PERF_TRACE=1` imprime as
+//! fases de cada edição.
+//!
 //! Dois casos: a fixture `artigo-40p` (40 páginas, texto e matemática) e a mesma fixture com
 //! duas imagens geradas no teste de 4000×3000 px e mais de 10 MB cada (ruído PNG; nada com
 //! direito autoral, nada versionado), uma delas na página editada (SC-002: a edição de texto não
@@ -172,6 +177,8 @@ impl Live {
 }
 
 struct Report {
+    /// Só a compilação (`duration_ms` do evento, medido na thread de compilação).
+    compile: Vec<Duration>,
     update: Vec<Duration>,
     svg: Vec<Duration>,
     /// SVG de todas as páginas alteradas, não só as visíveis (referência).
@@ -197,6 +204,7 @@ fn measure(live: &Live) -> Report {
     let pages = first.pages.len();
     live.render_changed(&first, 0..pages);
 
+    let mut compile = Vec::with_capacity(EDITS);
     let mut update = Vec::with_capacity(EDITS);
     let mut svg = Vec::with_capacity(EDITS);
     let mut all_svg = Vec::with_capacity(EDITS);
@@ -214,7 +222,18 @@ fn measure(live: &Live) -> Report {
         // Referência: o resto das páginas alteradas, como se todas estivessem na tela.
         live.render_changed(&u, VISIBLE.end..u.pages.len());
         let got_all = started.elapsed();
+        if std::env::var_os("PRELO_PERF_TRACE").is_some() {
+            println!(
+                "perf_preview edição {n}: compilação {} ms, PreviewUpdate {:.1} ms, SVG {:.1} ms, \
+                 {} alteradas",
+                u.duration_ms,
+                ms(got_update),
+                ms(got_svg),
+                u.changed.len()
+            );
+        }
         if n > WARMUP {
+            compile.push(Duration::from_millis(u.duration_ms));
             update.push(got_update);
             svg.push(got_svg);
             all_svg.push(got_all);
@@ -222,6 +241,7 @@ fn measure(live: &Live) -> Report {
         }
     }
     Report {
+        compile,
         update,
         svg,
         all_svg,
@@ -234,13 +254,25 @@ fn check(case: &str, report: &Report) {
     let limit = limit();
     let p95_update = p(&report.update, 0.95);
     let p95_svg = p(&report.svg, 0.95);
+    // Da compilação pronta ao evento: diff de páginas na prévia e entrega ao assinante.
+    let delivery: Vec<Duration> = report
+        .update
+        .iter()
+        .zip(&report.compile)
+        .map(|(u, c)| u.saturating_sub(*c))
+        .collect();
     println!(
         "perf_preview [{case}]: {} páginas, {EDITS} edições, até {} página(s) em `changed`; \
-         edição→PreviewUpdate p50 {:.1} ms, p95 {:.1} ms, máx {:.1} ms; \
+         compilação p50 {:.1} ms, p95 {:.1} ms, máx {:.1} ms; entrega (PreviewUpdate − \
+         compilação) p95 {:.1} ms; edição→PreviewUpdate p50 {:.1} ms, p95 {:.1} ms, máx {:.1} ms; \
          edição→SVG pronto (páginas visíveis) p50 {:.1} ms, p95 {:.1} ms, máx {:.1} ms \
          (limite {} ms); SVG de todas as alteradas p95 {:.1} ms",
         report.pages,
         report.max_changed,
+        ms(p(&report.compile, 0.5)),
+        ms(p(&report.compile, 0.95)),
+        ms(p(&report.compile, 1.0)),
+        ms(p(&delivery, 0.95)),
         ms(p(&report.update, 0.5)),
         ms(p95_update),
         ms(p(&report.update, 1.0)),
