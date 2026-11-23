@@ -4,7 +4,7 @@
 // anuncia a contagem; recolhível.
 import { afterEach, describe, expect, it } from "vitest";
 import type { Diagnostic } from "../ipc";
-import { location, mountProblems, type ProblemsHandle } from "./problems";
+import { location, mountProblems, packagePath, type ProblemsHandle } from "./problems";
 
 const MAIN = "= Título\n\n#let x = \nFim #foo.\n";
 
@@ -45,6 +45,21 @@ describe("location", () => {
 
   it("sem posição nenhuma → null", () => {
     expect(location(diag({}), MAIN)).toBeNull();
+  });
+});
+
+describe("packagePath", () => {
+  it("separa o pacote do arquivo dentro dele", () => {
+    expect(packagePath("@preview/stellar-springer-nature:0.1.0/lib.typ")).toEqual({
+      spec: "@preview/stellar-springer-nature:0.1.0",
+      file: "lib.typ",
+    });
+    expect(packagePath("@local/tese:1.2.3/src/capa.typ")).toEqual({ spec: "@local/tese:1.2.3", file: "src/capa.typ" });
+  });
+
+  it("caminho do projeto → null", () => {
+    expect(packagePath("main.typ")).toBeNull();
+    expect(packagePath("capitulos/metodo.typ")).toBeNull();
   });
 });
 
@@ -92,6 +107,24 @@ describe("painel Erros", () => {
     const [a] = items(parent);
     expect(a!.tagName).not.toBe("BUTTON");
     expect(a!.textContent).toContain("pasta do projeto não encontrada");
+  });
+
+  it("diagnóstico num pacote baixado: local como pacote, sem botão, clique não chama onSelect", () => {
+    const { parent, handle, selected } = setup();
+    const d = diag({
+      severity: "warning",
+      path: "@preview/stellar-springer-nature:0.1.0/lib.typ",
+      line: 77,
+      range: { from: 2000, to: 2010 },
+      message: "unknown font family: new computer modern",
+    });
+    handle.update([d]);
+    const [a] = items(parent);
+    expect(a!.tagName).not.toBe("BUTTON");
+    expect(a!.classList.contains("is-package")).toBe(true);
+    expect(a!.querySelector(".pb-loc")?.textContent).toBe("pacote @preview/stellar-springer-nature:0.1.0 · lib.typ:77");
+    a!.click();
+    expect(selected).toEqual([]);
   });
 
   it("não interpreta HTML das mensagens", () => {
