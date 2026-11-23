@@ -217,6 +217,16 @@ impl PreviewHub {
         self.lock().preview.page(index, hash)
     }
 
+    /// SVG da página atual `index` com o hash `hash` (ainda sem o protocolo, T058).
+    pub fn page_svg(&self, index: usize, hash: &str) -> Result<String, &'static str> {
+        self.page(index, hash).map(|page| render_svg(&page))
+    }
+
+    /// `data:` URL do conteúdo `sha256` (T058).
+    pub fn asset_data_url(&self, _sha256: &str) -> Option<String> {
+        None
+    }
+
     /// Último documento compilado com sucesso (saltos e estrutura, fases seguintes).
     pub fn document(&self) -> Option<Arc<PagedDocument>> {
         self.lock().preview.document().cloned()
@@ -245,6 +255,20 @@ impl PreviewHub {
     }
 }
 
+/// Prefixo das referências a imagem no SVG da prévia (T058).
+pub const ASSET_PREFIX: &str = "prelo-asset://";
+
+/// Resposta do protocolo `prelo-asset` (T058).
+pub fn asset_response(
+    _hub: &PreviewHub,
+    _request: &tauri::http::Request<Vec<u8>>,
+) -> tauri::http::Response<Vec<u8>> {
+    tauri::http::Response::builder()
+        .status(501)
+        .body(Vec::new())
+        .unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -270,6 +294,8 @@ mod tests {
             let (_, world) = slot.get_or_insert_with(|| {
                 let dir = tempfile::tempdir().expect("pasta temporária");
                 std::fs::write(dir.path().join("main.typ"), "").unwrap();
+                std::fs::write(dir.path().join("figura.png"), PNG).unwrap();
+                std::fs::write(dir.path().join("outra.webp"), OTHER_IMAGE).unwrap();
                 let world = ProjectWorld::open(dir.path(), "main.typ").expect("World");
                 (dir, world)
             });
@@ -483,5 +509,188 @@ mod tests {
             bare,
             serde_json::json!({ "severity": "error", "message": "x", "hints": [], "kind": "access" })
         );
+    }
+
+    // ------------------------------------------------ protocolo `prelo-asset` (T055)
+
+    /// Figuras das fixtures, gravadas na pasta do World de cada teste.
+    const PNG: &[u8] = include_bytes!("../../tests/fixtures/imagens/figura.png");
+    const OTHER_IMAGE: &[u8] = include_bytes!("../../tests/fixtures/imagens/figura.webp");
+
+    fn sha256_hex(bytes: &[u8]) -> String {
+        use sha2::Digest;
+        sha2::Sha256::digest(bytes)
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect()
+    }
+
+    /// Duas páginas: a primeira com a figura e `text`, a segunda só com texto.
+    fn with_image(text: &str) -> String {
+        format!(
+            "#set page(width: 200pt, height: 200pt)\n#image(\"figura.png\", width: 50pt)\n{text}\n#pagebreak()\nFim\n"
+        )
+    }
+
+    fn request(uri: &str) -> tauri::http::Request<Vec<u8>> {
+        tauri::http::Request::builder()
+            .uri(uri)
+            .body(Vec::new())
+            .unwrap()
+    }
+
+    /// Hub com a compilação `doc` entregue; devolve o evento.
+    fn hub_with(doc: PagedDocument) -> (PreviewHub, u64, PreviewUpdate) {
+        let hub = PreviewHub::default();
+        let generation = hub.reset();
+        let (tx, rx) = std::sync::mpsc::channel();
+        hub.subscribe(Arc::new(move |u: &PreviewUpdate| {
+            let _ = tx.send(u.clone());
+        }));
+        hub.deliver(generation, ok(1, doc));
+        let update = rx.try_recv().expect("evento entregue");
+        (hub, generation, update)
+    }
+
+    fn current_hash(hub: &PreviewHub, index: usize) -> String {
+        hub.lock().preview.pages[index].hash.clone()
+    }
+
+    fn asset_tokens(svg: &str) -> Vec<String> {
+        svg.match_indices(ASSET_PREFIX)
+            .map(|(i, _)| svg[i + ASSET_PREFIX.len()..][..64].to_owned())
+            .collect()
+    }
+
+    #[test]
+    fn data_url_de_imagem_vira_prelo_asset_com_o_sha256_dos_bytes() {
+        let (hub, _, update) = hub_with(compile(&with_image("Legenda")));
+        let svg = hub.page_svg(0, &update.pages[0].hash).expect("SVG");
+        assert!(svg.contains("<image"), "{svg:.200}");
+        assert!(!svg.contains("data:image/"), "imagem continua embutida no SVG");
+        assert_eq!(asset_tokens(&svg), vec![sha256_hex(PNG)]);
+        // A referência é o atributo inteiro, sem sobra do `data:`.
+        assert!(svg.contains(&format!("\"{ASSET_PREFIX}{}\"", sha256_hex(PNG))));
+
+        // Página sem figura: nenhuma referência.
+        let text_only = hub.page_svg(1, &update.pages[1].hash).expect("SVG");
+        assert!(asset_tokens(&text_only).is_empty());
+    }
+
+    #[test]
+    fn protocolo_serve_os_bytes_do_hash_conhecido() {
+        let (hub, _, update) = hub_with(compile(&with_image("Legenda")));
+        hub.page_svg(0, &update.pages[0].hash).expect("SVG");
+        let sha = sha256_hex(PNG);
+        // macOS/Linux (`prelo-asset://localhost/<sha>`) e Windows
+        // (`http://prelo-asset.localhost/<sha>`).
+        for uri in [
+            format!("prelo-asset://localhost/{sha}"),
+            format!("http://prelo-asset.localhost/{sha}"),
+        ] {
+            let response = asset_response(&hub, &request(&uri));
+            assert_eq!(response.status(), 200, "{uri}");
+            assert_eq!(response.body().as_slice(), PNG);
+            let header = |name: &str| {
+                response
+                    .headers()
+                    .get(name)
+                    .and_then(|v| v.to_str().ok())
+                    .map(str::to_owned)
+            };
+            assert_eq!(header("content-type").as_deref(), Some("image/png"));
+            assert_eq!(header("x-content-type-options").as_deref(), Some("nosniff"));
+            assert!(
+                header("content-security-policy").is_some_and(|c| c.contains("default-src 'none'")),
+                "resposta sem CSP própria"
+            );
+        }
+        // O mesmo conteúdo como `data:` URL, para a interface embutir no SVG da página.
+        let url = hub.asset_data_url(&sha).expect("data URL");
+        assert!(url.starts_with("data:image/png;base64,"), "{url:.40}");
+    }
+
+    #[test]
+    fn hash_desconhecido_ou_pedido_malformado_responde_404() {
+        let (hub, _, update) = hub_with(compile(&with_image("Legenda")));
+        hub.page_svg(0, &update.pages[0].hash).expect("SVG");
+        let sha = sha256_hex(PNG);
+        let unknown = sha256_hex(b"outra coisa");
+        for uri in [
+            format!("prelo-asset://localhost/{unknown}"),
+            // Bytes que existem no projeto mas não foram para a prévia.
+            format!("prelo-asset://localhost/{}", sha256_hex(OTHER_IMAGE)),
+            format!("prelo-asset://localhost/{}", sha.to_uppercase()),
+            format!("prelo-asset://localhost/{}", &sha[..63]),
+            format!("prelo-asset://localhost/{sha}/x"),
+            format!("prelo-asset://localhost/../{sha}"),
+            "prelo-asset://localhost/..%2F..%2Fetc%2Fpasswd".to_owned(),
+            "prelo-asset://localhost/main.typ".to_owned(),
+            "prelo-asset://localhost/".to_owned(),
+        ] {
+            let response = asset_response(&hub, &request(&uri));
+            assert_eq!(response.status(), 404, "{uri}");
+            assert!(response.body().is_empty(), "{uri}");
+        }
+        assert!(hub.asset_data_url(&unknown).is_none());
+
+        // Só leitura.
+        let post = tauri::http::Request::builder()
+            .method("POST")
+            .uri(format!("prelo-asset://localhost/{sha}"))
+            .body(Vec::new())
+            .unwrap();
+        assert_eq!(asset_response(&hub, &post).status(), 405);
+    }
+
+    #[test]
+    fn hash_so_vale_enquanto_a_imagem_esta_na_compilacao_atual() {
+        let hub = PreviewHub::default();
+        let generation = hub.reset();
+        hub.deliver(generation, ok(1, compile(&with_image("Legenda"))));
+        let page = current_hash(&hub, 0);
+        hub.page_svg(0, &page).expect("SVG");
+        let sha = sha256_hex(PNG);
+        assert!(hub.asset_data_url(&sha).is_some());
+
+        // Compilação nova sem a figura: o hash some.
+        hub.deliver(generation, ok(2, compile(&three_pages("B"))));
+        assert!(hub.asset_data_url(&sha).is_none());
+        let response = asset_response(&hub, &request(&format!("prelo-asset://localhost/{sha}")));
+        assert_eq!(response.status(), 404);
+
+        // Projeto novo (reset): nada da prévia anterior.
+        hub.deliver(generation, ok(3, compile(&with_image("Legenda"))));
+        let page = current_hash(&hub, 0);
+        hub.page_svg(0, &page).expect("SVG");
+        assert!(hub.asset_data_url(&sha).is_some());
+        hub.reset();
+        assert!(hub.asset_data_url(&sha).is_none());
+    }
+
+    #[test]
+    fn editar_texto_na_pagina_da_imagem_nao_reenvia_os_bytes() {
+        let hub = PreviewHub::default();
+        let generation = hub.reset();
+        hub.deliver(generation, ok(1, compile(&with_image("Legenda"))));
+        let first_hash = current_hash(&hub, 0);
+        let first = hub.page_svg(0, &first_hash).expect("SVG");
+
+        hub.deliver(generation, ok(2, compile(&with_image("Legenda editada"))));
+        let second_hash = current_hash(&hub, 0);
+        assert_ne!(second_hash, first_hash, "a página da figura mudou");
+        let second = hub.page_svg(0, &second_hash).expect("SVG");
+
+        // O SVG da página editada só cita o hash: os bytes da figura não vão de novo.
+        assert_eq!(asset_tokens(&second), asset_tokens(&first));
+        assert!(!second.contains("data:image/"));
+        let encoded_len = PNG.len() * 4 / 3;
+        assert!(
+            second.len() < first.len() + encoded_len / 2,
+            "SVG cresceu como se levasse a imagem: {} → {}",
+            first.len(),
+            second.len()
+        );
+        assert!(hub.asset_data_url(&sha256_hex(PNG)).is_some());
     }
 }

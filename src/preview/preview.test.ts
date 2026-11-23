@@ -558,3 +558,79 @@ describe("zoom lembrado por projeto", () => {
     expect(preview.zoom()).toBe(110);
   });
 });
+
+// Imagens das páginas (T058; RF-51, research R4): o SVG de `page_svg` cita cada imagem por
+// `prelo-asset://<sha256>`. Um SVG mostrado como <img> não carrega recurso de fora, nem do
+// protocolo próprio; por isso a prévia pede cada conteúdo uma vez (`preview_asset`), guarda a
+// `data:` URL por hash e a devolve ao SVG antes de criar o blob.
+describe("imagens por hash", () => {
+  const A = "a".repeat(64);
+  const B = "b".repeat(64);
+  const dataUrl = (sha: string) => `data:image/png;base64,${sha.slice(0, 4)}`;
+  const svgWith = (...shas: string[]) =>
+    `<svg>${shas.map((s) => `<image xlink:href="prelo-asset://${s}" width="1" height="1"/>`).join("")}</svg>`;
+
+  function setupAssets(svgOf: (a: Record<string, unknown>) => string) {
+    const s = setup(svgOf);
+    s.core.on("preview_asset", (a) => dataUrl(String(a.sha256)));
+    return s;
+  }
+
+  it("troca a referência pela data: URL antes de criar o blob", async () => {
+    const { core, parent, preview, blobs } = setupAssets(() => svgWith(A));
+    preview.update(upd({ pages: pages(1) }));
+    await preview.idle();
+    const text = await blobs.get(imgOf(parent, 0)!.getAttribute("src")!)!.text();
+    expect(text).toContain(`xlink:href="${dataUrl(A)}"`);
+    expect(text).not.toContain("prelo-asset:");
+    expect(core.calls("preview_asset").map((c) => c.args)).toEqual([{ sha256: A }]);
+  });
+
+  it("pede cada hash uma vez, mesmo em várias páginas e em edições seguintes", async () => {
+    const { core, preview } = setupAssets((a) => (a.index === 1 ? svgWith(A, B) : svgWith(A)));
+    preview.update(upd({ pages: pages(3) }));
+    await preview.idle();
+    // Edição de texto na página 0: SVG novo, mesma imagem.
+    preview.update(upd({ compileId: 2, pages: pages(3, (i) => (i === 0 ? "novo" : `h${i}`)), changed: [0] }));
+    await preview.idle();
+    expect(core.calls("page_svg")).toHaveLength(4);
+    expect(
+      core
+        .calls("preview_asset")
+        .map((c) => c.args.sha256)
+        .sort(),
+    ).toEqual([A, B]);
+  });
+
+  it("solta a data: URL quando nenhuma página mostrada usa o hash", async () => {
+    const { core, preview } = setupAssets((a) => (a.index === 0 ? svgWith(A) : "<svg></svg>"));
+    preview.update(upd({ pages: pages(10) }));
+    await preview.idle();
+    preview.setVisible([9]);
+    await preview.idle();
+    preview.setVisible([0]);
+    await preview.idle();
+    expect(core.calls("preview_asset")).toHaveLength(2);
+  });
+
+  it("hash recusado pelo núcleo deixa a página vazia sem derrubar a prévia", async () => {
+    const { core, parent, preview } = setup((a) => (a.index === 0 ? svgWith(A) : "<svg></svg>"));
+    core.on("preview_asset", () => {
+      throw "not_found";
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    preview.update(upd({ pages: pages(2) }));
+    await preview.idle();
+    expect(imgOf(parent, 0)).toBeNull();
+    expect(imgOf(parent, 1)?.getAttribute("src")).toMatch(/^blob:/);
+    warn.mockRestore();
+  });
+
+  it("ignora texto que só parece referência (hash malformado)", async () => {
+    const { core, parent, preview, blobs } = setupAssets(() => `<svg><text>prelo-asset://xyz</text></svg>`);
+    preview.update(upd({ pages: pages(1) }));
+    await preview.idle();
+    expect(core.calls("preview_asset")).toHaveLength(0);
+    expect(await blobs.get(imgOf(parent, 0)!.getAttribute("src")!)!.text()).toContain("prelo-asset://xyz");
+  });
+});
