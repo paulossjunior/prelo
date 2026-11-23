@@ -44,6 +44,8 @@ const CALLS: [string, (ipc: Ipc) => Promise<unknown>, string, Record<string, unk
     "update_project_compiler_version",
     undefined,
   ],
+  ["createFile", (i) => i.createFile("cap/novo.typ"), "create_file", { path: "cap/novo.typ" }],
+  ["createDir", (i) => i.createDir("cap/anexos"), "create_dir", { path: "cap/anexos" }],
   ["openFile", (i) => i.openFile("main.typ"), "open_file", { path: "main.typ" }],
   [
     "editFile",
@@ -136,6 +138,8 @@ describe("erros do núcleo", () => {
     "no_project",
     "not_implemented",
     "invalid_arguments",
+    "already_exists",
+    "invalid_name",
   ];
 
   it.each(CODES)("%s tem mensagem em português", (code) => {

@@ -35,6 +35,7 @@ use crate::compile::export::{ExportError, ExportSource, Exported};
 use crate::compile::preview::{render_svg, PreviewHub, PreviewUpdate};
 use crate::compile::project::{CompileInput, ProjectCompiler};
 use crate::compile::scheduler::Scheduler;
+use crate::fs::create::{self, NewItem};
 pub use crate::fs::save::{apply_changes, Change};
 use crate::fs::save::{format_utc, OpenFile};
 use crate::fs::scope::{Refusal, Scope};
@@ -771,6 +772,29 @@ impl AppState {
         Ok(project.info())
     }
 
+    /// Cria um arquivo vazio em `requested` (FR-034, FR-035). Devolve o caminho normalizado.
+    pub fn create_file(&self, requested: &str) -> Result<String, String> {
+        self.create(requested, NewItem::File)
+    }
+
+    /// Cria uma pasta vazia em `requested` (FR-034, FR-035). Devolve o caminho normalizado.
+    pub fn create_dir(&self, requested: &str) -> Result<String, String> {
+        self.create(requested, NewItem::Dir)
+    }
+
+    /// Regra de escopo e criação exclusiva em [`crate::fs::create`]. Recompila: um `#include`
+    /// ou `#image` que pedia o arquivo novo deixa de acusar arquivo não encontrado.
+    fn create(&self, requested: &str, item: NewItem) -> Result<String, String> {
+        let guard = self.lock();
+        let project = guard.as_ref().ok_or(NO_PROJECT)?;
+        if is_absolute(requested) {
+            return Err(OUTSIDE.into());
+        }
+        let path = create::create(&project.scope, requested, item).map_err(|e| e.code())?;
+        project.recompile();
+        Ok(path)
+    }
+
     /// O que exportar (FR-011, FR-012, FR-029): o documento da última prévia `Ok`, o nome do
     /// projeto (nome sugerido do PDF) e a raiz (pasta inicial do diálogo). Recusa sem projeto,
     /// com versão registrada ≠ embutida e quando a última compilação teve erro.
@@ -914,6 +938,31 @@ pub fn choose_main_file(
 ) -> Result<ProjectInfo, String> {
     let a: PathArgs = args(&request)?;
     state.choose_main_file(&a.path)
+}
+
+/// Resposta de `create_file` e `create_dir`: o caminho normalizado do item criado.
+#[derive(Debug, Serialize)]
+pub struct CreatedPath {
+    path: String,
+}
+
+/// Arquivo vazio novo, sem nunca sobrescrever (FR-034, FR-035).
+#[tauri::command(async)]
+pub fn create_file(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> Result<CreatedPath, String> {
+    let a: PathArgs = args(&request)?;
+    let path = state.create_file(&a.path)?;
+    Ok(CreatedPath { path })
+}
+
+/// Pasta vazia nova, sem nunca sobrescrever (FR-034, FR-035).
+#[tauri::command(async)]
+pub fn create_dir(state: State<'_, AppState>, request: Request<'_>) -> Result<CreatedPath, String> {
+    let a: PathArgs = args(&request)?;
+    let path = state.create_dir(&a.path)?;
+    Ok(CreatedPath { path })
 }
 
 #[tauri::command(async)]
@@ -1301,6 +1350,102 @@ mod tests {
             std::fs::read_to_string(sub.join("intro.typ")).unwrap(),
             "novo intro"
         );
+    }
+
+    fn tree_paths(nodes: &[TreeNode], out: &mut Vec<(String, TreeKind)>) {
+        for node in nodes {
+            out.push((node.path.clone(), node.kind));
+            if let Some(children) = &node.children {
+                tree_paths(children, out);
+            }
+        }
+    }
+
+    fn listed(state: &AppState) -> Vec<(String, TreeKind)> {
+        let mut out = Vec::new();
+        tree_paths(&state.list_tree().unwrap(), &mut out);
+        out
+    }
+
+    #[test]
+    fn arquivo_criado_aparece_na_arvore_e_abre_vazio() {
+        let (dir, state) = project();
+        assert_eq!(
+            state.create_file("capitulos/metodo.typ"),
+            Ok("capitulos/metodo.typ".into())
+        );
+        assert!(listed(&state).contains(&("capitulos/metodo.typ".into(), TreeKind::File)));
+        let opened = state.open_file("capitulos/metodo.typ").unwrap();
+        assert_eq!(opened.text, "");
+        assert_eq!(opened.version, 0);
+        assert_eq!(
+            std::fs::metadata(dir.path().join("capitulos/metodo.typ"))
+                .unwrap()
+                .len(),
+            0
+        );
+    }
+
+    #[test]
+    fn pasta_criada_aparece_na_arvore_vazia() {
+        let (_dir, state) = project();
+        assert_eq!(state.create_dir("figuras"), Ok("figuras".into()));
+        let tree = state.list_tree().unwrap();
+        let node = tree
+            .iter()
+            .find(|n| n.path == "figuras")
+            .expect("pasta nova");
+        assert_eq!(node.kind, TreeKind::Dir);
+        assert_eq!(node.children.as_deref(), Some(&[][..]));
+        assert_eq!(
+            state.create_file("figuras/legenda.typ"),
+            Ok("figuras/legenda.typ".into())
+        );
+    }
+
+    #[test]
+    fn observador_nao_acusa_conflito_no_arquivo_criado() {
+        let (_dir, state) = project();
+        state.create_file("novo.typ").unwrap();
+        // Aviso do observador antes de abrir: arquivo não aberto é ignorado.
+        assert_eq!(state.handle_disk_change("novo.typ"), DiskChange::Ignored);
+        state.open_file("novo.typ").unwrap();
+        // Aviso atrasado da criação, com o arquivo já aberto e editado (sujo).
+        assert_eq!(state.handle_disk_change("novo.typ"), DiskChange::Ignored);
+        state
+            .edit_file("novo.typ", 0, &[change(0, 0, "= Novo\n")])
+            .unwrap();
+        assert_eq!(state.handle_disk_change("novo.typ"), DiskChange::Ignored);
+        assert_eq!(state.open_file("novo.typ").unwrap().text, "= Novo\n");
+        state.save_file("novo.typ").unwrap();
+        assert_eq!(state.handle_disk_change("novo.typ"), DiskChange::Ignored);
+    }
+
+    #[test]
+    fn criar_responde_os_codigos_do_contrato() {
+        let (dir, state) = project();
+        for create in [AppState::create_file, AppState::create_dir] {
+            assert_eq!(create(&state, "main.typ"), Err("already_exists".into()));
+            assert_eq!(create(&state, ".oculto"), Err("invalid_name".into()));
+            assert_eq!(create(&state, "ab:c"), Err("invalid_name".into()));
+            assert_eq!(create(&state, "../fora"), Err(OUTSIDE.into()));
+            assert_eq!(create(&state, "/fora"), Err(OUTSIDE.into()));
+            let absolute = dir.path().join("novo-abs").to_string_lossy().into_owned();
+            assert_eq!(create(&state, &absolute), Err(OUTSIDE.into()));
+            assert_eq!(create(&state, "nada/novo"), Err(NOT_FOUND.into()));
+        }
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("main.typ")).unwrap(),
+            "= Título\n"
+        );
+        assert!(!dir.path().join("novo-abs").exists());
+    }
+
+    #[test]
+    fn criar_sem_projeto_aberto_e_no_project() {
+        let state = AppState::default();
+        assert_eq!(state.create_file("novo.typ"), Err(NO_PROJECT.into()));
+        assert_eq!(state.create_dir("nova"), Err(NO_PROJECT.into()));
     }
 
     #[test]

@@ -56,6 +56,20 @@ button.pt-item:hover { background: var(--accent-soft); }
 .pt-other { color: var(--muted); cursor: default; }
 .pt-error { color: var(--err); padding: 6px; }
 .pt :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Novo arquivo / Nova pasta (FR-034): ações discretas e o campo de nome na própria árvore. */
+.pt-actions { display: flex; gap: 4px; margin: 0 0 6px; }
+.pt-action {
+  flex: 1; font: inherit; font-size: 12px; color: var(--muted); background: transparent;
+  border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px; cursor: pointer;
+}
+.pt-action:hover { color: var(--fg); background: var(--accent-soft); }
+.pt-new { display: grid; gap: 3px; margin: 0 0 6px; }
+.pt-new-label { font-size: 12px; color: var(--muted); }
+.pt-new-name {
+  font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--accent);
+  border-radius: 5px; padding: 3px 6px; min-width: 0;
+}
+.pt-new-error { margin: 0; font-size: 12px; color: var(--err); }
 
 /* ---------- editor ---------- */
 /* Protótipo (.editor/.ln): mono 12,5 px, entrelinha 1,7, 10 px em cima e embaixo, números à

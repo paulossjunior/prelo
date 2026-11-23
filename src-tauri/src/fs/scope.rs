@@ -282,13 +282,13 @@ fn is_link_error(error: &std::io::Error) -> bool {
 
 /// Caminho real do arquivo aberto, lido do descritor (research R11).
 #[cfg(any(target_os = "linux", target_os = "android"))]
-fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
+pub(super) fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
     use std::os::fd::AsRawFd;
     std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd()))
 }
 
 #[cfg(any(target_os = "macos", target_os = "ios"))]
-fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
+pub(super) fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
     use std::ffi::OsStr;
     use std::os::fd::AsRawFd;
     use std::os::unix::ffi::OsStrExt;
@@ -304,7 +304,7 @@ fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
 }
 
 #[cfg(windows)]
-fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
+pub(super) fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
     use std::ffi::OsString;
     use std::os::windows::ffi::OsStringExt;
     use std::os::windows::io::AsRawHandle;
@@ -343,7 +343,7 @@ fn descriptor_path(file: &File) -> std::io::Result<PathBuf> {
     target_os = "ios",
     windows
 )))]
-fn descriptor_path(_file: &File) -> std::io::Result<PathBuf> {
+pub(super) fn descriptor_path(_file: &File) -> std::io::Result<PathBuf> {
     Err(std::io::Error::other(
         "caminho do descritor indisponível neste sistema",
     ))
