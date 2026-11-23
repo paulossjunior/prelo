@@ -4,6 +4,7 @@ import { diagnosticCount } from "@codemirror/lint";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PreviewUpdate, ProjectInfo } from "./ipc";
 import { fakeCore, settle } from "./testing/fake-core";
+import { stubRangeLayout } from "./testing/layout";
 import { mountWorkspace, type WorkspaceHandle } from "./workspace";
 
 let handles: WorkspaceHandle[] = [];
@@ -224,6 +225,8 @@ describe("prévia e diagnósticos (cenários 2 e 4)", () => {
   });
 
   it("clicar num item do painel abre o arquivo com o cursor no trecho (FR-006a)", async () => {
+    // O clique rola o editor até o trecho (scrollIntoView), que mede `Range` no próximo quadro.
+    stubRangeLayout();
     const { core, root, ws } = setup();
     await ws.ready;
     await ws.showProject(INFO);
