@@ -225,6 +225,8 @@ export interface Ipc {
   semanticTokens(path: string): Promise<Token[]>;
   subscribePreview(onUpdate: (update: PreviewUpdate) => void): Promise<void>;
   pageSvg(index: number, hash: string): Promise<string>;
+  /** Imagem citada no SVG da prévia como `prelo-asset://<sha256>`, como `data:` URL. */
+  previewAsset(sha256: string): Promise<string>;
   jumpFromClick(page: number, xPt: number, yPt: number): Promise<SourcePosition | null>;
   jumpFromCursor(path: string, offset: number): Promise<PagePosition[]>;
   outline(): Promise<OutlineItem[]>;
@@ -274,6 +276,7 @@ export function createIpc(transport: Transport): Ipc {
       await call("subscribe_preview", { channel });
     },
     pageSvg: (index, hash) => call("page_svg", { index, hash }),
+    previewAsset: (sha256) => call("preview_asset", { sha256 }),
     jumpFromClick: (page, xPt, yPt) => call("jump_from_click", { page, xPt, yPt }),
     jumpFromCursor: (path, offset) => call("jump_from_cursor", { path, offset }),
     outline: () => call("outline"),

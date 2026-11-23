@@ -59,7 +59,8 @@ vêm da última prévia `Ok`.
 | evento `PreviewUpdate` | `{ compileId, ok, pages: {index, hash, widthPt, heightPt}[], changed: number[], diagnostics: Diagnostic[], durationMs }`. Com `ok: false`, `pages` são as da última `Ok` e `changed` vem vazio; quem assina depois recebe logo a prévia atual com todas as páginas em `changed` |
 | `page_svg` | `{ index, hash }` → SVG da página (texto). `hash` velho → `stale_page` |
 | `Diagnostic.range` | `{ from, to }` em **unidades UTF-16** do texto atual do arquivo (as mesmas de `edit_file` e do CodeMirror); o núcleo converte os bytes do Typst |
-| `prelo-asset://<sha256>` | Protocolo próprio: bytes de imagem por hash; hash desconhecido → 404 |
+| `prelo-asset://<sha256>` | Protocolo próprio: bytes de imagem por hash; hash desconhecido → 404. O SVG de `page_svg` cita cada imagem assim, em vez da `data:` URL. Só `GET` de hash (64 dígitos hexadecimais minúsculos) de imagem do documento atual já citada num SVG; qualquer outro pedido → 404, outro método → 405 |
+| `preview_asset` | `{ sha256 }` → `data:` URL da imagem citada no SVG da prévia. Um SVG mostrado como `<img>` não carrega recurso de fora (nem `prelo-asset:`), e `connect-src` não libera o protocolo; por isso a interface pede cada hash uma vez por aqui e devolve a `data:` URL ao SVG antes de criar o blob. Erros: `invalid_arguments` (hash malformado), `not_found` (hash fora da prévia atual) |
 | `jump_from_click` | `{ page, xPt, yPt }` → `{ path, line, column }` ou `null` (sem origem) |
 | `jump_from_cursor` | `{ path, offset }` → `{ page, xPt, yPt }[]` |
 | `outline` | → `OutlineItem[]` |

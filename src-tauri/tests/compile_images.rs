@@ -127,6 +127,103 @@ fn cada_imagem_e_decodificada_uma_vez_em_20_edicoes_de_texto() {
     }
 }
 
+/// Pelo IPC (T058): `page_svg` cita cada figura por `prelo-asset://<sha256>` e `preview_asset`
+/// devolve a `data:` URL só para esses hashes.
+#[test]
+fn figuras_da_previa_pelo_ipc() {
+    use prelo_lib::commands::AppState;
+    use prelo_lib::compile::preview::{PreviewUpdate, ASSET_PREFIX};
+    use serde_json::{json, Value};
+    use tauri::ipc::{CallbackFn, InvokeBody};
+    use tauri::test::{get_ipc_response, mock_builder, mock_context, noop_assets, INVOKE_KEY};
+    use tauri::webview::InvokeRequest;
+    use tauri::{Manager, WebviewWindowBuilder};
+
+    let app = prelo_lib::configure_with_state(mock_builder(), AppState::default())
+        .build(mock_context(noop_assets()))
+        .expect("app de teste");
+    let window = WebviewWindowBuilder::new(&app, "main", Default::default())
+        .build()
+        .expect("janela de teste");
+    let invoke = |cmd: &str, body: Value| -> Result<Value, Value> {
+        let url = if cfg!(windows) {
+            "http://tauri.localhost"
+        } else {
+            "tauri://localhost"
+        };
+        get_ipc_response(
+            &window,
+            InvokeRequest {
+                cmd: cmd.into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: url.parse().unwrap(),
+                body: InvokeBody::Json(body),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map(|b| b.deserialize::<Value>().expect("JSON"))
+    };
+
+    let project = TempProject::from_fixture("imagens");
+    let state = app.state::<AppState>();
+    let (tx, rx) = std::sync::mpsc::channel();
+    state.subscribe_preview(move |u: &PreviewUpdate| {
+        let _ = tx.send(u.clone());
+    });
+    state.open_project(&project.root()).expect("abrir projeto");
+    let update = loop {
+        let u: PreviewUpdate = rx
+            .recv_timeout(std::time::Duration::from_secs(60))
+            .expect("PreviewUpdate no prazo");
+        if u.ok {
+            break u;
+        }
+    };
+
+    let mut shas = BTreeSet::new();
+    for page in &update.pages {
+        let svg = invoke(
+            "page_svg",
+            json!({ "index": page.index, "hash": page.hash }),
+        )
+        .expect("page_svg");
+        let svg = svg.as_str().expect("texto");
+        assert!(!svg.contains("data:image/"), "figura embutida no SVG");
+        for (i, _) in svg.match_indices(ASSET_PREFIX) {
+            shas.insert(svg[i + ASSET_PREFIX.len()..][..64].to_owned());
+        }
+    }
+    assert_eq!(shas.len(), FORMATS.len(), "um hash por figura");
+    for sha in &shas {
+        let url = invoke("preview_asset", json!({ "sha256": sha })).expect("preview_asset");
+        assert!(
+            url.as_str().unwrap().starts_with("data:image/"),
+            "{sha}: {url:.40}"
+        );
+    }
+
+    let unknown = "0".repeat(64);
+    assert_eq!(
+        invoke("preview_asset", json!({ "sha256": unknown })),
+        Err(json!("not_found"))
+    );
+    for bad in [
+        json!({ "sha256": "../main.typ" }),
+        json!({ "sha256": shas.first().unwrap().to_uppercase() }),
+        json!({ "sha256": shas.first().unwrap(), "path": "figura.png" }),
+        json!({ "path": "figura.png" }),
+        json!({}),
+    ] {
+        assert_eq!(
+            invoke("preview_asset", bad.clone()),
+            Err(json!("invalid_arguments")),
+            "{bad}"
+        );
+    }
+}
+
 #[test]
 fn cache_de_bytes_guarda_so_a_versao_atual_de_cada_arquivo() {
     let project = TempProject::empty();

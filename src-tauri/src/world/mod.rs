@@ -2,7 +2,8 @@
 //!
 //! `CompilerUniverse` do `tinymist-world` montado com:
 //! - o [`AccessModel`] do Prelo como único `PathAccessModel` do VFS (RF-08);
-//! - só as fontes embutidas ([`fonts`]), com os padrões de matemática e `raw` do Prelo;
+//! - só as fontes embutidas e as de `fonts/` do projeto, lidas pelo mesmo modelo de acesso
+//!   ([`fonts`]), com os padrões de matemática e `raw` do Prelo;
 //! - o registro de pacotes `@preview` do Prelo ([`packages`]), com cache e verificação;
 //! - plugins WASM barrados até a pessoa aprovar ([`plugins`], no modelo de acesso).
 //!
@@ -60,6 +61,8 @@ where
     registry: Arc<PreloRegistry>,
     /// Contador de decisões de plugin e de "Baixar de novo" visto na última compilação.
     seen_generation: u64,
+    /// Fontes de `fonts/` do projeto vistas na última compilação.
+    fonts: fonts::ProjectFonts,
     /// Arquivo principal como foi pedido, e como o escopo o vê (`/` + relativo à raiz).
     main: (String, String),
 }
@@ -142,6 +145,7 @@ where
             library: library(),
             registry,
             seen_generation,
+            fonts: fonts::ProjectFonts::default(),
             main: (main.to_owned(), format!("/{}", vpath_str)),
         })
     }
@@ -195,20 +199,34 @@ where
         }
     }
 
+    /// Confere `fonts/` do projeto e troca o resolvedor se algo mudou (FR-016).
+    fn refresh_fonts(&mut self) {
+        if let Some(resolver) = self.fonts.refresh(&self.access) {
+            self.universe
+                .increment_revision(|universe| universe.set_fonts(resolver));
+        }
+    }
+
     /// Compila o estado atual (disco + overlay). Erros e avisos viram [`Diagnostic`].
     pub fn compile(&mut self) -> Outcome<PagedDocument> {
         self.refresh_trust();
+        self.refresh_fonts();
         let world = self.snapshot();
         let Warned { output, warnings } = typst::compile::<PagedDocument>(&world);
+        // Cache de memorização do Typst (comemo): sai só o que ficou sem uso por
+        // `EVICT_AFTER` compilações. Imagem que segue no documento é usada em toda compilação,
+        // então continua decodificada (FR-027); a que saiu do documento libera a memória.
+        typst::comemo::evict(EVICT_AFTER);
         let (output, errors) = match output {
             Ok(doc) => (Some(doc), Default::default()),
             Err(errors) => (None, errors),
         };
-        let diagnostics = errors
+        let mut diagnostics: Vec<Diagnostic> = errors
             .iter()
             .chain(warnings.iter())
             .map(|diag| self.convert(&world, diag))
             .collect();
+        diagnostics.extend_from_slice(self.fonts.diagnostics());
         Outcome {
             output,
             diagnostics,
@@ -326,6 +344,10 @@ where
         ));
     }
 }
+
+/// Compilações sem uso depois das quais um resultado memorizado sai do cache do Typst
+/// (o `typst watch` usa 10).
+const EVICT_AFTER: usize = 30;
 
 /// Mensagem do Typst para arquivo que não é UTF-8 (`FileError::InvalidUtf8`).
 const INVALID_UTF8: &str = "file is not valid UTF-8";

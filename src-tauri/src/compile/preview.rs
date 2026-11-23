@@ -10,14 +10,26 @@
 //! [`PreviewHub`] liga a agenda à interface: guarda a prévia do projeto aberto, entrega cada
 //! evento ao assinante (o `tauri::ipc::Channel` de `subscribe_preview`) e descarta o que vier
 //! da agenda de um projeto já fechado.
+//!
+//! Imagens (T058; RF-51, research R4): o `typst-svg` embute cada imagem como `data:` URL. Para
+//! não reenviar uma imagem grande a cada edição na mesma página, o SVG de `page_svg` cita cada
+//! uma por `prelo-asset://<sha256>` (sha256 dos bytes servidos). O conteúdo de cada hash sai
+//! pelo protocolo `prelo-asset` ([`asset_response`]) e por `preview_asset` (como `data:` URL,
+//! que a interface devolve ao SVG: um SVG mostrado como `<img>` não carrega recurso de fora).
+//! Só respondem os hashes de imagens do documento atual cujo SVG já foi pedido; o resto é 404.
 
+use std::collections::{HashMap, HashSet};
 use std::sync::mpsc::Receiver;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread;
 
 use serde::Serialize;
+use sha2::{Digest, Sha256};
+use tauri::http::{header, Method, Request, Response, StatusCode};
+use typst::layout::{Frame, FrameItem};
+use typst::visualize::Image;
 use typst_layout::{Page, PagedDocument};
-use typst_svg::SvgOptions;
+use typst_svg::{SvgOptions, WebImage};
 
 use super::scheduler::{Compilation, Status};
 use crate::diagnostic::Diagnostic;
@@ -70,6 +82,84 @@ pub struct Preview {
     pages: Vec<PageInfo>,
     /// Último evento entregue, para quem assinar depois.
     last: Option<PreviewUpdate>,
+    /// Imagens do documento atual servidas por hash.
+    assets: Assets,
+}
+
+/// Imagem servida por `prelo-asset`: o conteúdo como o `typst-svg` o embutiria.
+struct Asset {
+    sha256: String,
+    image: WebImage,
+}
+
+impl Asset {
+    fn mime(&self) -> &'static str {
+        self.image.format.mime()
+    }
+}
+
+/// Imagens que a prévia pode servir: só as do documento `Ok` atual (`live`, pelo hash do
+/// Typst de cada imagem) cujo SVG já foi pedido.
+#[derive(Default)]
+struct Assets {
+    live: HashSet<u128>,
+    by_image: HashMap<u128, Arc<Asset>>,
+    by_sha: HashMap<String, Arc<Asset>>,
+}
+
+impl Assets {
+    /// Documento novo: esquece as imagens que saíram dele.
+    fn track(&mut self, doc: &PagedDocument) {
+        self.live.clear();
+        for page in doc.pages() {
+            for_each_image(&page.frame, &mut |image| {
+                self.live.insert(typst::utils::hash128(image));
+            });
+        }
+        let live = &self.live;
+        self.by_image.retain(|key, _| live.contains(key));
+        self.by_sha = self
+            .by_image
+            .values()
+            .map(|asset| (asset.sha256.clone(), Arc::clone(asset)))
+            .collect();
+    }
+
+    /// Guarda a imagem `key` se ela ainda está no documento atual.
+    fn insert(&mut self, key: u128, asset: &Arc<Asset>) {
+        if self.live.contains(&key) {
+            self.by_image.insert(key, Arc::clone(asset));
+            self.by_sha
+                .insert(asset.sha256.clone(), Arc::clone(asset));
+        }
+    }
+}
+
+/// Chama `f` para cada imagem do quadro, inclusive dentro de grupos.
+fn for_each_image(frame: &Frame, f: &mut impl FnMut(&Image)) {
+    for (_, item) in frame.items() {
+        match item {
+            FrameItem::Group(group) => for_each_image(&group.frame, f),
+            FrameItem::Image(image, _, _) => f(image),
+            _ => {}
+        }
+    }
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use std::fmt::Write;
+    Sha256::digest(bytes)
+        .iter()
+        .fold(String::with_capacity(64), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        })
+}
+
+/// `sha256` em hexadecimal minúsculo (64 dígitos)? Qualquer outra coisa é recusada sem
+/// consultar nada.
+fn is_sha256(text: &str) -> bool {
+    text.len() == 64 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 impl Preview {
@@ -101,6 +191,7 @@ impl Preview {
                     .map(|p| p.index)
                     .collect();
                 self.pages = pages;
+                self.assets.track(&doc);
                 self.document = Some(Arc::new(doc));
                 (true, changed)
             }
@@ -217,14 +308,50 @@ impl PreviewHub {
         self.lock().preview.page(index, hash)
     }
 
-    /// SVG da página atual `index` com o hash `hash` (ainda sem o protocolo, T058).
+    /// SVG da página atual `index` com o hash `hash`, com cada imagem citada por
+    /// `prelo-asset://<sha256>` em vez da `data:` URL. O SVG e o sha256 de uma imagem nova são
+    /// calculados fora da trava; o sha256 fica guardado enquanto a imagem estiver no documento.
     pub fn page_svg(&self, index: usize, hash: &str) -> Result<String, &'static str> {
-        self.page(index, hash).map(|page| render_svg(&page))
+        let page = self.page(index, hash)?;
+        let mut svg = render_svg(&page);
+        let mut done = HashSet::new();
+        let mut images = Vec::new();
+        for_each_image(&page.frame, &mut |image| {
+            if done.insert(typst::utils::hash128(image)) {
+                images.push(image.clone());
+            }
+        });
+        for image in images {
+            let key = typst::utils::hash128(&image);
+            let known = self.lock().preview.assets.by_image.get(&key).cloned();
+            let asset = known.unwrap_or_else(|| {
+                let image = WebImage::new(&image);
+                let asset = Arc::new(Asset {
+                    sha256: sha256_hex(&image.data),
+                    image,
+                });
+                self.lock().preview.assets.insert(key, &asset);
+                asset
+            });
+            // Memorizado pelo Typst: é a mesma `data:` URL que o `typst-svg` escreveu.
+            let url = asset.image.to_base64_url();
+            svg = svg.replace(url.as_str(), &format!("{ASSET_PREFIX}{}", asset.sha256));
+        }
+        Ok(svg)
     }
 
-    /// `data:` URL do conteúdo `sha256` (T058).
-    pub fn asset_data_url(&self, _sha256: &str) -> Option<String> {
-        None
+    fn asset(&self, sha256: &str) -> Option<Arc<Asset>> {
+        if !is_sha256(sha256) {
+            return None;
+        }
+        self.lock().preview.assets.by_sha.get(sha256).cloned()
+    }
+
+    /// Conteúdo `sha256` como `data:` URL, para a interface devolver ao SVG da página
+    /// (`preview_asset`). `None` se o hash não é de uma imagem servida da prévia atual.
+    pub fn asset_data_url(&self, sha256: &str) -> Option<String> {
+        self.asset(sha256)
+            .map(|asset| asset.image.to_base64_url().to_string())
     }
 
     /// Último documento compilado com sucesso (saltos e estrutura, fases seguintes).
@@ -255,18 +382,50 @@ impl PreviewHub {
     }
 }
 
-/// Prefixo das referências a imagem no SVG da prévia (T058).
+/// Nome do protocolo próprio das imagens da prévia (contracts/ipc.md).
+pub const ASSET_SCHEME: &str = "prelo-asset";
+
+/// Prefixo das referências a imagem no SVG da prévia: `prelo-asset://<sha256>`.
 pub const ASSET_PREFIX: &str = "prelo-asset://";
 
-/// Resposta do protocolo `prelo-asset` (T058).
-pub fn asset_response(
-    _hub: &PreviewHub,
-    _request: &tauri::http::Request<Vec<u8>>,
-) -> tauri::http::Response<Vec<u8>> {
-    tauri::http::Response::builder()
-        .status(501)
-        .body(Vec::new())
-        .unwrap()
+/// CSP da resposta: se o conteúdo (um SVG, por exemplo) for aberto como documento, não roda
+/// script nem carrega nada.
+const ASSET_CSP: &str = "default-src 'none'; sandbox";
+
+/// Protocolo `prelo-asset` (contracts/ipc.md): `GET` de `/<sha256>` (macOS e Linux:
+/// `prelo-asset://localhost/<sha256>`; Windows: `http://prelo-asset.localhost/<sha256>`; ou o
+/// próprio `prelo-asset://<sha256>`) devolve os bytes da imagem. Só hashes de imagens da prévia
+/// atual; qualquer outro pedido (hash desconhecido, caminho, `..`, hexadecimal maiúsculo) é
+/// 404 sem consultar nada, e o que não for leitura é 405. Nenhum caminho de arquivo é aceito.
+pub fn asset_response(hub: &PreviewHub, request: &Request<Vec<u8>>) -> Response<Vec<u8>> {
+    let status = |code: StatusCode| {
+        Response::builder()
+            .status(code)
+            .header(header::CACHE_CONTROL, "no-store")
+            .body(Vec::new())
+            .unwrap_or_default()
+    };
+    if request.method() != Method::GET {
+        return status(StatusCode::METHOD_NOT_ALLOWED);
+    }
+    let uri = request.uri();
+    let path = uri.path().strip_prefix('/').unwrap_or(uri.path());
+    let sha256 = if path.is_empty() {
+        uri.host().unwrap_or_default()
+    } else {
+        path
+    };
+    let Some(asset) = hub.asset(sha256) else {
+        return status(StatusCode::NOT_FOUND);
+    };
+    Response::builder()
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, asset.mime())
+        .header(header::X_CONTENT_TYPE_OPTIONS, "nosniff")
+        .header(header::CONTENT_SECURITY_POLICY, ASSET_CSP)
+        .header(header::CACHE_CONTROL, "no-store")
+        .body(asset.image.data.to_vec())
+        .unwrap_or_else(|_| status(StatusCode::NOT_FOUND))
 }
 
 #[cfg(test)]
@@ -684,11 +843,12 @@ mod tests {
         // O SVG da página editada só cita o hash: os bytes da figura não vão de novo.
         assert_eq!(asset_tokens(&second), asset_tokens(&first));
         assert!(!second.contains("data:image/"));
-        let encoded_len = PNG.len() * 4 / 3;
+        // Comparado ao SVG com a imagem embutida, fica menor pelo menos o tamanho dela.
+        let inline = render_svg(&hub.page(0, &second_hash).unwrap());
         assert!(
-            second.len() < first.len() + encoded_len / 2,
-            "SVG cresceu como se levasse a imagem: {} → {}",
-            first.len(),
+            inline.len() >= second.len() + PNG.len(),
+            "SVG leva a imagem: {} com, {} sem",
+            inline.len(),
             second.len()
         );
         assert!(hub.asset_data_url(&sha256_hex(PNG)).is_some());
