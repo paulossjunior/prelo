@@ -53,7 +53,9 @@ docs/
 ├── especificacao.md            # visão geral, escopo, plano
 ├── requisitos.md               # RF/RNF canônicos, papéis, regras, fluxos
 ├── arquitetura.md              # visão de arquitetura e riscos técnicos
-├── adrs.md                     # decisões D-xx (um bloco por decisão)
+├── adrs.md                     # índice das decisões D-xx
+├── adrs/
+│   └── D-NN-<slug>.md          # uma decisão por arquivo
 ├── requisitos/
 │   ├── casos-de-uso.md         # UC-xx com fluxos principal, alternativos e de exceção
 │   ├── historias.md            # US-xx com critérios de aceite Gherkin
@@ -66,8 +68,8 @@ docs/
 ```
 
 Novos IDs continuam a numeração existente. Antes de criar um ID, procure o maior já usado com
-Grep. Requisitos novos entram primeiro em `docs/requisitos.md` e decisões em `docs/adrs.md`, com
-os mesmos IDs D-xx; os outros documentos só referenciam.
+Grep. Requisitos novos entram primeiro em `docs/requisitos.md` e decisões em `docs/adrs/D-NN-<slug>.md`
+(com linha no índice `docs/adrs.md`), com os mesmos IDs D-xx; os outros documentos só referenciam.
 
 ## Engenharia de requisitos
 
@@ -123,9 +125,10 @@ Regras para diagramas:
   glossário). Não preencha seção vazia; omita.
 - **Visões 4+1** quando a pergunta for sobre como as visões se conectam; amarre os cenários
   aos casos de uso.
-- **ADR** (formato Nygard/MADR) em `docs/adrs.md`, um bloco `## D-xx` por decisão: Status
-  (proposta, aceita, substituída por D-xx), Contexto, Decisão, Alternativas consideradas,
-  Consequências (+/−). Atualize também o índice no topo do arquivo.
+- **ADR** (formato Nygard/MADR) em `docs/adrs/D-NN-<slug>.md`, um arquivo por decisão, com
+  título `# D-NN — <título>`: Status (proposta, aceita, substituída por D-xx), Contexto,
+  Decisão, Alternativas consideradas, Consequências (+/−). Acrescente a linha da decisão no
+  índice `docs/adrs.md`.
 - **Atributos de qualidade (ISO/IEC 25010)**: desempenho, confiabilidade, segurança,
   portabilidade, manutenibilidade, usabilidade. Ligue cada um a RNF-xx e a um cenário mensurável.
 - Para cada escolha, diga o trade-off. Arquitetura sem custo descrito está incompleta.
