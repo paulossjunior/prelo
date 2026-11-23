@@ -70,6 +70,12 @@ describe("forced-kill: conferência do texto reaberto", () => {
     expect(checkReopened({ marks, killedAt, original, reopened: "lixo" }).join()).toContain("original");
   });
 
+  it("aceita o original com CRLF do disco (checkout do Windows) e o editor com LF", () => {
+    const crlf = original.replace(/\n/g, "\r\n");
+    expect(checkReopened({ marks, killedAt, original: crlf, reopened: withMarks(13) })).toEqual([]);
+    expect(checkReopened({ marks, killedAt, original: crlf, reopened: "lixo" }).join()).toContain("original");
+  });
+
   it("recusa roteiro sem marcas ou sem texto reaberto", () => {
     expect(checkReopened({ marks: [], killedAt, original, reopened: original })).toHaveLength(1);
     expect(checkReopened({ marks, killedAt, original, reopened: null })).toHaveLength(1);
