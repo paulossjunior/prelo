@@ -1,9 +1,9 @@
 // Testes da conferência de layout do autoteste (T037/T039). O jsdom não faz layout: as medidas
 // são fixadas à mão, reproduzindo o app real com e sem o tema base do CodeMirror.
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { mountEditor } from "./editor/editor";
 import { mountEditorZoom } from "./editor/zoom";
-import { editorZoomProblems, layoutProblems, openAllPanes, paneLayoutProblems, previewZoomProblems, watchCspViolations } from "./layout-check";
+import { editorZoomProblems, layoutProblems, lintMarkerProblems, openAllPanes, paneLayoutProblems, previewZoomProblems, watchCspViolations } from "./layout-check";
 import { mountPanes } from "./panes";
 import { mountPreview } from "./preview/preview";
 import { fakeCore } from "./testing/fake-core";
@@ -343,5 +343,51 @@ describe("openAllPanes", () => {
     restore();
     expect(panes.layout()).toMatchObject({ tree: false, editor: true, preview: false });
     panes.destroy();
+  });
+});
+
+describe("lintMarkerProblems", () => {
+  function editor() {
+    const box = document.createElement("div");
+    box.className = "ws-editor";
+    document.body.append(box);
+    const core = fakeCore({});
+    return mountEditor(box, { ipc: core.ipc, path: "main.typ", text: "= Título\n\nTexto.\n", version: 1, tokenDelayMs: 0 });
+  }
+  function paint(color: string, size = 12) {
+    const real = window.getComputedStyle;
+    vi.spyOn(window, "getComputedStyle").mockImplementation((el, pseudo) => {
+      const st = real(el, pseudo);
+      if ((el as Element).classList?.contains("prelo-icon")) {
+        return new Proxy(st, { get: (t, k) => (k === "color" ? color : Reflect.get(t, k)) });
+      }
+      return st;
+    });
+    const proto = Element.prototype.getBoundingClientRect;
+    vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+      if (this.classList.contains("prelo-icon")) {
+        return { left: 0, top: 0, x: 0, y: 0, width: size, height: size, right: size, bottom: size, toJSON: () => ({}) } as DOMRect;
+      }
+      return proto.call(this);
+    });
+  }
+  afterEach(() => vi.restoreAllMocks());
+
+  it("aceita o marcador de erro visível e vermelho, e devolve os diagnósticos de antes", async () => {
+    const ed = editor();
+    paint("rgb(180, 51, 43)");
+    expect(await lintMarkerProblems(ed.view)).toEqual([]);
+    // O diagnóstico de teste some depois da conferência.
+    expect(ed.view.dom.querySelector(".prelo-lint-gutter .prelo-icon")).toBeNull();
+    ed.destroy();
+  });
+
+  it("recusa marcador sem tamanho ou sem cor de erro", async () => {
+    const ed = editor();
+    paint("rgb(91, 106, 113)", 0);
+    const p = await lintMarkerProblems(ed.view);
+    expect(p.join("\n")).toMatch(/tamanho/);
+    expect(p.join("\n")).toMatch(/vermelh/);
+    ed.destroy();
   });
 });

@@ -113,8 +113,8 @@ button.pt-item:hover { background: var(--accent-soft); }
 .prelo-editor .cm-gutters { background: var(--code-bg); color: var(--muted); border-right: 0; }
 /* Largura em em (38 px a 12,5 px) para escalar com o zoom do editor (FR-013c). */
 .prelo-editor .cm-lineNumbers .cm-gutterElement { min-width: 3.04em; padding: 0; text-align: right; opacity: 0.7; }
-.prelo-editor .cm-gutter-lint { width: 1.2em; }
-.prelo-editor .cm-gutter-lint .cm-gutterElement { padding: 0; }
+.prelo-editor .prelo-lint-gutter { width: 1.2em; }
+.prelo-editor .prelo-lint-gutter .cm-gutterElement { display: flex; align-items: center; justify-content: center; padding: 0; }
 .prelo-editor .cm-activeLine { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
 .prelo-editor .cm-activeLineGutter { background: transparent; color: var(--ink); }
 .prelo-editor .cm-cursor { border-left-color: var(--fg); }
@@ -126,14 +126,18 @@ button.pt-item:hover { background: var(--accent-soft); }
 .prelo-editor .cm-content .cm-lintRange { background-image: none; }
 .prelo-editor .cm-content .cm-lintRange-info,
 .prelo-editor .cm-content .cm-lintRange-hint { text-decoration: underline dotted var(--muted); }
-.prelo-editor .cm-gutter-lint .cm-lint-marker {
-  content: normal; box-sizing: border-box; width: 0.8em; height: 0.8em; margin: 0.35em auto 0;
-  background: var(--muted);
-}
-.prelo-editor .cm-gutter-lint .cm-lint-marker-error { background: var(--err); border-radius: 50%; }
-.prelo-editor .cm-gutter-lint .cm-lint-marker-warning {
-  background: var(--warn); clip-path: polygon(50% 0, 100% 100%, 0 100%);
-}
+/* Ícones de gravidade (src/editor/icons.ts): SVG montado pelo DOM, cor por classe. A margem
+   não usa o marcador do lint, cuja imagem `data:` (na propriedade content) a CSP bloqueia; no
+   app real sobrava um quadrado vazio. Em em, para crescer com o zoom do editor (FR-013c). */
+.prelo-icon { display: inline-flex; flex: none; vertical-align: -0.15em; color: var(--muted); }
+.prelo-icon svg { width: 1em; height: 1em; display: block; }
+.prelo-icon .pi-bg { fill: currentColor; stroke: currentColor; stroke-width: 0.6; }
+.prelo-icon .pi-fg { fill: var(--surface); }
+.prelo-icon.is-error { color: var(--err); }
+.prelo-icon.is-warning { color: var(--warn); }
+.prelo-icon.is-info { color: var(--accent); }
+.prelo-editor .prelo-lint-gutter .prelo-icon svg { width: 0.9em; height: 0.9em; }
+.pb-icon { margin-top: 0.2em; }
 /* Realce como o do protótipo: `#nome` (funções e palavras-chave) roxo, `<rótulo>` laranja,
    `@referência` verde-azulado, títulos em negrito, comentários em itálico; o resto na cor do
    texto. Classes = tags do Typst sem o prefixo `typ-` (src-tauri/src/lang_service.rs). */
@@ -214,13 +218,14 @@ html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
 #app { height: 100%; }
 .ws {
-  height: 100%; display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  height: 100%; display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
   background: var(--surface); min-width: 720px;
 }
 /* Barra, mensagem, erros da exportação e aviso ocupam as linhas de cima na ordem (os ocultos
    não ocupam nenhuma); corpo e status ficam sempre nas duas últimas. */
 .ws > .ws-body { grid-row: 5; }
-.ws > .ws-status { grid-row: 6; }
+.ws > .pb { grid-row: 6; }
+.ws > .ws-status { grid-row: 7; }
 .ws-export-errors ul { margin: 4px 0 0; padding-left: 18px; }
 .ws-top {
   display: flex; align-items: center; gap: 10px; padding: 8px 12px;
@@ -359,3 +364,48 @@ body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
 .ws-pane-h .seg button { padding: 3px 9px; }
 .ed-zoom-pct { display: grid; place-items: center; min-width: 42px; padding: 0 6px; color: var(--ink); font-size: 12px; }
 .ed-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- painel "Erros" (FR-006a) ----------
+   Faixa recolhível entre o corpo e a barra de status, com a linguagem do protótipo: cabeçalho
+   em mono maiúsculo como os títulos dos painéis, itens como os da estrutura, erro e aviso nas
+   cores de exclusão e de comentário. A lista rola por dentro e não passa de um terço da janela. */
+.pb { border-top: 1px solid var(--line); background: var(--surface); font: 12.5px/1.5 var(--f-body); color: var(--fg); min-width: 0; }
+.pb-h { display: flex; align-items: center; padding: 2px 8px; background: var(--surface-2); }
+.pb-toggle {
+  display: inline-flex; align-items: center; gap: 8px; font: inherit; color: var(--muted);
+  background: transparent; border: 0; border-radius: 5px; padding: 2px 6px; cursor: pointer;
+}
+.pb-toggle::before { content: "▸"; }
+.pb.is-open .pb-toggle::before { content: "▾"; }
+.pb-toggle:hover { color: var(--ink); background: var(--accent-soft); }
+.pb-toggle:focus-visible, .pb-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pb-title { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; }
+.pb-count {
+  min-width: 18px; padding: 0 6px; border-radius: 9px; font-size: 11px; text-align: center;
+  background: var(--line); color: var(--fg); font-variant-numeric: tabular-nums;
+}
+.pb.has-errors .pb-count { background: var(--err-bg); color: var(--err); font-weight: 600; }
+.pb.has-warnings .pb-count { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+.pb-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pb-list { list-style: none; margin: 0; padding: 4px 8px 8px; max-height: 32vh; overflow: auto; display: grid; gap: 2px; }
+.pb-list[hidden] { display: none; }
+.pb-item {
+  display: flex; gap: 8px; width: 100%; text-align: left; font: inherit; color: inherit;
+  background: transparent; border: 0; border-left: 3px solid transparent; border-radius: 5px; padding: 5px 8px;
+}
+button.pb-item { cursor: pointer; }
+button.pb-item:hover { background: var(--accent-soft); }
+.pb-item.is-error { border-left-color: var(--err); }
+.pb-item.is-warning { border-left-color: var(--warn); }
+.pb-body, .pb-tip { display: grid; gap: 2px; min-width: 0; }
+.pb-loc { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+.pb-reason { color: var(--ink); font-weight: 500; }
+.pb-fix b { font-weight: 600; }
+.pb-orig, .pb-hint { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+.pb-empty { color: var(--muted); padding: 4px 8px; }
+/* Tooltip do sublinhado (tema do lint entra pelo nonce; aqui só as cores do app). */
+.prelo-editor .cm-tooltip-lint { background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; box-shadow: var(--shadow); max-width: 480px; }
+.prelo-editor .cm-diagnostic { font: 12.5px/1.5 var(--f-body); padding: 6px 10px; white-space: normal; }
+.prelo-editor .cm-diagnostic-error { border-left-color: var(--err); }
+.prelo-editor .cm-diagnostic-warning { border-left-color: var(--warn); }
+.pv-error-show { margin-left: 8px; }

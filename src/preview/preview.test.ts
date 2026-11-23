@@ -217,6 +217,32 @@ describe("faixa de erro (FR-014)", () => {
     expect(band?.hidden).toBe(true);
   });
 
+  it("faixa de erro com onShowErrors tem botão 'Ver os erros' (FR-006a)", async () => {
+    const parent = document.createElement("div");
+    document.body.append(parent);
+    let shown = 0;
+    const p = mountPreview(parent, {
+      ipc: fakeCore().ipc,
+      urls: { create: () => "blob:x", revoke: () => {} },
+      onShowErrors: () => shown++,
+    });
+    p.update({
+      compileId: 1,
+      ok: false,
+      pages: [],
+      changed: [],
+      diagnostics: [{ severity: "error", path: "main.typ", line: 1, message: "x", hints: [], kind: "typst" }],
+      durationMs: 1,
+    });
+    const band = parent.querySelector<HTMLElement>(".pv-error")!;
+    expect(band.textContent).toContain("1 erro");
+    const b = band.querySelector<HTMLButtonElement>("button")!;
+    expect(b.textContent).toBe("Ver os erros");
+    b.click();
+    expect(shown).toBe(1);
+    p.destroy();
+  });
+
   it("falha ao buscar a página (não stale) não quebra a prévia", async () => {
     const { parent, preview } = setup(() => {
       throw "invalid_arguments";

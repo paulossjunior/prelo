@@ -62,6 +62,32 @@ describe("toLintDiagnostics", () => {
     expect(out).toEqual([]);
   });
 
+  it("tooltip do sublinhado mostra a explicação em português, como corrigir, original e dicas (FR-006a)", () => {
+    const [d] = toLintDiagnostics(
+      [diag({ range: { from: 0, to: 1 }, message: "unknown variable: foo", hints: ["did you mean `for`?"] })],
+      "main.typ",
+      DOC,
+    );
+    expect(d?.renderMessage).toBeTypeOf("function");
+    const node = d!.renderMessage!({} as never) as HTMLElement;
+    expect(node.querySelector(".pb-reason")?.textContent).toMatch(/`foo` não existe/);
+    expect(node.querySelector(".pb-fix")?.textContent).toMatch(/^Como corrigir:/);
+    expect(node.querySelector(".pb-orig")?.textContent).toContain("unknown variable: foo");
+    expect(node.querySelector(".pb-hint")?.textContent).toContain("did you mean `for`?");
+  });
+
+  it("tooltip de mensagem desconhecida mostra a original e as dicas", () => {
+    const [d] = toLintDiagnostics(
+      [diag({ range: { from: 0, to: 1 }, message: "brand new error", hints: ["h1"] })],
+      "main.typ",
+      DOC,
+    );
+    const node = d!.renderMessage!({} as never) as HTMLElement;
+    expect(node.querySelector(".pb-reason")?.textContent).toBe("brand new error");
+    expect(node.querySelector(".pb-fix")).toBeNull();
+    expect(node.querySelector(".pb-hint")?.textContent).toContain("h1");
+  });
+
   it("intervalo fora do texto é limitado ao fim do texto", () => {
     const [d] = toLintDiagnostics([diag({ range: { from: 20, to: 900 } })], "main.typ", DOC);
     expect(d).toMatchObject({ from: 20, to: DOC.length });
@@ -98,6 +124,26 @@ describe("diagnósticos no editor", () => {
     expect(seen).toEqual([{ from: 10, to: 14, message: "expected expression" }]);
     const mark = parent.querySelector(".cm-lintRange-error");
     expect(mark?.textContent).toBe("#let");
+  });
+
+  it("margem com ícone desenhado em SVG por severidade, sem o marcador `data:` do lint (regressão)", () => {
+    const { parent, editor } = mount();
+    editor.setDiagnostics([
+      diag({ range: { from: 10, to: 14 }, message: "expected expression" }),
+      diag({ severity: "warning", range: { from: 20, to: 24 }, message: "aviso" }),
+    ]);
+    // O marcador do @codemirror/lint usa `content: url(data:…)`, bloqueado pela CSP: no WebKit
+    // vira um quadrado vazio. Não deve existir.
+    expect(parent.querySelector(".cm-lint-marker")).toBeNull();
+    const err = parent.querySelector<HTMLElement>(".prelo-lint-gutter .prelo-icon.is-error");
+    const warn = parent.querySelector<HTMLElement>(".prelo-lint-gutter .prelo-icon.is-warning");
+    expect(err?.querySelector("svg")).not.toBeNull();
+    expect(warn?.querySelector("svg")).not.toBeNull();
+    expect(err?.getAttribute("title")).toBe("expected expression");
+    // Sem atributo `style` (CSP `style-src` sem 'unsafe-inline').
+    expect(err?.querySelector("[style]")).toBeNull();
+    editor.setDiagnostics([]);
+    expect(parent.querySelector(".prelo-lint-gutter .prelo-icon")).toBeNull();
   });
 
   it("lista nova substitui a anterior; lista vazia limpa", () => {

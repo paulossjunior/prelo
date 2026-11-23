@@ -54,6 +54,12 @@ describe("tokens do protótipo", () => {
     expect(css).toMatch(/\.tok-comment\b[^{]*\{[^}]*font-style:\s*italic/);
   });
 
+  it("ícones de erro e aviso nas cores de erro e aviso, sem `content: url(` (CSP)", () => {
+    expect(css).toMatch(/\.prelo-icon\.is-error\s*\{[^}]*color:\s*var\(--err\)/);
+    expect(css).toMatch(/\.prelo-icon\.is-warning\s*\{[^}]*color:\s*var\(--warn\)/);
+    expect(css).not.toMatch(/content:\s*url\(/);
+  });
+
   it("status de compilação ok em verde (--ins), como no protótipo", () => {
     expect(css).toMatch(/\.ws-compile\.is-ok\s*\{[^}]*color:\s*var\(--ins\)/);
   });
