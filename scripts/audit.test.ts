@@ -216,6 +216,18 @@ describe("licenças de arquivos embutidos (D-15, D-16)", () => {
     expect(fontLicenseViolations(["A.otf"], [{ ...entry("A.otf"), copyright: "" }], allow)).toHaveLength(1);
   });
 
+  it("licenças das fontes do typst CLI valem só para arquivo de fonte", () => {
+    const repoAllow = parseAllowlist(read("security/licenses-allow.txt"));
+    for (const license of [
+      "LicenseRef-GUST-Font-License",
+      "LicenseRef-NewCM-GPL-3.0-or-later-FE-DE",
+      "Bitstream-Vera",
+    ]) {
+      expect(fontLicenseViolations(["A.otf"], [entry("A.otf", license)], repoAllow)).toEqual([]);
+      expect(licenseViolations([{ name: "dep@1.0.0", licenses: license }], repoAllow)).toHaveLength(1);
+    }
+  });
+
   it("OFL-1.1 em dependência (não fonte) continua proibida", () => {
     const repoAllow = parseAllowlist(read("security/licenses-allow.txt"));
     expect(repoAllow).not.toContain("OFL-1.1");

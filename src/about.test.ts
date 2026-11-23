@@ -101,6 +101,23 @@ describe("mountAbout", () => {
     expect(text).toMatch(/Registrado no projeto\s*ainda não registrado/);
   });
 
+  it("mostra o texto de cada licença das fontes do compilador (GUST, Bitstream Vera, GPL+FE+DE)", async () => {
+    const entries = parseFontLicenses(readFileSync(resolve(process.cwd(), "src-tauri/fonts/licenses.toml"), "utf8"));
+    const { about } = setup({
+      compiler_info: () => ({ embedded: "0.15.1", registered: null, fonts: entries }),
+    });
+    await about.open();
+    const text = about.element.textContent ?? "";
+    for (const family of ["New Computer Modern", "New Computer Modern Math", "DejaVu Sans Mono"]) {
+      expect(text).toContain(family);
+    }
+    expect(text).toContain("SIL OPEN FONT LICENSE Version 1.1");
+    expect(text).toContain("GUST Font License");
+    expect(text).toContain("Bitstream Vera Fonts Copyright");
+    expect(text).toContain("Distribution Exception (DE)");
+    expect(text).toContain("GNU GENERAL PUBLIC LICENSE");
+  });
+
   it("mostra os avisos de atribuição do typst-assets (CC-BY-4.0 e W3C, D-16)", async () => {
     const { about } = setup({
       compiler_info: () => ({ embedded: "0.15.1", registered: null, fonts: FONTS }),
@@ -122,6 +139,8 @@ describe("mountAbout", () => {
     const text = about.element.textContent ?? "";
     expect(text).toMatch(/Embutido\s*0\.15\.1/);
     expect(text).toContain("Libertinus");
+    expect(text).toContain("New Computer Modern");
+    expect(text).toContain("DejaVu Sans Mono");
     expect(text).toContain("SIL OPEN FONT LICENSE Version 1.1");
   });
 

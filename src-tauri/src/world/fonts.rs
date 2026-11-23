@@ -304,7 +304,31 @@ mod tests {
         embedded.sort();
         listed.sort();
         assert_eq!(listed, embedded);
-        assert!(licenses().iter().all(|l| l.license == "OFL-1.1"));
+        let permitted = [
+            "OFL-1.1",
+            "LicenseRef-GUST-Font-License",
+            "LicenseRef-NewCM-GPL-3.0-or-later-FE-DE",
+            "Bitstream-Vera",
+        ];
+        assert!(licenses()
+            .iter()
+            .all(|l| permitted.contains(&l.license.as_str())));
+        // As fontes do `typst` CLI 0.15.1 estão todas embutidas (D-15, emenda de 2026-11-23).
+        for file in [
+            "NewCM10-Regular.otf",
+            "NewCM10-Bold.otf",
+            "NewCM10-Italic.otf",
+            "NewCM10-BoldItalic.otf",
+            "NewCMMath-Regular.otf",
+            "NewCMMath-Book.otf",
+            "NewCMMath-Bold.otf",
+            "DejaVuSansMono.ttf",
+            "DejaVuSansMono-Bold.ttf",
+            "DejaVuSansMono-Oblique.ttf",
+            "DejaVuSansMono-BoldOblique.ttf",
+        ] {
+            assert!(embedded.contains(&file), "{file} não embutida");
+        }
         // Aspas escapadas no copyright.
         assert!(licenses()[0].copyright.contains("\"Linux Libertine\""));
     }

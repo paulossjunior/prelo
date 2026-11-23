@@ -6,7 +6,9 @@
 //!   com o nome pedido;
 //! - arquivo de fonte malformado vira diagnóstico, sem derrubar a compilação;
 //! - `fonts/` segue a regra de escopo (FR-021): link para fora não é lido;
-//! - `compiler_info.fonts` lista as Libertinus embutidas com OFL-1.1.
+//! - as fontes do `typst` CLI 0.15.1 estão embutidas: template que pede New Computer Modern
+//!   compila sem aviso de fonte, com matemática e `raw` nos padrões do Typst;
+//! - `compiler_info.fonts` lista cada fonte embutida com licença e copyright.
 
 mod support;
 
@@ -206,7 +208,31 @@ fn link_em_fonts_para_fora_do_projeto_nao_e_lido() {
 }
 
 #[test]
-fn compiler_info_lista_as_libertinus_embutidas_com_ofl() {
+fn template_academico_com_new_computer_modern_compila_sem_aviso() {
+    // O que templates como `@preview/stellar-springer-nature` pedem: texto em New Computer
+    // Modern, matemática e código nos padrões do Typst. Igual ao `typst` CLI, sem fallback.
+    let project = TempProject::empty();
+    project.write(
+        "main.typ",
+        "#set text(font: \"New Computer Modern\")\n\
+         = Introdução\n\
+         Texto *negrito* e _itálico_, com $x^2 + sum_(i=1)^n a_i$ e `codigo` em linha.\n\n\
+         ```rust\nfn main() {}\n```\n",
+    );
+    let (doc, diagnostics) = compile(&project.root());
+    assert!(diagnostics.is_empty(), "{diagnostics:?}");
+    let used = used_families(&doc);
+    for family in ["New Computer Modern", "New Computer Modern Math", "DejaVu Sans Mono"] {
+        assert!(used.contains(family), "{family} não usada: {used:?}");
+    }
+    assert!(
+        !used.iter().any(|f| f.starts_with("Libertinus")),
+        "sobrou fonte de reserva: {used:?}"
+    );
+}
+
+#[test]
+fn compiler_info_lista_cada_fonte_embutida_com_licenca() {
     let info = serde_json::to_value(AppState::default().compiler_info()).unwrap();
     let fonts = info["fonts"].as_array().expect("fonts é lista");
     let files: BTreeSet<&str> = fonts.iter().map(|f| f["file"].as_str().unwrap()).collect();
@@ -219,16 +245,21 @@ fn compiler_info_lista_as_libertinus_embutidas_com_ofl() {
         let mut keys: Vec<_> = font.as_object().unwrap().keys().cloned().collect();
         keys.sort();
         assert_eq!(keys, ["copyright", "family", "file", "license"], "{font}");
-        assert_eq!(font["license"], "OFL-1.1", "{font}");
+        let family = font["family"].as_str().unwrap();
+        let (license, author) = if family.starts_with("Libertinus ") {
+            ("OFL-1.1", "Libertinus Project Authors")
+        } else if family == "DejaVu Sans Mono" {
+            ("Bitstream-Vera", "Bitstream")
+        } else if font["file"] == "NewCM10-Regular.otf" {
+            ("LicenseRef-NewCM-GPL-3.0-or-later-FE-DE", "Antonis Tsolomitis")
+        } else if family.starts_with("New Computer Modern") {
+            ("LicenseRef-GUST-Font-License", "Antonis Tsolomitis")
+        } else {
+            panic!("família inesperada: {font}");
+        };
+        assert_eq!(font["license"], license, "{font}");
         assert!(
-            font["family"].as_str().unwrap().starts_with("Libertinus "),
-            "{font}"
-        );
-        assert!(
-            font["copyright"]
-                .as_str()
-                .unwrap()
-                .contains("Libertinus Project Authors"),
+            font["copyright"].as_str().unwrap().contains(author),
             "{font}"
         );
     }
