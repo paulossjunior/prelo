@@ -1,7 +1,9 @@
 // Testes da conferência de layout do autoteste (T037/T039). O jsdom não faz layout: as medidas
 // são fixadas à mão, reproduzindo o app real com e sem o tema base do CodeMirror.
 import { afterEach, describe, expect, it } from "vitest";
-import { layoutProblems, paneLayoutProblems, previewZoomProblems, watchCspViolations } from "./layout-check";
+import { mountEditor } from "./editor/editor";
+import { mountEditorZoom } from "./editor/zoom";
+import { editorZoomProblems, layoutProblems, openAllPanes, paneLayoutProblems, previewZoomProblems, watchCspViolations } from "./layout-check";
 import { mountPanes } from "./panes";
 import { mountPreview } from "./preview/preview";
 import { fakeCore } from "./testing/fake-core";
@@ -272,5 +274,74 @@ describe("paneLayoutProblems", () => {
   it("recusa área sem os botões de recolher", () => {
     document.body.innerHTML = `<div class="ws-body"></div>`;
     expect(paneLayoutProblems(document)[0]).toMatch(/botões de recolher/);
+  });
+});
+
+// ---------------------------------------------------------------- zoom do editor (T094; FR-013c)
+
+describe("editorZoomProblems", () => {
+  function editorWithZoom() {
+    document.body.innerHTML = "";
+    const header = document.createElement("div");
+    const box = document.createElement("div");
+    box.className = "ws-editor";
+    document.body.append(header, box);
+    const core = fakeCore({});
+    const ed = mountEditor(box, { ipc: core.ipc, path: "main.typ", text: "= Título\n", version: 1, onError: () => {}, onSaved: () => {}, tokenDelayMs: 0 });
+    const zoom = mountEditorZoom({ header, target: box, storage: null });
+    zoom.attach(ed.view);
+    return { ed, zoom };
+  }
+
+  it("leva o editor a 150 %, confere o layout lá e devolve o zoom de antes", async () => {
+    const { ed, zoom } = editorWithZoom();
+    const seen: number[] = [];
+    const p = await editorZoomProblems(document, () => {
+      seen.push(parseFloat(ed.view.dom.style.fontSize));
+      return [];
+    });
+    expect(p).toEqual([]);
+    expect(seen).toEqual([12.5 * 1.5]);
+    expect(zoom.level()).toBe(100);
+    zoom.destroy();
+    ed.destroy();
+  });
+
+  it("problemas de layout a 150 % aparecem com o nível no texto", async () => {
+    const { ed, zoom } = editorWithZoom();
+    const p = await editorZoomProblems(document, () => ["números de linha desalinhados"]);
+    expect(p).toEqual(["editor a 150 %: números de linha desalinhados"]);
+    zoom.destroy();
+    ed.destroy();
+  });
+
+  it("recusa editor sem os controles de zoom", async () => {
+    document.body.innerHTML = `<div class="ws-editor"></div>`;
+    expect((await editorZoomProblems(document, () => []))[0]).toMatch(/zoom do editor/);
+  });
+});
+
+describe("openAllPanes", () => {
+  it("abre os painéis recolhidos pelo arranjo lembrado e os recolhe de novo depois", () => {
+    document.body.innerHTML = "";
+    const body = document.createElement("div");
+    const mk = () => {
+      const c = document.createElement("div");
+      const h = document.createElement("div");
+      c.append(h);
+      body.append(c);
+      return { c, h };
+    };
+    const [t, e, p] = [mk(), mk(), mk()];
+    document.body.append(body);
+    const panes = mountPanes({ body, tree: t.c, editor: e.c, preview: p.c, treeHeader: t.h, editorHeader: e.h, storage: null });
+    p.h.append(panes.previewButton);
+    panes.setOpen("tree", false);
+    panes.setOpen("preview", false);
+    const restore = openAllPanes(document);
+    expect(panes.layout()).toMatchObject({ tree: true, editor: true, preview: true });
+    restore();
+    expect(panes.layout()).toMatchObject({ tree: false, editor: true, preview: false });
+    panes.destroy();
   });
 });

@@ -14,6 +14,7 @@ import { EditorView } from "@codemirror/view";
 import { compilerStatus, mountAbout, type AboutHandle } from "./about";
 import { mountAppInfo, type Invoke } from "./app-info";
 import { mountEditor, type EditorHandle } from "./editor/editor";
+import { mountEditorZoom, type EditorZoomHandle } from "./editor/zoom";
 import { mountExport } from "./export";
 import {
   errorMessage,
@@ -145,6 +146,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   editorHead.append(el("span", "ws-pane-title", "Editor"), editorPath, locateBtn);
   const editorBox = el("div", "ws-editor");
   editorCol.append(editorHead, editorBox);
+  // Zoom do código (FR-013c): controles no cabeçalho; atalhos, roda e pinça só na área do editor.
+  const editorZoom: EditorZoomHandle = mountEditorZoom({ header: editorHead, target: editorBox, key: null });
   const previewCol = el("div", "ws-col ws-col-preview");
   const previewBox = el("div", "ws-preview");
   previewCol.append(previewBox);
@@ -353,6 +356,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     preview = attachPreview(mountPreview(previewBox, { ipc, urls: opts.previewUrls, zoomKey: next.name }));
     // O arranjo dos painéis também é lembrado por projeto (FR-013b).
     panes.setKey(next.name);
+    editorZoom.setKey(next.name);
     compileEl.textContent = "Compilando…";
     compileEl.classList.remove("is-ok", "is-err");
     saveEl.textContent = "";
@@ -466,6 +470,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
       ),
     });
     editor = handle;
+    editorZoom.attach(handle.view);
     saveEl.textContent = "Sem alterações";
     saveBtn.disabled = false;
     tree.setCurrent(path);
@@ -566,6 +571,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
       sync?.destroy();
       preview.destroy();
       panes.destroy();
+      editorZoom.destroy();
       tree.destroy();
       outline.destroy();
       app.remove();
