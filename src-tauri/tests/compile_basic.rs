@@ -210,7 +210,9 @@ fn fixture_crlf(name: &str) -> TempProject {
             if path.is_dir() {
                 stack.push(path);
             } else if path.extension().is_some_and(|e| e == "typ") {
-                let text = std::fs::read_to_string(&path).unwrap().replace("\r\n", "\n");
+                let text = std::fs::read_to_string(&path)
+                    .unwrap()
+                    .replace("\r\n", "\n");
                 std::fs::write(&path, text.replace('\n', "\r\n")).unwrap();
             }
         }
