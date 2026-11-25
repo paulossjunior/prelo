@@ -1,0 +1,19 @@
+# Checkout igual nos três sistemas: texto sempre em LF, também no Windows (core.autocrlf).
+# Sem isto, as fixtures de teste chegavam em CRLF só no Windows (CI do #232).
+* text=auto eol=lf
+
+# Binários: nunca converter.
+*.png binary
+*.jpg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.icns binary
+*.pdf binary
+*.wasm binary
+*.otf binary
+*.ttf binary
+*.woff2 binary
+
+# Texto de licença copiado byte a byte da fonte original (CRLF no original).
+src/fonts/OFL-IBMPlexSans.txt -text
