@@ -266,10 +266,36 @@ impl PathAccessModel for AccessModel {
         // Passo 8: plugins.
         self.gate(&requested, package, &bytes)?;
 
+        // Código Typst lido do disco com CRLF (Git no Windows) passa a LF, o mesmo texto que o
+        // editor guarda no overlay. Sem isso, as posições dos glifos no código mudam entre a
+        // versão do disco e a do editor: o clique na prévia erra o lugar e toda página parece
+        // alterada na primeira edição. O desenho não muda (o Typst trata `\r\n` como `\n`).
+        let bytes = if src.extension().is_some_and(|e| e == "typ") {
+            crlf_to_lf(bytes)
+        } else {
+            bytes
+        };
+
         // Passo 9: cache por conteúdo.
         let hash: [u8; 32] = Sha256::digest(&bytes).into();
         Ok(lock(&self.cache).insert(src, hash, bytes))
     }
+}
+
+/// Troca cada `\r\n` por `\n`; sem `\r\n`, devolve os mesmos bytes sem copiar.
+fn crlf_to_lf(bytes: Vec<u8>) -> Vec<u8> {
+    if !bytes.windows(2).any(|w| w == b"\r\n") {
+        return bytes;
+    }
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut iter = bytes.iter().peekable();
+    while let Some(&b) = iter.next() {
+        if b == b'\r' && iter.peek() == Some(&&b'\n') {
+            continue;
+        }
+        out.push(b);
+    }
+    out
 }
 
 /// Cache de bytes por conteúdo (passo 9, RF-51): arquivos com o mesmo conteúdo compartilham
@@ -319,4 +345,17 @@ pub fn access_diagnostic(refusal: &Refusal) -> Diagnostic {
 
 fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::crlf_to_lf;
+
+    #[test]
+    fn crlf_vira_lf_e_cr_solto_fica() {
+        assert_eq!(crlf_to_lf(b"a\r\nb\r\n".to_vec()), b"a\nb\n");
+        assert_eq!(crlf_to_lf(b"a\rb\n".to_vec()), b"a\rb\n");
+        assert_eq!(crlf_to_lf(b"\r\r\n".to_vec()), b"\r\n");
+        assert_eq!(crlf_to_lf(Vec::new()), b"");
+    }
 }

@@ -200,6 +200,44 @@ fn edicao_nao_salva_muda_a_previa() {
     assert!(!disk.contains("acrescentado"));
 }
 
+/// Copia `name` com todo `.typ` em CRLF, como o Git grava no Windows (`core.autocrlf`).
+fn fixture_crlf(name: &str) -> TempProject {
+    let project = TempProject::from_fixture(name);
+    let mut stack = vec![project.root()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "typ") {
+                let text = std::fs::read_to_string(&path)
+                    .unwrap()
+                    .replace("\r\n", "\n");
+                std::fs::write(&path, text.replace('\n', "\r\n")).unwrap();
+            }
+        }
+    }
+    project
+}
+
+#[test]
+fn projeto_em_crlf_edicao_so_muda_a_ultima_pagina() {
+    // O primeiro `.typ` vem do disco (CRLF); depois da edição, do editor (LF). As páginas que
+    // a edição não tocou precisam sair iguais: as posições de cada glifo no código (usadas no
+    // clique da prévia) não podem depender do fim de linha.
+    let s = Session::open(fixture_crlf("artigo-basico"));
+    let first = s.next_ok();
+    let last = first.pages.len() - 1;
+    s.insert("main.typ", None, "\nTexto acrescentado pela edição.\n");
+    let second = s.next_ok();
+    assert!(
+        second.changed.iter().all(|&i| i >= last),
+        "só a última página muda: {:?}",
+        second.changed
+    );
+    assert_eq!(second.pages[0].hash, first.pages[0].hash);
+}
+
 #[test]
 fn edicao_em_arquivo_incluido_recompila() {
     let s = Session::fixture("artigo-basico");
