@@ -241,8 +241,14 @@ impl Scope {
             }
         })?;
 
-        // Passo 6: no descritor aberto, arquivo regular e caminho real sob a raiz.
+        // Passo 6: no descritor aberto, arquivo regular e caminho real sob a raiz. No Windows,
+        // `FILE_FLAG_OPEN_REPARSE_POINT` abre o próprio link em vez de falhar como o
+        // `O_NOFOLLOW` do Unix: link trocado no último componente é recusado com o mesmo
+        // motivo nos dois sistemas (fora do projeto), sem ler o destino.
         let meta = file.metadata().map_err(|_| not_found())?;
+        if meta.file_type().is_symlink() {
+            return Err(outside());
+        }
         if !meta.file_type().is_file() {
             return Err(special());
         }
