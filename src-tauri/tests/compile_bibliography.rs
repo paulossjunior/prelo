@@ -328,7 +328,10 @@ fn compile_doc(world: &mut ProjectWorld) -> PagedDocument {
 #[test]
 fn bibliografia_processada_uma_vez_em_20_edicoes_de_texto() {
     let p = TempProject::from_fixture("bibliografia");
-    let base = std::fs::read_to_string(p.path("main.typ")).unwrap();
+    // Em LF, como o editor entrega ao overlay (no Windows o Git grava a fixture em CRLF).
+    let base = std::fs::read_to_string(p.path("main.typ"))
+        .unwrap()
+        .replace("\r\n", "\n");
     let bib = std::fs::read_to_string(p.path("refs.bib")).unwrap();
     let yml = std::fs::read_to_string(p.path("refs.yml")).unwrap();
 
