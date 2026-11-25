@@ -227,6 +227,8 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     mountPreview(previewBox, { ipc, urls: opts.previewUrls, onShowErrors: showErrors }),
   );
   let last: PreviewUpdate | null = null;
+  /** Conta as `PreviewUpdate` recebidas: diz se alguma chegou durante a abertura de um projeto. */
+  let updateSeq = 0;
   let opening = 0;
   const observers = new Set<(u: PreviewUpdate) => void>();
   const stops: (() => void)[] = [];
@@ -289,6 +291,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
   }
 
   function onUpdate(u: PreviewUpdate) {
+    updateSeq += 1;
     last = u;
     preview.update(u);
     editor?.setDiagnostics(u.diagnostics);
@@ -380,9 +383,16 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     }
   }
 
-  async function showProject(next: ProjectInfo) {
+  /**
+   * `since`: valor de `updateSeq` antes de pedir ao núcleo o projeto. O núcleo já compila o
+   * projeto novo ao abri-lo, e um erro (sintaxe, pacote indisponível sem rede) volta em poucos
+   * ms, antes do diálogo ou de `closeEditor`. Essa atualização é reaplicada depois da limpeza;
+   * sem isso a barra ficava em "Compilando…" para sempre, com ERROS 0.
+   */
+  async function showProject(next: ProjectInfo, since = updateSeq) {
     const ticket = ++opening;
     await closeEditor();
+    const early = updateSeq > since ? last : null;
     info = next;
     last = null;
     problems.update([]);
@@ -407,6 +417,7 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
     compileEl.classList.remove("is-ok", "is-err");
     saveEl.textContent = "";
     saveBtn.disabled = true;
+    if (early) onUpdate(early);
     renderProject();
     await tree.refresh();
     if (ticket !== opening) return;
@@ -419,25 +430,27 @@ export function mountWorkspace(root: HTMLElement, opts: WorkspaceOptions): Works
 
   async function openProject() {
     let next: ProjectInfo | null;
+    const since = updateSeq;
     try {
       next = await ipc.openProjectDialog();
     } catch (err) {
       showError(toIpcError(err));
       return;
     }
-    if (next) await showProject(next);
+    if (next) await showProject(next, since);
   }
 
   /** "Novo projeto" (US6): pasta não vazia → aviso `folder_not_empty`, nada muda. */
   async function createProject() {
     let next: ProjectInfo | null;
+    const since = updateSeq;
     try {
       next = await ipc.createProjectDialog();
     } catch (err) {
       showError(toIpcError(err));
       return;
     }
-    if (next) await showProject(next);
+    if (next) await showProject(next, since);
   }
 
   // ---------------------------------------------------------------- editor

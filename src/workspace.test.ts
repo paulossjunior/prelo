@@ -101,6 +101,69 @@ describe("layout", () => {
   });
 });
 
+describe("abrir projeto: compilação que chega antes da interface trocar de projeto", () => {
+  // Um erro de sintaxe (ou pacote indisponível sem rede) compila em poucos ms: o núcleo entrega
+  // o resultado antes de o diálogo voltar. A troca de projeto não pode apagar esse resultado e
+  // deixar "Compilando…" para sempre, com ERROS 0.
+  const ERR = update({
+    compileId: 1,
+    ok: false,
+    pages: [],
+    changed: [],
+    diagnostics: [
+      {
+        severity: "error",
+        kind: "typst",
+        message: "unclosed delimiter",
+        path: "main.typ",
+        range: { from: 22, to: 23 },
+        line: 3,
+        hints: [],
+      },
+    ],
+  });
+
+  for (const [label, btn, cmd] of [
+    ["Abrir projeto", /Abrir projeto/, "open_project_dialog"],
+    ["Novo projeto", /Novo projeto/, "create_project_dialog"],
+  ] as const) {
+    it(`${label}: erro entregue durante o diálogo continua na barra e no painel`, async () => {
+      let push: (u: PreviewUpdate) => void = () => {};
+      const { core, root, ws } = setup({
+        [cmd]: () => {
+          push(ERR);
+          return cmd === "open_project_dialog" ? INFO : NEW_INFO;
+        },
+      });
+      push = (u) => core.push(u);
+      await ws.ready;
+      button(root, btn)!.click();
+      await settle();
+      const status = root.querySelector(".ws-status")?.textContent ?? "";
+      expect(status).not.toContain("Compilando…");
+      expect(status).toContain("1 erro no documento");
+    });
+  }
+
+  it("erro entregue enquanto o editor anterior fecha também fica", async () => {
+    const held = deferred<unknown>();
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    // Edição pendente: fechar o editor espera o núcleo aceitar a edição.
+    core.on("edit_file", () => held.promise);
+    ws.editor()!.view.dispatch({ changes: { from: 0, insert: "x" }, userEvent: "input.type" });
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    core.push(ERR);
+    held.resolve({ version: 2 });
+    await settle();
+    const status = root.querySelector(".ws-status")?.textContent ?? "";
+    expect(status).not.toContain("Compilando…");
+    expect(status).toContain("1 erro no documento");
+  });
+});
+
 describe("abrir projeto (cenário 1)", () => {
   it("diálogo do núcleo → nome, árvore, arquivo principal no editor e marcado na árvore", async () => {
     const { core, root, ws } = setup();
