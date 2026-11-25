@@ -20,7 +20,7 @@ export const STEPS = [
   { name: "test:rust", cmd: "npm run test:rust" },
   {
     name: "test:rust:self-test",
-    cmd: "cargo test --manifest-path src-tauri/Cargo.toml --features self-test",
+    cmd: "cargo test --no-fail-fast --manifest-path src-tauri/Cargo.toml --features self-test",
   },
   { name: "test:ui", cmd: "npm run test:ui" },
   { name: "test:e2e", cmd: "npm run test:e2e" },
