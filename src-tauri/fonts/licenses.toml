@@ -1,0 +1,140 @@
+# Licenças dos arquivos de fonte embutidos (D-15, data-model.md "FontLicense").
+# Cada arquivo de fonte em src-tauri/fonts/ precisa de uma entrada; verificado por scripts/audit.mjs.
+# Libertinus: https://github.com/alerque/libertinus/releases/tag/v7.051 (Libertinus-7.051.zip,
+# sha256 4d9be29b5cb380c35af8ba967abcc752ad1e07be1f738a9789c33e0dd7478c92), pasta static/OTF.
+# New Computer Modern e DejaVu Sans Mono: os mesmos bytes que o `typst` CLI 0.15.1 embute, de
+# files/fonts/ da crate typst-assets 0.15.1 (D-15, emenda de 2026-11-23). Textos das licenças:
+# GUST-FONT-LICENSE.txt, LICENSE-NewCM10-Regular.txt e LICENSE-DejaVu.txt, copiados do NOTICE
+# da crate. Os identificadores LicenseRef-* não estão na lista SPDX.
+
+[[font]]
+file = "LibertinusSerif-Regular.otf"
+family = "Libertinus Serif"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "LibertinusSerif-Italic.otf"
+family = "Libertinus Serif"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "LibertinusSerif-Bold.otf"
+family = "Libertinus Serif"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "LibertinusSerif-BoldItalic.otf"
+family = "Libertinus Serif"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "LibertinusSerif-Semibold.otf"
+family = "Libertinus Serif"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "LibertinusSerif-SemiboldItalic.otf"
+family = "Libertinus Serif"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "LibertinusSans-Regular.otf"
+family = "Libertinus Sans"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "LibertinusSans-Italic.otf"
+family = "Libertinus Sans"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "LibertinusSans-Bold.otf"
+family = "Libertinus Sans"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "LibertinusMath-Regular.otf"
+family = "Libertinus Math"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "LibertinusMono-Regular.otf"
+family = "Libertinus Mono"
+license = "OFL-1.1"
+copyright = "Copyright © 2012-2024 The Libertinus Project Authors, with Reserved Font Name \"Linux Libertine\", \"Biolinum\", \"STIX Fonts\"."
+
+[[font]]
+file = "NewCM10-Regular.otf"
+family = "New Computer Modern"
+license = "LicenseRef-NewCM-GPL-3.0-or-later-FE-DE"
+copyright = "(Copyleft) 2019-2026 Antonis Tsolomitis. This work is released under the GPL3+FE, with the Distribution Exception (DE) in Section 7 of GNU-GPL3."
+
+[[font]]
+file = "NewCM10-Bold.otf"
+family = "New Computer Modern"
+license = "LicenseRef-GUST-Font-License"
+copyright = "(C) 2019-2026 Antonis Tsolomitis. This work is released under the GUST Font License."
+
+[[font]]
+file = "NewCM10-Italic.otf"
+family = "New Computer Modern"
+license = "LicenseRef-GUST-Font-License"
+copyright = "(C) 2019-2026 Antonis Tsolomitis. This work is released under the GUST Font License."
+
+[[font]]
+file = "NewCM10-BoldItalic.otf"
+family = "New Computer Modern"
+license = "LicenseRef-GUST-Font-License"
+copyright = "(C) 2019-2026 Antonis Tsolomitis. This work is released under the GUST Font License."
+
+[[font]]
+file = "NewCMMath-Regular.otf"
+family = "New Computer Modern Math"
+license = "LicenseRef-GUST-Font-License"
+copyright = "(C) 2019-2026 Antonis Tsolomitis. This work is released under the GUST Font License."
+
+[[font]]
+file = "NewCMMath-Book.otf"
+family = "New Computer Modern Math"
+license = "LicenseRef-GUST-Font-License"
+copyright = "(C) 2019-2026 Antonis Tsolomitis. This work is released under the GUST Font License."
+
+[[font]]
+file = "NewCMMath-Bold.otf"
+family = "New Computer Modern Math"
+license = "LicenseRef-GUST-Font-License"
+copyright = "(C) 2019-2026 Antonis Tsolomitis. This work is released under the GUST Font License."
+
+[[font]]
+file = "DejaVuSansMono.ttf"
+family = "DejaVu Sans Mono"
+license = "Bitstream-Vera"
+copyright = "Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved. Bitstream Vera is a trademark of Bitstream, Inc. DejaVu changes are in public domain. Arev glyphs Copyright (c) 2006 by Tavmjong Bah."
+
+[[font]]
+file = "DejaVuSansMono-Bold.ttf"
+family = "DejaVu Sans Mono"
+license = "Bitstream-Vera"
+copyright = "Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved. Bitstream Vera is a trademark of Bitstream, Inc. DejaVu changes are in public domain. Arev glyphs Copyright (c) 2006 by Tavmjong Bah."
+
+[[font]]
+file = "DejaVuSansMono-Oblique.ttf"
+family = "DejaVu Sans Mono"
+license = "Bitstream-Vera"
+copyright = "Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved. Bitstream Vera is a trademark of Bitstream, Inc. DejaVu changes are in public domain. Arev glyphs Copyright (c) 2006 by Tavmjong Bah."
+
+[[font]]
+file = "DejaVuSansMono-BoldOblique.ttf"
+family = "DejaVu Sans Mono"
+license = "Bitstream-Vera"
+copyright = "Copyright (c) 2003 by Bitstream, Inc. All Rights Reserved. Bitstream Vera is a trademark of Bitstream, Inc. DejaVu changes are in public domain. Arev glyphs Copyright (c) 2006 by Tavmjong Bah."

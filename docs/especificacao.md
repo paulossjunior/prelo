@@ -10,7 +10,7 @@ Este documento é a visão geral. O detalhe está em:
 |---|---|
 | [requisitos.md](requisitos.md) | Papéis, requisitos funcionais (RF) e não funcionais (RNF), regras de revisão e de sincronização, fluxos, PDF de diferenças |
 | [arquitetura.md](arquitetura.md) | Componentes, arquivos do repositório, conexão sem servidor, modelo de revisão, sincronização, acesso a arquivos pelo compilador, riscos técnicos |
-| [adrs.md](adrs.md) | Decisões de arquitetura D-01 a D-14, com contexto, alternativas e consequências |
+| [adrs.md](adrs.md) | Índice das decisões de arquitetura D-01 a D-14; cada decisão, com contexto, alternativas e consequências, num arquivo em [adrs/](adrs/) |
 
 O nome vem da prensa tipográfica. Um texto "no prelo" é um texto prestes a ser publicado, que é a fase que a ferramenta atende.
 
@@ -52,6 +52,10 @@ Nenhuma opção documentada junta Typst, controle de alterações no estilo do O
 
 ## 3. Escopo
 
+O escopo abaixo é o do produto completo. Ele é entregue em cinco releases, uma por fase do [plano de construção](#4-plano-de-construção): R1 a R5, versões `1.0.0` a `1.4.0` (da `1.1.0` em diante, propostas). O conteúdo de cada release está em [release-plan.md](release-plan.md).
+
+A primeira versão estável, `1.0.0`, é a fase 1 (editor local): editar e compilar um arquivo Typst com o compilador embutido e gerar o PDF (decisão do dono, 2026-11-21). Comentários, git, tempo real, sugestões e papéis chegam nas releases seguintes.
+
 **Dentro do escopo**
 
 - Projetos Typst com vários arquivos (`.typ`, `.bib`, figuras).
@@ -60,7 +64,7 @@ Nenhuma opção documentada junta Typst, controle de alterações no estilo do O
 - Integração com repositórios git (GitHub, GitLab ou qualquer remoto).
 - Exportação de PDF final, PDF com marcações e PDF de diferenças.
 
-**Fora do escopo na primeira versão**
+**Fora do escopo das releases R1 a R5**
 
 - Edição de LaTeX.
 - Versão web ou mobile.

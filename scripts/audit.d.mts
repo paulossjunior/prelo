@@ -20,3 +20,37 @@ export declare function licenseViolations(
   packages: PackageLicense[],
   allow: string[],
 ): PackageLicense[];
+
+export interface FontLicense {
+  file: string;
+  family: string;
+  license: string;
+  copyright: string;
+}
+
+export interface EmbeddedData {
+  name: string;
+  crate: string;
+  path: string;
+  licenses: string[];
+}
+
+export interface DenyLicenseException {
+  crate?: string;
+  name?: string;
+  allow?: string[];
+}
+
+export declare const FONT_DIRS: string[];
+export declare function parseFontLicenses(tomlText: string): FontLicense[];
+export declare function fontLicenseViolations(
+  files: string[],
+  entries: FontLicense[],
+  allow: string[],
+): string[];
+export declare function parseEmbeddedData(tomlText: string): EmbeddedData[];
+export declare function embeddedDataViolations(
+  data: EmbeddedData[],
+  allow: string[],
+  denyExceptions: DenyLicenseException[],
+): string[];

@@ -1,0 +1,429 @@
+/* Área de trabalho do editor local (T037/T038/T039): árvore, editor, prévia e status.
+   Cores, tipografia e medidas de prototype/index.html (claro/escuro), a fonte de verdade do
+   design; src/theme.test.ts confere os tokens. Só folha de estilo própria e fontes servidas
+   pelo app: a CSP é `style-src 'self'` e não libera origem remota. */
+@import "./fonts/fonts.css";
+
+:root {
+  --bg: #f3f5f6; --surface: #ffffff; --surface-2: #eaeef0; --line: #d5dcdf; --fg: #172126;
+  --muted: #5b6a71; --accent: #0d6a73; --accent-soft: #d9eef0; --ink: #0b2a33;
+  --ins: #1f7a3d; --ins-bg: #dcf1e2; --del: #b4332b; --del-bg: #f8dfdc; --cmt: #9a6a00; --cmt-bg: #fbedc6;
+  --paper: #ffffff; --paper-fg: #1a1a1a; --code-bg: #fbfcfc;
+  --tok-fn: #7a3fb0; --tok-lbl: #a0521b; --tok-ref: #0d6a73; --tok-h: #0b2a33; --tok-cmt: #7d8a90;
+  --shadow: 0 18px 50px -18px rgba(11,42,51,.35);
+  /* Erro e aviso usam as cores de exclusão e de comentário do protótipo. */
+  --err: var(--del); --err-bg: var(--del-bg); --warn: var(--cmt); --warn-bg: var(--cmt-bg);
+  --f-display: "Bricolage Grotesque", "IBM Plex Sans", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1517; --surface: #162024; --surface-2: #1d292e; --line: #2c3b41; --fg: #e3eaec;
+    --muted: #93a3a9; --accent: #4cc1c9; --accent-soft: #16383c; --ink: #e3eaec;
+    --ins: #6fd38f; --ins-bg: #173524; --del: #ff8a80; --del-bg: #3d1e1b; --cmt: #f0c35a; --cmt-bg: #3a2f12;
+    --paper: #f6f4ef; --paper-fg: #1a1a1a; --code-bg: #121b1f;
+    --tok-fn: #c79bff; --tok-lbl: #f0a46a; --tok-ref: #4cc1c9; --tok-h: #ffffff; --tok-cmt: #6f8087;
+    --shadow: 0 18px 50px -18px rgba(0,0,0,.7);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1517; --surface: #162024; --surface-2: #1d292e; --line: #2c3b41; --fg: #e3eaec;
+  --muted: #93a3a9; --accent: #4cc1c9; --accent-soft: #16383c; --ink: #e3eaec;
+  --ins: #6fd38f; --ins-bg: #173524; --del: #ff8a80; --del-bg: #3d1e1b; --cmt: #f0c35a; --cmt-bg: #3a2f12;
+  --paper: #f6f4ef; --paper-fg: #1a1a1a; --code-bg: #121b1f;
+  --tok-fn: #c79bff; --tok-lbl: #f0a46a; --tok-ref: #4cc1c9; --tok-h: #ffffff; --tok-cmt: #6f8087;
+  --shadow: 0 18px 50px -18px rgba(0,0,0,.7);
+  color-scheme: dark;
+}
+
+/* ---------- árvore ---------- */
+.pt { font: 13px/1.5 var(--f-body); color: var(--fg); }
+.pt ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.pt ul ul { padding-left: 12px; }
+/* Pasta recolhida (FR-004a): `display: grid` acima venceria o atributo `hidden` da folha do
+   navegador e os filhos continuariam na tela. */
+.pt ul[hidden] { display: none; }
+.pt-item {
+  display: flex; align-items: center; gap: 2px; width: 100%; box-sizing: border-box;
+  text-align: left; font: inherit; color: inherit;
+  background: transparent; border: 0; border-radius: 5px; padding: 3px 6px 3px 2px;
+  white-space: nowrap; overflow: hidden;
+}
+.pt-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Seta da pasta (▾ aberta, ▸ recolhida); nos arquivos, o mesmo espaço vazio alinha os nomes. */
+.pt-chev { flex: none; width: 14px; text-align: center; font-size: 10px; color: var(--muted); }
+button.pt-item { cursor: pointer; }
+button.pt-item:hover { background: var(--accent-soft); }
+.pt-item[aria-current="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.pt-dir { color: var(--muted); }
+.pt-dir:hover .pt-chev { color: var(--ink); }
+.pt-other { color: var(--muted); cursor: default; }
+.pt-error { color: var(--err); padding: 6px; }
+.pt :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* Ícones dos botões da árvore: traço na cor do texto, do tamanho da letra. */
+.pt-icon {
+  flex: none; width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+/* Novo arquivo / Nova pasta (FR-034): ações discretas e o campo de nome na própria árvore. */
+.pt { container-type: inline-size; }
+.pt-actions { display: flex; gap: 4px; margin: 0 0 6px; }
+.pt-action {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  min-width: 0; position: relative; font: inherit; font-size: 12px; color: var(--muted);
+  background: transparent; border: 1px solid var(--line); border-radius: 5px; padding: 2px 6px;
+  cursor: pointer; white-space: nowrap;
+}
+.pt-action:hover { color: var(--fg); background: var(--accent-soft); }
+/* Árvore estreita: só o ícone; o nome continua para leitores de tela e no `title`. */
+@container (max-width: 230px) {
+  .pt-action-label {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+  }
+}
+/* Recolher tudo / Expandir tudo (FR-004a): botões fantasma como o de recolher o painel. */
+.pt-fold { display: flex; gap: 2px; flex: none; }
+.pt-actions .pt-fold { margin-left: auto; }
+.ws-pane-h .pt-fold { margin-left: auto; }
+.ws-pane-h .pt-fold ~ .ws-collapse { margin-left: 0; }
+.pt-fold-btn {
+  display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+  color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 6px;
+  cursor: pointer;
+}
+.pt-fold-btn:hover { color: var(--ink); border-color: var(--line); background: var(--surface); }
+.pt-fold-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pt-new { display: grid; gap: 3px; margin: 0 0 6px; }
+.pt-new-label { font-size: 12px; color: var(--muted); }
+.pt-new-name {
+  font: inherit; color: var(--fg); background: var(--surface); border: 1px solid var(--accent);
+  border-radius: 5px; padding: 3px 6px; min-width: 0;
+}
+.pt-new-error { margin: 0; font-size: 12px; color: var(--err); }
+
+/* ---------- editor ---------- */
+/* Protótipo (.editor/.ln): mono 12,5 px, entrelinha 1,7, 10 px em cima e embaixo, números à
+   direita numa coluna de 38 px em cinza a 70 %, 10 px até o código, sem fio entre eles. */
+.prelo-editor { height: 100%; background: var(--code-bg); color: var(--fg); font-size: 12.5px; }
+.prelo-editor .cm-scroller { font-family: var(--f-mono); line-height: 1.7; }
+.prelo-editor .cm-content { padding: 10px 0; }
+.prelo-editor .cm-line { padding: 0 14px 0 10px; }
+.prelo-editor .cm-gutters { background: var(--code-bg); color: var(--muted); border-right: 0; }
+/* Largura em em (38 px a 12,5 px) para escalar com o zoom do editor (FR-013c). */
+.prelo-editor .cm-lineNumbers .cm-gutterElement { min-width: 3.04em; padding: 0; text-align: right; opacity: 0.7; }
+.prelo-editor .prelo-lint-gutter { width: 1.2em; }
+.prelo-editor .prelo-lint-gutter .cm-gutterElement { display: flex; align-items: center; justify-content: center; padding: 0; }
+.prelo-editor .cm-activeLine { background: color-mix(in srgb, var(--accent-soft) 45%, transparent); }
+.prelo-editor .cm-activeLineGutter { background: transparent; color: var(--ink); }
+.prelo-editor .cm-cursor { border-left-color: var(--fg); }
+.prelo-editor.cm-focused { outline: 0; }
+.prelo-editor .cm-lintRange-error { background: var(--err-bg); text-decoration: underline wavy var(--err); }
+.prelo-editor .cm-lintRange-warning { background: var(--warn-bg); text-decoration: underline wavy var(--warn); }
+/* O tema do @codemirror/lint desenha sublinhados e marcadores com imagens `data:`, que a CSP
+   (`img-src` sem `data:`) bloqueia. Mesmo desenho só com CSS. */
+.prelo-editor .cm-content .cm-lintRange { background-image: none; }
+.prelo-editor .cm-content .cm-lintRange-info,
+.prelo-editor .cm-content .cm-lintRange-hint { text-decoration: underline dotted var(--muted); }
+/* Ícones de gravidade (src/editor/icons.ts): SVG montado pelo DOM, cor por classe. A margem
+   não usa o marcador do lint, cuja imagem `data:` (na propriedade content) a CSP bloqueia; no
+   app real sobrava um quadrado vazio. Em em, para crescer com o zoom do editor (FR-013c). */
+.prelo-icon { display: inline-flex; flex: none; vertical-align: -0.15em; color: var(--muted); }
+.prelo-icon svg { width: 1em; height: 1em; display: block; }
+.prelo-icon .pi-bg { fill: currentColor; stroke: currentColor; stroke-width: 0.6; }
+.prelo-icon .pi-fg { fill: var(--surface); }
+.prelo-icon.is-error { color: var(--err); }
+.prelo-icon.is-warning { color: var(--warn); }
+.prelo-icon.is-info { color: var(--accent); }
+.prelo-editor .prelo-lint-gutter .prelo-icon svg { width: 0.9em; height: 0.9em; }
+.pb-icon { margin-top: 0.2em; }
+/* Realce como o do protótipo: `#nome` (funções e palavras-chave) roxo, `<rótulo>` laranja,
+   `@referência` verde-azulado, títulos em negrito, comentários em itálico; o resto na cor do
+   texto. Classes = tags do Typst sem o prefixo `typ-` (src-tauri/src/lang_service.rs). */
+.tok-heading { color: var(--tok-h); font-weight: 600; }
+.tok-func, .tok-key { color: var(--tok-fn); }
+.tok-label { color: var(--tok-lbl); }
+.tok-ref { color: var(--tok-ref); }
+.tok-comment { color: var(--tok-cmt); font-style: italic; }
+.tok-strong { font-weight: 600; }
+.tok-emph { font-style: italic; }
+
+/* ---------- prévia ---------- */
+.pv { height: 100%; display: grid; grid-template-rows: auto auto 1fr; min-height: 0; background: var(--surface-2); }
+/* Barra da prévia (protótipo: .pvbar + .seg); fica fora da rolagem das páginas. */
+.pvbar {
+  display: flex; gap: 8px; align-items: center; justify-content: space-between;
+  padding: 8px 18px; color: var(--muted); font: 12px/1.5 var(--f-body);
+  border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums;
+}
+.pv-label { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seg { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); flex: none; }
+.seg button { font: inherit; font-size: 12px; border: 0; background: transparent; color: var(--muted); padding: 5px 11px; cursor: pointer; }
+.seg button + button, .seg button + span, .seg span + button { border-left: 1px solid var(--line); }
+.seg button:hover:not(:disabled) { color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+/* "Compilar" (FR-014a): botão da barra da prévia no estilo de .seg; o nome some em barra estreita
+   (fica o símbolo, com aria-label e title). O arco de "Compilando…" gira, parado com
+   prefers-reduced-motion. */
+.pvbar { container-type: inline-size; }
+.pv-compile {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  font: inherit; font-size: 12px; color: var(--muted); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; cursor: pointer;
+}
+.pv-compile:hover:not(:disabled) { color: var(--ink); border-color: var(--accent); }
+.pv-compile:disabled { opacity: 0.6; cursor: not-allowed; }
+.pv-compile[aria-busy="true"] { opacity: 1; color: var(--ink); }
+.pv-compile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pv-compile .cn-icon { flex: none; display: block; }
+.cn-spin { animation: cn-spin 0.9s linear infinite; }
+@keyframes cn-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .cn-spin { animation: none; } }
+@container (max-width: 420px) { .pv-compile-label { display: none; } }
+.pv-zoom-pct { display: grid; place-items: center; min-width: 46px; padding: 0 6px; color: var(--ink); font-size: 12px; }
+.pv-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pv-error {
+  font: 12.5px/1.5 var(--f-body); padding: 6px 12px; color: var(--err); background: var(--err-bg);
+  border-bottom: 1px solid color-mix(in srgb, var(--err) 35%, var(--line));
+}
+.pv-error[hidden] { display: none; }
+/* Rolagem nos dois eixos dentro do painel; `position: relative` faz das páginas offsetParent
+   para a âncora do zoom. Margem automática centraliza sem cortar a borda esquerda quando a
+   página é mais larga que o painel. */
+.pv-pages { position: relative; overflow: auto; padding: 18px; display: grid; align-content: start; gap: 10px; min-height: 0; }
+.pv-pages:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pv-page {
+  position: relative; margin-inline: auto; background: var(--paper);
+  box-shadow: 0 2px 14px rgba(0, 0, 0, 0.18); color: var(--paper-fg);
+}
+.pv-fit .pv-page { width: 100%; }
+.pv-page img { display: block; width: 100%; height: 100%; user-select: none; }
+/* Clique leva ao código (US4); o destaque de "Localizar na prévia" é posto em % da página, então
+   acompanha o zoom, e some sozinho. */
+.pv-page { cursor: pointer; }
+.pv-mark {
+  position: absolute; pointer-events: none; border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+  outline: 2px solid var(--accent); outline-offset: 1px;
+  animation: pv-mark-fade 1.8s ease-out forwards;
+}
+@keyframes pv-mark-fade { 0%, 60% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pv-mark { animation: none; } }
+
+/* Estrutura do artigo (US4, FR-005): como `.outline` do protótipo, abaixo da árvore. */
+.ol { font: 13px/1.5 var(--f-body); color: var(--fg); margin-top: 10px; }
+.ol h4 {
+  font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); margin: 6px 4px 6px;
+}
+.ol-list { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 1px; }
+.ol-item {
+  display: block; width: 100%; text-align: left; font: inherit; color: var(--fg);
+  background: none; border: 0; border-radius: 5px; padding: 3px 6px; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ol-item:hover { background: var(--accent-soft); }
+.ol-item[aria-current="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.ol-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ol-empty { margin: 0 4px; font-size: 12px; color: var(--muted); }
+.ol-empty[hidden] { display: none; }
+
+/* ---------- área de trabalho (T039): barra | árvore · editor · prévia | status ---------- */
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.5 var(--f-body); }
+#app { height: 100%; }
+.ws {
+  height: 100%; display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto;
+  background: var(--surface); min-width: 720px;
+}
+/* Barra, mensagem, erros da exportação e aviso ocupam as linhas de cima na ordem (os ocultos
+   não ocupam nenhuma); corpo e status ficam sempre nas duas últimas. */
+.ws > .ws-body { grid-row: 5; }
+.ws > .pb { grid-row: 6; }
+.ws > .ws-status { grid-row: 7; }
+.ws-export-errors ul { margin: 4px 0 0; padding-left: 18px; }
+.ws-top {
+  display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+  background: var(--surface-2); border-bottom: 1px solid var(--line);
+}
+.ws-project { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws-project strong { font-weight: 600; }
+.ws-project small { font-weight: 400; color: var(--muted); margin-left: 6px; }
+.ws-spacer { flex: 1; }
+.btn {
+  font: inherit; font-size: 12.5px; border: 1px solid var(--line); background: var(--surface);
+  color: var(--fg); padding: 5px 11px; border-radius: 7px; cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.btn.sm { font-size: 11.5px; padding: 3px 8px; }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ws-message {
+  padding: 5px 12px; font-size: 12.5px; color: var(--err); background: var(--err-bg);
+  border-bottom: 1px solid var(--line);
+}
+.ws-banner { background: var(--warn-bg); color: var(--warn); border-bottom: 1px solid var(--line); }
+.ws-banner-row { display: flex; align-items: center; gap: 12px; padding: 6px 12px; font-size: 12.5px; }
+.ws-banner-row span { flex: 1; }
+.ws-message[hidden], .ws-banner[hidden] { display: none; }
+/* Colunas do protótipo (200px | 1,25fr | 1fr), sem o painel de revisão, que é da fase 4. */
+.ws-body { display: grid; grid-template-columns: 200px minmax(0, 1.25fr) minmax(0, 1fr); min-height: 0; }
+.ws-side { padding: 10px; overflow: auto; background: var(--surface-2); min-height: 0; }
+.ws-col-tree h4 {
+  font-family: var(--f-mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); margin: 6px 4px;
+}
+.ws-editor { min-height: 0; overflow: hidden; background: var(--code-bg); }
+.ws-editor .cm-editor { height: 100%; }
+.ws-preview { min-height: 0; overflow: hidden; }
+.ws-empty { height: 100%; display: grid; place-content: center; justify-items: center; gap: 10px; color: var(--muted); }
+.ws-empty p { margin: 0; }
+.ws-empty-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.ws-status {
+  display: flex; align-items: center; gap: 16px; padding: 4px 12px; font-size: 11.5px;
+  color: var(--muted); background: var(--surface-2); border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.ws-compile.is-ok { color: var(--ins); }
+.ws-compile.is-err { color: var(--err); }
+.ws-compiler.is-warn { color: var(--warn); font-weight: 600; }
+
+/* ---------- diálogos na página (alert/confirm são recusados na webview) ---------- */
+.ws-backdrop {
+  position: fixed; inset: 0; z-index: 10; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--ink) 35%, transparent);
+}
+.ws-backdrop[hidden] { display: none; }
+.ws-modal {
+  background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow); padding: 18px 20px;
+  width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow: auto;
+}
+.ws-modal:focus { outline: none; }
+/* Títulos como os do protótipo (.scr h6, h3): fonte de exibição, peso 600, cor de tinta. */
+.ws-modal h2 { font: 600 16px/1.15 var(--f-display); margin: 0 0 10px; color: var(--ink); }
+.ws-modal h3 { font: 600 13px/1.15 var(--f-display); margin: 16px 0 6px; color: var(--ink); }
+.ws-modal code { font-family: var(--f-mono); background: var(--surface-2); padding: 0 4px; border-radius: 4px; }
+.ws-modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.ws-dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; margin: 0; }
+.ws-dl dt { color: var(--muted); }
+.ws-dl dd { margin: 0; font-family: var(--f-mono); }
+.ws-muted { color: var(--muted); font-size: 12px; }
+.ws-warn { background: var(--warn-bg); color: var(--warn); padding: 6px 10px; border-radius: 6px; }
+.ws-fonts { width: 100%; border-collapse: collapse; font-size: 12px; }
+.ws-fonts th, .ws-fonts td { text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.ws-fonts th {
+  font: 500 10.5px/1.5 var(--f-mono); letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--muted); background: var(--surface-2);
+}
+.ws-license {
+  white-space: pre-wrap; font: 11px/1.45 var(--f-mono); background: var(--surface-2);
+  padding: 8px; border-radius: 6px; max-height: 220px; overflow: auto;
+}
+.ws-modal details { margin: 4px 0; }
+.ws-modal summary { cursor: pointer; }
+
+/* ---------- painéis ajustáveis (T093; FR-013b) ---------- */
+/* Cada coluna: cabeçalho com o botão de recolher + conteúdo. As colunas do grid vêm de
+   src/panes.ts (padrão do protótipo: 200px | 1,25fr | 1fr), com divisórias e trilhos. */
+.ws-col { min-width: 0; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.ws-col-tree { background: var(--surface-2); }
+.ws-col-preview { grid-template-rows: minmax(0, 1fr); }
+.ws-col[hidden], .ws-rail[hidden], .ws-split[hidden] { display: none; }
+.ws-pane-h {
+  display: flex; align-items: center; gap: 6px; min-height: 37px; box-sizing: border-box;
+  padding: 4px 8px 4px 12px; border-bottom: 1px solid var(--line); background: var(--surface-2);
+  color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden;
+}
+.ws-pane-h h4 { margin: 0; }
+.ws-pane-title { color: var(--ink); font-weight: 600; }
+.ws-pane-path { overflow: hidden; text-overflow: ellipsis; font-family: var(--f-mono); font-size: 11px; }
+.ws-pane-h .ws-collapse { margin-left: auto; }
+/* Botão de recolher: secundário, sem fundo, cor apagada (linguagem do protótipo). */
+.ws-collapse {
+  flex: none; display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+  font: 600 14px/1 var(--f-body); color: var(--muted); background: transparent;
+  border: 1px solid transparent; border-radius: 6px; cursor: pointer;
+}
+.ws-collapse:hover:not(:disabled) { color: var(--ink); border-color: var(--line); background: var(--surface); }
+.ws-collapse:disabled { opacity: 0.35; cursor: not-allowed; }
+.ws-collapse:focus-visible, .ws-rail:focus-visible, .ws-split:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: -2px;
+}
+/* Trilho do painel recolhido: um clique reabre. */
+.ws-rail {
+  display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 0;
+  padding: 8px 0; margin: 0; border: 0; background: var(--surface-2); color: var(--muted);
+  font: 12px/1 var(--f-body); cursor: pointer;
+}
+.ws-rail:hover { color: var(--ink); background: var(--accent-soft); }
+.ws-rail-icon { font-weight: 600; font-size: 14px; }
+.ws-rail-label { writing-mode: vertical-rl; letter-spacing: 0.04em; }
+.ws-rail-tree { border-right: 1px solid var(--line); }
+.ws-rail-editor { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+.ws-rail-preview { border-left: 1px solid var(--line); }
+/* Divisória: fio de 1 px no meio de uma faixa de 6 px que se arrasta. */
+.ws-split {
+  min-width: 0; cursor: col-resize; touch-action: none; background:
+    linear-gradient(to right, transparent 2.5px, var(--line) 2.5px, var(--line) 3.5px, transparent 3.5px);
+}
+.ws-split:hover, .ws-body.is-resizing .ws-split { background-color: var(--accent-soft); }
+.ws-body.is-resizing { cursor: col-resize; user-select: none; }
+.ws-panes { display: flex; align-items: center; gap: 8px; }
+.ws-tree-toggle[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); }
+
+/* ---------- zoom do editor (T095; FR-013c): grupo .seg no cabeçalho do editor ---------- */
+.ws-pane-h .ed-zoom { margin-left: auto; }
+.ws-pane-h .ed-zoom ~ .ws-collapse { margin-left: 0; }
+.ws-pane-h .seg button { padding: 3px 9px; }
+.ed-zoom-pct { display: grid; place-items: center; min-width: 42px; padding: 0 6px; color: var(--ink); font-size: 12px; }
+.ed-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---------- painel "Erros" (FR-006a) ----------
+   Faixa recolhível entre o corpo e a barra de status, com a linguagem do protótipo: cabeçalho
+   em mono maiúsculo como os títulos dos painéis, itens como os da estrutura, erro e aviso nas
+   cores de exclusão e de comentário. A lista rola por dentro e não passa de um terço da janela. */
+.pb { border-top: 1px solid var(--line); background: var(--surface); font: 12.5px/1.5 var(--f-body); color: var(--fg); min-width: 0; }
+.pb-h { display: flex; align-items: center; padding: 2px 8px; background: var(--surface-2); }
+.pb-toggle {
+  display: inline-flex; align-items: center; gap: 8px; font: inherit; color: var(--muted);
+  background: transparent; border: 0; border-radius: 5px; padding: 2px 6px; cursor: pointer;
+}
+.pb-toggle::before { content: "▸"; }
+.pb.is-open .pb-toggle::before { content: "▾"; }
+.pb-toggle:hover { color: var(--ink); background: var(--accent-soft); }
+.pb-toggle:focus-visible, .pb-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pb-title { font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; }
+.pb-count {
+  min-width: 18px; padding: 0 6px; border-radius: 9px; font-size: 11px; text-align: center;
+  background: var(--line); color: var(--fg); font-variant-numeric: tabular-nums;
+}
+.pb.has-errors .pb-count { background: var(--err-bg); color: var(--err); font-weight: 600; }
+.pb.has-warnings .pb-count { background: var(--warn-bg); color: var(--warn); font-weight: 600; }
+.pb-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.pb-list { list-style: none; margin: 0; padding: 4px 8px 8px; max-height: 32vh; overflow: auto; display: grid; gap: 2px; }
+.pb-list[hidden] { display: none; }
+.pb-item {
+  display: flex; gap: 8px; width: 100%; text-align: left; font: inherit; color: inherit;
+  background: transparent; border: 0; border-left: 3px solid transparent; border-radius: 5px; padding: 5px 8px;
+}
+button.pb-item { cursor: pointer; }
+button.pb-item:hover { background: var(--accent-soft); }
+.pb-item.is-error { border-left-color: var(--err); }
+.pb-item.is-warning { border-left-color: var(--warn); }
+.pb-body, .pb-tip { display: grid; gap: 2px; min-width: 0; }
+.pb-loc { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); }
+.pb-reason { color: var(--ink); font-weight: 500; }
+.pb-fix b { font-weight: 600; }
+.pb-orig, .pb-hint { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
+.pb-empty { color: var(--muted); padding: 4px 8px; }
+/* Tooltip do sublinhado (tema do lint entra pelo nonce; aqui só as cores do app). */
+.prelo-editor .cm-tooltip-lint { background: var(--surface); color: var(--fg); border: 1px solid var(--line); border-radius: 7px; box-shadow: var(--shadow); max-width: 480px; }
+.prelo-editor .cm-diagnostic { font: 12.5px/1.5 var(--f-body); padding: 6px 10px; white-space: normal; }
+.prelo-editor .cm-diagnostic-error { border-left-color: var(--err); }
+.prelo-editor .cm-diagnostic-warning { border-left-color: var(--warn); }
+.pv-error-show { margin-left: 8px; }

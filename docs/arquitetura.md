@@ -46,9 +46,9 @@ flowchart LR
 | Shell | Tauri | Janela, menus, instaladores, ponte entre interface e núcleo | RNF-01 |
 | Editor | CodeMirror 6 + y-codemirror.next | Edição, cursores de outras pessoas, desfazer por usuário | RF-01, RF-14, RF-20 |
 | Documento compartilhado | Yjs (interface) e yrs (núcleo) | CRDT: edições simultâneas se fundem sem conflito, também depois de períodos offline | RF-20, RF-30 |
-| Compilação e prévia | typst + Tinymist, embutidos | Diagnósticos, autocompletar, prévia SVG incremental, PDFs; leitura de arquivos restrita ao projeto ([seção 6](#6-acesso-a-arquivos-pelo-compilador)) | RF-01, RF-02, RF-06, RF-08, RF-09, RF-42–44, RF-50–54 |
+| Compilação e prévia | typst (com `typst-ide`, D-17) + Tinymist (World, VFS, pacotes), embutidos | Diagnósticos, autocompletar e realce pelo `typst-ide`/`typst-syntax` (D-17), prévia SVG incremental, PDFs; leitura de arquivos restrita ao projeto ([seção 6](#6-acesso-a-arquivos-pelo-compilador)) | RF-01, RF-02, RF-06, RF-08, RF-09, RF-42–44, RF-50–54 |
 | Rede | iroh + mDNS | Conexão direta entre computadores ([seção 3](#3-conexão-sem-servidor)) | RF-23, RNF-02 |
-| Histórico | gitoxide | Commit, push, pull, versões nomeadas | RF-33, RF-40, RF-41 |
+| Histórico | gitoxide | Commit, push, pull, versões nomeadas; no GitHub, por HTTPS com token OAuth de GitHub App guardado no cofre do sistema ([D-18](adrs/D-18-github-oauth.md)) | RF-33, RF-40, RF-41 |
 
 ## 2. Arquivos no repositório do artigo
 
@@ -76,6 +76,8 @@ O Yjs junta as edições dentro de cada computador, então não é preciso um se
 | Internet, rede muito fechada | Tráfego passa pelo relay do iroh, criptografado de ponta a ponta | Um relay, público ou do grupo |
 | Rede privada existente (Tailscale, ZeroTier, VPN) | Os computadores já se enxergam | Nenhum além da VPN |
 | Ninguém online ao mesmo tempo | Salvar e fechar gravam no git; quem abre depois faz pull (D-05) | O GitHub ou GitLab do grupo |
+
+Para o pull e o push no GitHub, o núcleo autentica por OAuth (GitHub App, device flow); o token fica só no cofre de credenciais do sistema e nunca chega à webview ([D-18](adrs/D-18-github-oauth.md)). A autenticação no GitLab ainda não foi decidida.
 
 **Par sempre ligado (opcional)**: um grupo que queira entrega mesmo sem ninguém online pode deixar um computador do laboratório rodando o Prelo. Ele é só mais um participante, com o mesmo código.
 
@@ -168,7 +170,7 @@ O `.typ` e os demais arquivos do projeto chegam de outros coautores. Para o núc
 | Dados | `read`, `json`, `yaml`, `toml`, `csv`, `xml`, `cbor` | Raiz do projeto | RF-08 |
 | Plugins | `plugin("calc.wasm")` | Raiz do projeto ou pasta do pacote | RF-08; risco na [seção 7](#7-riscos-técnicos-e-questões-em-aberto) |
 | Pacotes | `#import "@preview/nome:1.0.0"` | Cache local de pacotes, baixado do registro do Typst | RF-08; risco na [seção 7](#7-riscos-técnicos-e-questões-em-aberto) |
-| Fontes | `#set text(font: "…")` | Não vêm por caminho do `.typ`: o World entrega a lista de fontes | TODO(fontes), [seção 6.5](#65-fontes-e-pacotes) |
+| Fontes | `#set text(font: "…")` | Não vêm por caminho do `.typ`: o World entrega as fontes embutidas e as da pasta `fonts/` do projeto | D-15, [seção 6.5](#65-fontes-e-pacotes) |
 
 TODO(multi-arquivo): confirmar que cada `.typ` do projeto, e não só o principal, é um `Y.Text` no documento Yjs. Se algum `.typ` for lido do disco, ele passa pelas mesmas regras da seção 6.2.
 
@@ -188,7 +190,7 @@ Uma recusa vira diagnóstico no editor, com o caminho pedido e o motivo, e nunca
 
 Testes de segurança exigidos (Princípio VI): `..` além da raiz, `/` seguido de `..`, link simbólico versionado para fora, link simbólico interno (aceito), FIFO, caminho de pacote saindo da pasta do pacote e autocompletar de caminhos.
 
-**Trade-off.** O projeto fica autocontido, e o `.typ` continua compilando fora do Prelo com o projeto como raiz (Princípio I). O custo: um `.bib` compartilhado entre artigos precisa entrar no projeto (D-13, proposta), e links simbólicos para pastas pessoais, comuns em instalações de LaTeX, deixam de funcionar.
+**Trade-off.** O projeto fica autocontido, e o `.typ` continua compilando fora do Prelo com o projeto como raiz (Princípio I). O custo: um `.bib` compartilhado entre artigos precisa entrar no projeto (D-13, aceita em 2026-11-18), e links simbólicos para pastas pessoais, comuns em instalações de LaTeX, deixam de funcionar.
 
 ### 6.3 Como um arquivo é resolvido
 
@@ -226,7 +228,7 @@ sequenceDiagram
   end
 ```
 
-O diagrama não mostra arquivos de pacote, que seguem os mesmos passos com a pasta do pacote como raiz e não consultam o manifesto. Também não mostra fontes, invalidação do cache quando um arquivo muda nem o autocompletar do Tinymist, que usa o mesmo World. O manifesto ainda não existe: ele depende de D-12, que está proposta. Hoje o protótipo já mostra "Figuras · 118 de 131 arquivos" durante a entrada, o que pressupõe uma lista de arquivos conhecida antes dos bytes.
+O diagrama não mostra arquivos de pacote, que seguem os mesmos passos com a pasta do pacote como raiz e não consultam o manifesto. Também não mostra fontes, invalidação do cache quando um arquivo muda nem o autocompletar do Tinymist, que usa o mesmo World. O manifesto vem de D-12, aceita em 2026-11-18, e ainda não está implementado. Hoje o protótipo já mostra "Figuras · 118 de 131 arquivos" durante a entrada, o que pressupõe uma lista de arquivos conhecida antes dos bytes.
 
 ### 6.4 Arquivos pendentes (RF-52 a RF-54)
 
@@ -255,7 +257,7 @@ Os estados de sincronização continuam os quatro de [requisitos.md §5](requisi
 | Embutidas + fontes do sistema | Usa o que já está instalado | Prévia e PDF podem mudar de um computador para outro |
 | Embutidas + pasta de fontes no projeto | Reprodutível e flexível | Arquivos de fonte vão para o git; a licença de cada fonte precisa permitir redistribuição |
 
-TODO(fontes): quais fontes vêm embutidas, se fontes do sistema são lidas e se uma pasta de fontes no projeto é aceita (ela seguiria RF-08). TODO(licença-fontes): fontes costumam ter licença própria (ex.: OFL), e RNF-06 só cita Apache-2.0 e MIT; confirmar se fontes embutidas entram na mesma regra.
+Decidido em [D-15](adrs/D-15-fontes-embutidas-e-do-projeto.md): fontes embutidas no app mais a pasta `fonts/` do projeto, que segue RF-08; fontes do sistema não são lidas. Arquivos de fonte embutidos podem usar OFL-1.1, além das licenças de RNF-06. Emenda aceita em 2026-11-23: o app embute também as fontes do `typst` CLI (New Computer Modern, New Computer Modern Math, DejaVu Sans Mono), com as licenças delas aceitas só para esses arquivos.
 
 **Pacotes.** Pacotes `@preview` são baixados do registro do Typst para um cache local e lidos com a pasta do pacote como raiz (RF-08). Eles são entrada não confiável: trazem código Typst e podem trazer plugins WASM. O download revela ao registro o nome e a versão dos pacotes e o endereço IP de quem baixa, mas não o conteúdo do artigo (Princípio II). Pacotes `@local` ficam na máquina de quem os criou e não existem nos outros computadores, como um arquivo fora do projeto (D-13). Cache para compilar offline e cache no git continuam em aberto ([seção 7](#7-riscos-técnicos-e-questões-em-aberto)).
 
@@ -265,21 +267,22 @@ Decididas pelo dono em 2026-11-18:
 
 | ID | Pergunta | Decisão |
 |---|---|---|
-| [D-12](adrs.md#d-12-transporte-de-arquivos-binários-entre-coautores) | Como imagens e outros binários chegam aos coautores? | Blobs por iroh com manifesto no documento Yjs, git como canal assíncrono |
-| [D-13](adrs.md#d-13-arquivos-fora-do-projeto) | Como usar um arquivo fora do projeto, como um `.bib` compartilhado? | Não permitir; copiar para dentro do projeto |
-| [D-14](adrs.md#d-14-edição-concorrente-de-bibliografia) | `.bib` e `.yml` se fundem pelo CRDT ou como arquivo inteiro? | CRDT de texto, como o `.typ`; `.csl` como arquivo inteiro |
+| [D-12](adrs/D-12-binarios-entre-coautores.md) | Como imagens e outros binários chegam aos coautores? | Blobs por iroh com manifesto no documento Yjs, git como canal assíncrono |
+| [D-13](adrs/D-13-arquivos-fora-do-projeto.md) | Como usar um arquivo fora do projeto, como um `.bib` compartilhado? | Não permitir; copiar para dentro do projeto |
+| [D-14](adrs/D-14-bibliografia-concorrente.md) | `.bib` e `.yml` se fundem pelo CRDT ou como arquivo inteiro? | CRDT de texto, como o `.typ`; `.csl` como arquivo inteiro |
 
 ## 7. Riscos técnicos e questões em aberto
 
 - **Edição fora do app.** Se alguém editar o `.typ` no VS Code e fizer push, o Prelo precisa transformar o diff em sugestões de um autor "externo". Falta definir como tratar trechos que mudaram nos dois lados.
 - **Redes que bloqueiam P2P.** Algumas redes bloqueiam UDP; o tráfego passa sempre pelo relay. Decidir entre relays públicos do iroh ou relay próprio do grupo.
 - **Bloqueio enquanto sincroniza.** O app só sabe o que recebeu de quem está online e do git. Mudanças de quem ainda não reconectou chegam depois; itens sobre trechos alterados são realocados com ajuda do usuário (RF-37).
-- **Sincronização lenta.** Muitas figuras podem demorar. O bloqueio vale só para o texto: o documento chega primeiro e as figuras terminam sem travar a edição. Enquanto isso, a prévia mostra marcadores e o PDF final fica bloqueado (RF-52, RF-53). O transporte das figuras depende de D-12 (proposta).
+- **Sincronização lenta.** Muitas figuras podem demorar. O bloqueio vale só para o texto: o documento chega primeiro e as figuras terminam sem travar a edição. Enquanto isso, a prévia mostra marcadores e o PDF final fica bloqueado (RF-52, RF-53). O transporte das figuras segue D-12 (aceita em 2026-11-18).
 - **Conteúdo gerado.** Texto vindo de funções ou `#include` aparece na prévia mas não no arquivo aberto. Comentar na prévia precisa levar ao arquivo de origem.
 - **Pacotes e fontes na compilação embutida.** Pacotes `@preview` do Typst Universe são baixados da internet. Falta definir cache local para compilar offline, se o cache vai para o git e quais fontes vêm embutidas no app ([seção 6.5](#65-fontes-e-pacotes)).
-- **Fontes diferentes entre coautores.** Se o World ler fontes do sistema, dois coautores na mesma versão do compilador podem ver prévia e PDF diferentes, o que anula parte do objetivo de D-10. TODO(fontes).
+- **Fontes diferentes entre coautores.** Se o World ler fontes do sistema, dois coautores na mesma versão do compilador podem ver prévia e PDF diferentes, o que anula parte do objetivo de D-10. Resolvido por D-15: o World não lê fontes do sistema.
 - **Plugins WASM de coautores.** `plugin()` executa código WASM vindo do projeto ou de um pacote. O typst o roda em sandbox, mas é código de terceiros executado no computador de quem compila. TODO(plugins): permitir sempre, pedir confirmação na primeira vez ou recusar.
 - **Imagens grandes na prévia.** RF-51 cobre edições que não tocam a imagem. A primeira compilação depois que uma imagem grande chega ou muda, e o envio dela para a prévia na interface, podem passar da meta de RF-02. TODO(imagem-grande).
 - **Escape da raiz do projeto.** Um link simbólico versionado ou trocado durante a leitura pode tentar levar o compilador para fora do projeto. Mitigação: RF-08, conferência sobre o arquivo aberto ([seção 6.2](#62-regras-de-escopo-rf-08)) e testes de segurança.
+- **Credenciais do git remoto.** O login no GitHub depende de um GitHub App registrado e mantido pelo dono do projeto, de rede até `github.com` e da renovação de tokens que expiram ([D-18](adrs/D-18-github-oauth.md)). Token revogado ou *refresh token* inválido pedem novo login sem perder a fila de Salvar (Princípio III). GitLab fica para decisão futura.
 - **Atualizar o compilador.** Uma versão nova do Typst pode mudar o layout. Falta definir quando o app atualiza a versão registrada no projeto e quem decide.
 - **Compatibilidade com o Typst web app.** Não há API pública documentada para sincronizar com projetos do typst.app; a interoperação seria pelo git.

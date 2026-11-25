@@ -4,7 +4,7 @@
 // licenças com a lista única de security/licenses-allow.txt. Exceções em
 // security/vuln-exceptions.toml precisam de motivo e de data de revisão futura.
 import { spawnSync } from "node:child_process";
-import { readFileSync, realpathSync } from "node:fs";
+import { readdirSync, readFileSync, realpathSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { parse as parseToml } from "smol-toml";
 
@@ -69,6 +69,71 @@ export function licenseViolations(packages, allow) {
   return packages.filter((p) => !allowed(String(p.licenses ?? ""), allow));
 }
 
+// Arquivos embutidos (D-15, D-16) ------------------------------------------------------
+
+// Licenças aceitas só para arquivos de fonte embutidos (D-15), nunca para dependências:
+// OFL-1.1 (Libertinus e fontes da interface) e as das fontes que o `typst` CLI 0.15.1 embute
+// (emenda de 2026-11-23): GUST Font License (New Computer Modern), GPL-3.0-or-later com Font
+// Exception e Distribution Exception (só NewCM10-Regular) e Bitstream Vera (DejaVu Sans Mono).
+const FONT_ONLY_LICENSES = [
+  "OFL-1.1",
+  "LicenseRef-GUST-Font-License",
+  "LicenseRef-NewCM-GPL-3.0-or-later-FE-DE",
+  "Bitstream-Vera",
+];
+const FONT_FILE = /\.(ttf|otf|ttc|otc|woff2?)$/i;
+
+/** Pastas com arquivos de fonte do app, cada uma com o seu licenses.toml: as do compilador
+ * (embutidas no núcleo) e as da interface (servidas pela webview). */
+export const FONT_DIRS = ["src-tauri/fonts", "src/fonts"];
+
+/** src-tauri/fonts/licenses.toml → FontLicense[] (data-model.md "Fontes"). */
+export function parseFontLicenses(tomlText) {
+  return (parseToml(tomlText).font ?? []).map((f) => ({
+    file: f.file,
+    family: f.family,
+    license: f.license,
+    copyright: f.copyright,
+  }));
+}
+
+/** Cada arquivo de fonte precisa de entrada com copyright e licença da lista ou OFL-1.1. */
+export function fontLicenseViolations(files, entries, allow) {
+  const byFile = new Map(entries.map((e) => [e.file, e]));
+  const permitted = [...allow, ...FONT_ONLY_LICENSES];
+  const errors = [];
+  for (const file of files.filter((f) => FONT_FILE.test(f))) {
+    const e = byFile.get(file);
+    if (!e) errors.push(`${file}: sem entrada no licenses.toml da pasta`);
+    else if (!permitted.includes(e.license)) errors.push(`${file}: licença ${e.license} não permitida`);
+    else if (!e.copyright || !String(e.copyright).trim()) errors.push(`${file}: sem aviso de copyright`);
+  }
+  return errors;
+}
+
+/** security/embedded-data.toml → lista de dados embutidos por dependências. */
+export function parseEmbeddedData(tomlText) {
+  return (parseToml(tomlText).data ?? []).map((d) => ({
+    name: d.name,
+    crate: d.crate,
+    path: d.path,
+    licenses: d.licenses ?? [],
+  }));
+}
+
+/** Licença de dado embutido: da lista geral ou de exceção da própria crate (D-16). */
+export function embeddedDataViolations(data, allow, denyExceptions) {
+  const errors = [];
+  for (const d of data) {
+    const own = denyExceptions.filter((e) => (e.crate ?? e.name) === d.crate).flatMap((e) => e.allow ?? []);
+    if (d.licenses.length === 0) errors.push(`${d.name}: sem licença listada`);
+    for (const lic of d.licenses) {
+      if (!allow.includes(lic) && !own.includes(lic)) errors.push(`${d.name} (${d.crate}): licença ${lic} não permitida`);
+    }
+  }
+  return errors;
+}
+
 // ---------------------------------------------------------------------------------------
 
 function run(name, cmd, opts = {}) {
@@ -107,6 +172,19 @@ function main() {
   const inSync = [...denyAllow].sort().join() === [...allow].sort().join();
   if (!inSync) console.error("src-tauri/deny.toml [licenses].allow difere de security/licenses-allow.txt");
   results.push(["lista de licenças em sincronia", inSync]);
+
+  const fontErrors = FONT_DIRS.flatMap((dir) =>
+    fontLicenseViolations(readdirSync(dir), parseFontLicenses(read(`${dir}/licenses.toml`)), allow).map(
+      (e) => `${dir}/${e}`,
+    ),
+  );
+  const dataErrors = embeddedDataViolations(
+    parseEmbeddedData(read("security/embedded-data.toml")),
+    allow,
+    parseToml(read("src-tauri/deny.toml")).licenses?.exceptions ?? [],
+  );
+  for (const e of [...fontErrors, ...dataErrors]) console.error(`arquivo embutido: ${e}`);
+  results.push(["licenças de arquivos embutidos", fontErrors.length === 0 && dataErrors.length === 0]);
 
   results.push(["cargo-deny", run("cargo-deny", "cargo deny --manifest-path src-tauri/Cargo.toml check")]);
 

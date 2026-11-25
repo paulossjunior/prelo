@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Permissões da janela principal. Ver contracts/ipc.md.",
-  "windows": ["main"],
-  "permissions": []
+  "description": "Permissões da janela principal: só escutar eventos do núcleo. Ver contracts/ipc.md.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import {
   exitCode,
   findUnjustifiedSkips,
@@ -219,5 +220,30 @@ describe("modo rápido (gitflow: push em feature e dev)", () => {
     const { modeFromArgs } = await import("./verify.mjs");
     expect(modeFromArgs(["node", "verify.mjs", "--quick"])).toBe("quick");
     expect(modeFromArgs(["node", "verify.mjs"])).toBe("full");
+  });
+});
+
+// Windows no CI do #232: o `cargo test` parava no primeiro binário com falha e escondia as
+// falhas dos binários seguintes, uma rodada de CI por falha.
+describe("testes Rust mostram todas as falhas", () => {
+  it("todo cargo test do verify usa --no-fail-fast", async () => {
+    const { STEPS } = await import("./verify.mjs");
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    const cmds = STEPS.map((s) => s.cmd.replace("npm run test:rust", pkg.scripts["test:rust"]));
+    const cargoTests = cmds.filter((c) => c.includes("cargo test"));
+    expect(cargoTests.length).toBeGreaterThanOrEqual(2);
+    for (const cmd of cargoTests) expect(cmd).toContain("--no-fail-fast");
+  });
+});
+
+// O Git no Windows (core.autocrlf) gravava as fixtures em CRLF e os testes viam arquivos
+// diferentes dos de macOS e Linux.
+describe(".gitattributes", () => {
+  it("força LF no checkout de todo arquivo de texto", () => {
+    const attrs = readFileSync(".gitattributes", "utf8");
+    expect(attrs).toMatch(/^\*\s+text=auto\s+eol=lf\s*$/m);
+    for (const ext of ["png", "otf", "ttf", "woff2", "wasm", "pdf", "ico", "icns"]) {
+      expect(attrs).toMatch(new RegExp(`^\\*\\.${ext}\\s+binary\\s*$`, "m"));
+    }
   });
 });

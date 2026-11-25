@@ -1,0 +1,45 @@
+# Dados embutidos no binário por dependências, com licença própria além da declarada pela
+# crate (D-15, D-16). O cargo-deny só lê a licença declarada da crate; scripts/audit.mjs
+# confere esta lista: cada licença precisa estar em security/licenses-allow.txt ou numa
+# exceção da própria crate em src-tauri/deny.toml ([licenses].exceptions).
+# Fonte: NOTICE do typst-assets 0.15.1. Revisar a cada atualização da crate.
+# As fontes do typst-assets (feature `fonts`) não entram por aqui: o Prelo copia os mesmos
+# arquivos para src-tauri/fonts/, conferidos pelo licenses.toml de lá (D-15, emenda de 2026-11-23).
+
+[[data]]
+name = "icc"
+crate = "typst-assets"
+path = "files/icc/*-v4.icc"
+licenses = ["CC0-1.0"]
+notice = "Perfis de cor ICC."
+
+[[data]]
+name = "html"
+crate = "typst-assets"
+path = "files/html/data.rs"
+# Partes do WHATWG (o NOTICE as chama de "Creative Commons ... 4.0 International" e
+# BSD-3-Clause) e partes do W3C (WAI-ARIA 1.1, Referrer Policy).
+licenses = ["CC-BY-4.0", "BSD-3-Clause", "W3C-20150513"]
+notice = "Copyright © WHATWG (Apple, Google, Mozilla, Microsoft). Copyright © 2017 World Wide Web Consortium."
+
+[[data]]
+name = "mathml"
+crate = "typst-assets"
+path = "files/mathml/data.rs"
+licenses = ["W3C-20150513"]
+notice = "Copyright © 2025 World Wide Web Consortium (MathML Core)."
+
+[[data]]
+name = "foxit"
+crate = "typst-assets"
+path = "files/fonts/Foxit*.pfb"
+licenses = ["BSD-3-Clause"]
+notice = "Copyright 2014 PDFium Authors. All rights reserved."
+
+[[data]]
+name = "icu"
+crate = "typst-assets"
+path = "files/icu/icu_cj_segment.postcard"
+# Não citado no NOTICE; dados de segmentação gerados pelo ICU4X (licença Unicode-3.0).
+licenses = ["Unicode-3.0"]
+notice = "Dados de segmentação de texto do ICU4X, © Unicode, Inc."

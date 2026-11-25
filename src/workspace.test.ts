@@ -1,0 +1,775 @@
+// Testes da área de trabalho montada em src/main.ts (T039; US1 cenários 1, 2, 4, 6).
+// Núcleo falso: contracts/ipc.md.
+import { diagnosticCount } from "@codemirror/lint";
+import { afterEach, describe, expect, it } from "vitest";
+import type { PreviewUpdate, ProjectInfo } from "./ipc";
+import { deferred, fakeCore, settle } from "./testing/fake-core";
+import { stubRangeLayout } from "./testing/layout";
+import { mountWorkspace, type WorkspaceHandle } from "./workspace";
+
+let handles: WorkspaceHandle[] = [];
+afterEach(() => {
+  for (const h of handles) h.destroy();
+  handles = [];
+  document.body.innerHTML = "";
+});
+
+const INFO: ProjectInfo = {
+  name: "artigo-basico",
+  mainFile: "main.typ",
+  compiler: { embedded: "0.15.1", registered: "0.15.1" },
+  warnings: [],
+};
+
+const NEW_INFO: ProjectInfo = { ...INFO, name: "artigo-novo" };
+
+const TREE = [
+  { name: "capitulos", path: "capitulos", kind: "dir", children: [{ name: "metodo.typ", path: "capitulos/metodo.typ", kind: "file" }] },
+  { name: "main.typ", path: "main.typ", kind: "file" },
+];
+
+const FILES: Record<string, string> = {
+  "main.typ": "= Introdução\n\nOlá.\n",
+  "capitulos/metodo.typ": "= Método\n",
+};
+
+function update(over: Partial<PreviewUpdate> = {}): PreviewUpdate {
+  return {
+    compileId: 1,
+    ok: true,
+    pages: [{ index: 0, hash: "h1", widthPt: 595, heightPt: 842 }],
+    changed: [0],
+    diagnostics: [],
+    durationMs: 41,
+    ...over,
+  };
+}
+
+function setup(extra: Parameters<typeof fakeCore>[0] = {}) {
+  let version = 1;
+  const core = fakeCore({
+    get_app_info: () => ({ version: "0.1.0", os: "macos", arch: "aarch64" }),
+    subscribe_preview: () => null,
+    open_project_dialog: () => INFO,
+    create_project_dialog: () => NEW_INFO,
+    list_tree: () => TREE,
+    open_file: (a) => ({ text: FILES[a.path as string] ?? "", version: 1 }),
+    edit_file: () => ({ version: ++version }),
+    save_file: () => ({ savedAt: "2026-11-22T10:15:00Z" }),
+    page_svg: () => "<svg xmlns='http://www.w3.org/2000/svg'/>",
+    ...extra,
+  });
+  const root = document.createElement("main");
+  document.body.append(root);
+  const ws = mountWorkspace(root, {
+    ipc: core.ipc,
+    appInfo: (cmd) => core.invoke(cmd),
+    previewUrls: { create: () => "blob:x", revoke: () => {} },
+    tokenDelayMs: 0,
+  });
+  handles.push(ws);
+  return { core, root, ws };
+}
+
+const button = (root: ParentNode, name: RegExp) =>
+  [...root.querySelectorAll<HTMLButtonElement>("button")].find((b) => name.test(b.textContent ?? ""));
+
+describe("layout", () => {
+  it("barra com abrir projeto, salvar e sobre; árvore | editor | prévia; versão do app", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    expect(button(root, /Abrir projeto/)).toBeDefined();
+    expect(button(root, /Salvar/)).toBeDefined();
+    expect(button(root, /Sobre/)).toBeDefined();
+    expect(root.querySelector("[aria-label='Arquivos do projeto']")).not.toBeNull();
+    expect(root.querySelector(".ws-editor")).not.toBeNull();
+    expect(root.querySelector("[aria-label='Prévia']")).not.toBeNull();
+    expect(ws.appInfoElement.textContent).toBe("Prelo 0.1.0 · macos");
+  });
+
+  it("sem projeto: convida a abrir um e Salvar fica desativado", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    expect(root.querySelector(".ws-editor")?.textContent).toContain("Nenhum projeto aberto");
+    expect(button(root, /Salvar/)!.disabled).toBe(true);
+  });
+
+  it("assina a prévia uma vez ao montar", async () => {
+    const { core, ws } = setup();
+    await ws.ready;
+    expect(core.calls("subscribe_preview")).toHaveLength(1);
+  });
+});
+
+describe("abrir projeto (cenário 1)", () => {
+  it("diálogo do núcleo → nome, árvore, arquivo principal no editor e marcado na árvore", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    expect(core.calls("open_project_dialog")).toHaveLength(1);
+    expect(root.querySelector(".ws-project")?.textContent).toContain("artigo-basico");
+    expect(root.querySelector(".ws-project")?.textContent).toContain("main.typ");
+    expect(core.calls("open_file")[0]?.args).toEqual({ path: "main.typ" });
+    expect(ws.editor()?.view.state.doc.toString()).toBe(FILES["main.typ"]);
+    expect(root.querySelector("button.pt-file[data-path='main.typ']")?.getAttribute("aria-current")).toBe("true");
+    expect(button(root, /Salvar/)!.disabled).toBe(false);
+    expect(root.querySelector(".ws-status")?.textContent).toContain("Typst 0.15.1");
+  });
+
+  it("cancelar o diálogo não muda nada", async () => {
+    const { core, root, ws } = setup({ open_project_dialog: () => null });
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    expect(core.calls("list_tree")).toHaveLength(0);
+    expect(ws.editor()).toBeNull();
+  });
+
+  it("núcleo sem o comando: mensagem em português, sem quebrar", async () => {
+    const { core, root, ws } = setup();
+    core.on("open_project_dialog", () => {
+      throw "not_implemented";
+    });
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    expect(root.querySelector(".ws-message")?.textContent).toContain("Recurso ainda não disponível");
+  });
+
+  it("clicar noutro arquivo da árvore abre no editor e move a marcação", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    root.querySelector<HTMLButtonElement>("button.pt-file[data-path='capitulos/metodo.typ']")!.click();
+    await settle();
+    expect(core.calls("open_file").at(-1)?.args).toEqual({ path: "capitulos/metodo.typ" });
+    expect(ws.editor()?.path).toBe("capitulos/metodo.typ");
+    expect(ws.editor()?.view.state.doc.toString()).toBe("= Método\n");
+    expect(root.querySelectorAll(".cm-editor")).toHaveLength(1);
+    expect(
+      root.querySelector("button.pt-file[data-path='capitulos/metodo.typ']")?.getAttribute("aria-current"),
+    ).toBe("true");
+  });
+});
+
+describe("prévia e diagnósticos (cenários 2 e 4)", () => {
+  it("o PreviewUpdate vai à prévia e ao status", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(update());
+    await settle();
+    expect(core.calls("page_svg")[0]?.args).toEqual({ index: 0, hash: "h1" });
+    expect(root.querySelector(".pv-page img")).not.toBeNull();
+    expect(root.querySelector(".ws-compile")?.textContent).toContain("41 ms");
+  });
+
+  it("os diagnósticos do arquivo aberto aparecem no editor; status conta os erros", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(
+      update({
+        compileId: 2,
+        ok: false,
+        pages: [],
+        changed: [],
+        diagnostics: [
+          { severity: "error", path: "main.typ", range: { from: 14, to: 18 }, message: "unknown variable", hints: [], kind: "typst" },
+        ],
+      }),
+    );
+    await settle();
+    expect(diagnosticCount(ws.editor()!.view.state)).toBe(1);
+    expect(root.querySelector(".ws-compile")?.textContent).toMatch(/1 erro/);
+    expect(root.querySelector(".pv-error")?.hasAttribute("hidden")).toBe(false);
+    // Ícone de erro na faixa da prévia e na contagem da barra de status.
+    expect(root.querySelector(".pv-error .prelo-icon.is-error svg")).not.toBeNull();
+    expect(root.querySelector(".ws-compile .prelo-icon.is-error svg")).not.toBeNull();
+  });
+
+  it("painel Erros lista os diagnósticos; status e faixa da prévia abrem o painel (FR-006a)", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(
+      update({
+        compileId: 2,
+        ok: false,
+        pages: [],
+        changed: [],
+        diagnostics: [
+          { severity: "error", path: "main.typ", range: { from: 14, to: 18 }, line: 3, message: "unknown variable: Olá", hints: [], kind: "typst" },
+        ],
+      }),
+    );
+    await settle();
+    const panel = root.querySelector<HTMLElement>(".pb")!;
+    expect(panel).not.toBeNull();
+    // Acima da barra de status, abaixo do corpo.
+    expect(panel.nextElementSibling).toBe(root.querySelector(".ws-status"));
+    const list = panel.querySelector<HTMLElement>(".pb-list")!;
+    expect(list.hidden).toBe(true);
+    expect(panel.querySelector(".pb-loc")?.textContent).toBe("main.typ:3:1");
+    // Contagem na barra de status é um botão que abre o painel.
+    const status = root.querySelector<HTMLButtonElement>("button.ws-compile")!;
+    expect(status).not.toBeNull();
+    status.click();
+    expect(list.hidden).toBe(false);
+    panel.querySelector<HTMLButtonElement>(".pb-toggle")!.click();
+    expect(list.hidden).toBe(true);
+    // Faixa vermelha da prévia também.
+    root.querySelector<HTMLButtonElement>(".pv-error button")!.click();
+    expect(list.hidden).toBe(false);
+  });
+
+  it("clicar num item do painel abre o arquivo com o cursor no trecho (FR-006a)", async () => {
+    // O clique rola o editor até o trecho (scrollIntoView), que mede `Range` no próximo quadro.
+    stubRangeLayout();
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(
+      update({
+        compileId: 2,
+        ok: false,
+        diagnostics: [
+          { severity: "error", path: "capitulos/metodo.typ", range: { from: 2, to: 8 }, line: 1, message: "unknown variable: Método", hints: [], kind: "typst" },
+        ],
+      }),
+    );
+    await settle();
+    root.querySelector<HTMLButtonElement>("button.pb-item")!.click();
+    await settle();
+    expect(ws.editor()?.path).toBe("capitulos/metodo.typ");
+    const sel = ws.editor()!.view.state.selection.main;
+    expect({ from: sel.from, to: sel.to }).toEqual({ from: 2, to: 8 });
+    // Agora com o arquivo aberto, o painel mostra a coluna.
+    expect(root.querySelector(".pb-loc")?.textContent).toBe("capitulos/metodo.typ:1:3");
+  });
+
+  it("diagnósticos já recebidos valem para o arquivo aberto depois", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(
+      update({
+        compileId: 2,
+        ok: false,
+        diagnostics: [
+          { severity: "error", path: "capitulos/metodo.typ", line: 1, message: "x", hints: [], kind: "typst" },
+        ],
+      }),
+    );
+    await settle();
+    expect(diagnosticCount(ws.editor()!.view.state)).toBe(0);
+    root.querySelector<HTMLButtonElement>("button.pt-file[data-path='capitulos/metodo.typ']")!.click();
+    await settle();
+    expect(diagnosticCount(ws.editor()!.view.state)).toBe(1);
+  });
+
+  it("diagnóstico num pacote baixado não abre arquivo nem mostra erro", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    const opened = core.calls("open_file").length;
+    core.push(
+      update({
+        compileId: 2,
+        ok: true,
+        diagnostics: [
+          {
+            severity: "warning",
+            path: "@preview/stellar-springer-nature:0.1.0/lib.typ",
+            range: { from: 2000, to: 2010 },
+            line: 77,
+            message: "unknown font family: new computer modern",
+            hints: [],
+            kind: "typst",
+          },
+        ],
+      }),
+    );
+    await settle();
+    expect(root.querySelector("button.pb-item")).toBeNull();
+    const item = root.querySelector<HTMLElement>(".pb-item")!;
+    expect(item.querySelector(".pb-loc")?.textContent).toBe("pacote @preview/stellar-springer-nature:0.1.0 · lib.typ:77");
+    item.click();
+    await settle();
+    expect(core.calls("open_file")).toHaveLength(opened);
+    expect(root.querySelector<HTMLElement>(".ws-message")!.hidden).toBe(true);
+    expect(ws.editor()?.path).toBe("main.typ");
+  });
+
+  it("clique na prévia que cai no código de um pacote não faz nada (sem faixa de erro)", async () => {
+    const { core, root, ws } = setup({
+      jump_from_click: () => ({ path: "@preview/stellar-springer-nature:0.1.0/lib.typ", line: 77, column: 3 }),
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.push(update({ compileId: 2 }));
+    await settle();
+    const opened = core.calls("open_file").length;
+    const page = root.querySelector<HTMLElement>('.pv-page[data-page-index="0"]')!;
+    page.getBoundingClientRect = () =>
+      ({ left: 0, top: 0, width: 595, height: 842, x: 0, y: 0, right: 595, bottom: 842, toJSON() {} }) as DOMRect;
+    page.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }));
+    await settle();
+    expect(core.calls("jump_from_click")).toHaveLength(1);
+    expect(core.calls("open_file")).toHaveLength(opened);
+    expect(root.querySelector<HTMLElement>(".ws-message")!.hidden).toBe(true);
+    expect(ws.editor()?.path).toBe("main.typ");
+  });
+
+  it("onPreviewUpdate avisa quem observa (autoteste)", async () => {
+    const { core, ws } = setup();
+    await ws.ready;
+    const seen: number[] = [];
+    ws.onPreviewUpdate((u) => seen.push(u.compileId));
+    core.push(update({ compileId: 7 }));
+    expect(seen).toEqual([7]);
+  });
+});
+
+describe("novo projeto (US6)", () => {
+  it("botão na barra chama create_project_dialog e abre o projeto criado", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    const novo = root.querySelector<HTMLButtonElement>(".ws-top button[data-action='new-project']");
+    expect(novo?.textContent).toMatch(/Novo projeto/);
+    novo!.click();
+    await settle();
+    expect(core.calls("create_project_dialog")).toHaveLength(1);
+    expect(core.calls("create_project_dialog")[0]?.args).toEqual({});
+    expect(core.calls("open_project_dialog")).toHaveLength(0);
+    expect(root.querySelector(".ws-project")?.textContent).toContain("artigo-novo");
+    expect(core.calls("open_file")[0]?.args).toEqual({ path: "main.typ" });
+    expect(ws.project()?.name).toBe("artigo-novo");
+  });
+
+  it("sem projeto, o convite do editor também oferece criar um", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    const novo = root.querySelector<HTMLButtonElement>(".ws-editor button[data-action='new-project']");
+    expect(novo).not.toBeNull();
+    novo!.click();
+    await settle();
+    expect(core.calls("create_project_dialog")).toHaveLength(1);
+  });
+
+  it("cancelar o diálogo não muda nada", async () => {
+    const { core, root, ws } = setup({ create_project_dialog: () => null });
+    await ws.ready;
+    button(root, /Novo projeto/)!.click();
+    await settle();
+    expect(core.calls("list_tree")).toHaveLength(0);
+    expect(ws.project()).toBeNull();
+    expect(root.querySelector<HTMLElement>(".ws-message")!.hidden).toBe(true);
+  });
+
+  it("folder_not_empty mostra o aviso em português e mantém o projeto aberto", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    await settle();
+    const opened = core.calls("open_file").length;
+    core.on("create_project_dialog", () => {
+      throw "folder_not_empty";
+    });
+    button(root, /Novo projeto/)!.click();
+    await settle();
+    const msg = root.querySelector<HTMLElement>(".ws-message")!;
+    expect(msg.hidden).toBe(false);
+    expect(msg.textContent).toBe("A pasta escolhida não está vazia. Escolha uma pasta vazia.");
+    expect(ws.project()?.name).toBe("artigo-basico");
+    expect(core.calls("open_file")).toHaveLength(opened);
+    expect(ws.editor()?.path).toBe("main.typ");
+  });
+});
+
+describe("salvar", () => {
+  it("botão Salvar chama save_file e mostra a hora", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    button(root, /Salvar/)!.click();
+    await settle();
+    expect(core.calls("save_file")[0]?.args).toEqual({ path: "main.typ" });
+    expect(root.querySelector(".ws-save")?.textContent).toMatch(/Salvo/);
+  });
+
+  it("editar marca alterações pendentes", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    const view = ws.editor()!.view;
+    view.dispatch({ changes: { from: 0, insert: "x" }, userEvent: "input.type" });
+    await settle();
+    expect(root.querySelector(".ws-save")?.textContent).toMatch(/automaticamente/);
+  });
+
+  it("edição recusada pelo núcleo recarrega o arquivo (PR #176)", async () => {
+    const { core, root, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.on("edit_file", () => {
+      throw "version_mismatch";
+    });
+    core.on("open_file", () => ({ text: "texto do núcleo", version: 5 }));
+    ws.editor()!.view.dispatch({ changes: { from: 0, insert: "x" } });
+    await settle(10);
+    expect(ws.editor()!.view.state.doc.toString()).toBe("texto do núcleo");
+    expect(ws.editor()!.version()).toBe(5);
+    expect(root.querySelector(".ws-message")?.textContent).toContain("recarregue");
+  });
+});
+
+describe("Compilar (FR-014a, cenário 14)", () => {
+  const compileBtn = (root: ParentNode) =>
+    root.querySelector<HTMLButtonElement>(".pvbar button[aria-label='Compilar agora (⌘⇧B / Ctrl+Shift+B)']");
+
+  it("botão na barra da prévia, desativado sem projeto e ativo com projeto", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    expect(compileBtn(root)).not.toBeNull();
+    expect(compileBtn(root)!.disabled).toBe(true);
+    await ws.showProject(INFO);
+    expect(compileBtn(root)!.disabled).toBe(false);
+  });
+
+  it("envia ao núcleo a edição pendente antes de compile_now e libera com a prévia", async () => {
+    const held = deferred<unknown>();
+    const order: string[] = [];
+    const { core, root, ws } = setup({
+      compile_now: () => {
+        order.push("compile_now");
+        return { compileId: 5 };
+      },
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.on("edit_file", () => {
+      order.push("edit_file");
+      return held.promise;
+    });
+    ws.editor()!.view.dispatch({ changes: { from: 0, insert: "x" }, userEvent: "input.type" });
+    compileBtn(root)!.click();
+    await settle();
+    expect(order).toEqual(["edit_file"]);
+    held.resolve({ version: 2 });
+    await settle();
+    expect(order).toEqual(["edit_file", "compile_now"]);
+    expect(compileBtn(root)!.disabled).toBe(true);
+    expect(compileBtn(root)!.textContent).toContain("Compilando…");
+    core.push(update({ compileId: 5, durationMs: 33 }));
+    await settle();
+    expect(compileBtn(root)!.disabled).toBe(false);
+    expect(root.querySelector(".ws-status")?.textContent).toContain("Compilado em 33 ms");
+  });
+
+  it("⌘⇧B compila de qualquer lugar da janela", async () => {
+    const { core, ws } = setup({ compile_now: () => ({ compileId: 3 }) });
+    await ws.ready;
+    await ws.showProject(INFO);
+    ws.editor()!.view.contentDOM.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "B", code: "KeyB", metaKey: true, shiftKey: true, bubbles: true, cancelable: true }),
+    );
+    await settle();
+    expect(core.calls("compile_now")).toHaveLength(1);
+  });
+
+  it("recusa (compile_suspended) aparece como mensagem e o botão volta", async () => {
+    const { root, ws } = setup({
+      compile_now: () => {
+        throw "compile_suspended";
+      },
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    compileBtn(root)!.click();
+    await settle();
+    expect(compileBtn(root)!.disabled).toBe(false);
+    expect(root.querySelector(".ws-message")?.textContent).toMatch(/presas|terminar/);
+  });
+
+  it("versão do compilador diferente: desativado", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    await ws.showProject({
+      ...INFO,
+      compiler: { embedded: "0.15.1", registered: "0.14.0" },
+      warnings: ["compiler_version_mismatch"],
+    });
+    expect(compileBtn(root)!.disabled).toBe(true);
+  });
+});
+
+describe("versão do compilador (cenário 6, FR-012)", () => {
+  it("versão diferente: faixa de aviso com ação explícita de atualizar", async () => {
+    const updated = { ...INFO, compiler: { embedded: "0.15.1", registered: "0.15.1" } };
+    const { core, root, ws } = setup({ update_project_compiler_version: () => updated });
+    await ws.ready;
+    await ws.showProject({
+      ...INFO,
+      compiler: { embedded: "0.15.1", registered: "0.14.0" },
+      warnings: ["compiler_version_mismatch"],
+    });
+    const banner = root.querySelector<HTMLElement>(".ws-banner")!;
+    expect(banner.hidden).toBe(false);
+    expect(banner.textContent).toContain("0.14.0");
+    expect(core.calls("update_project_compiler_version")).toHaveLength(0);
+    button(banner, /Atualizar/)!.click();
+    await settle();
+    expect(core.calls("update_project_compiler_version")).toHaveLength(1);
+    expect(banner.hidden).toBe(true);
+  });
+
+  it("arquivo principal ausente: escolher um .typ da árvore como principal (choose_main_file)", async () => {
+    const { core, root, ws } = setup({
+      choose_main_file: (a) => ({ ...INFO, mainFile: a.path as string }),
+    });
+    await ws.ready;
+    await ws.showProject({ ...INFO, mainFile: "sumiu.typ", warnings: ["main_file_missing"] });
+    // Não tenta abrir o principal que não existe.
+    expect(core.calls("open_file")).toHaveLength(0);
+    const banner = root.querySelector<HTMLElement>(".ws-banner")!;
+    expect(banner.hidden).toBe(false);
+    expect(banner.textContent).toContain("arquivo principal");
+    const use = button(banner, /principal/)!;
+    expect(use.disabled).toBe(true);
+    root.querySelector<HTMLButtonElement>("button.pt-file[data-path='capitulos/metodo.typ']")!.click();
+    await settle();
+    expect(use.disabled).toBe(false);
+    use.click();
+    await settle();
+    expect(core.calls("choose_main_file")[0]?.args).toEqual({ path: "capitulos/metodo.typ" });
+    expect(banner.hidden).toBe(true);
+    expect(root.querySelector(".ws-project")?.textContent).toContain("capitulos/metodo.typ");
+  });
+
+  it("Sobre abre o diálogo com as versões", async () => {
+    const { root, ws } = setup({
+      compiler_info: () => ({ embedded: "0.15.1", registered: "0.15.1", fonts: [] }),
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    button(root, /Sobre/)!.click();
+    await settle();
+    const dialog = root.querySelector<HTMLElement>("[role=dialog]")!;
+    expect(dialog.hidden).toBe(false);
+    expect(dialog.textContent).toMatch(/Embutido\s*0\.15\.1/);
+  });
+});
+
+describe("conflito externo", () => {
+  it("o evento abre o diálogo e a escolha recarrega o editor", async () => {
+    const { core, root, ws } = setup({
+      resolve_external_change: () => ({ text: "do disco", version: 3 }),
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    core.emit("external_change_conflict", { path: "main.typ" });
+    await settle();
+    button(root, /disco/)!.click();
+    await settle();
+    expect(ws.editor()!.view.state.doc.toString()).toBe("do disco");
+  });
+
+  it("⌘S durante um conflito (save_file → external_change_conflict) abre o mesmo diálogo", async () => {
+    const { core, root, ws } = setup({
+      save_file: () => {
+        throw "external_change_conflict";
+      },
+      resolve_external_change: () => ({ text: "meu texto", version: 4 }),
+    });
+    await ws.ready;
+    await ws.showProject(INFO);
+    button(root, /Salvar/)!.click();
+    await settle();
+    expect(root.querySelector("[role=alertdialog]")).not.toBeNull();
+    button(root, /minha/)!.click();
+    await settle();
+    expect(core.calls("resolve_external_change")[0]?.args).toEqual({ path: "main.typ", keep: "mine" });
+    expect(ws.editor()!.view.state.doc.toString()).toBe("meu texto");
+  });
+});
+
+describe("mudança externa recarregada sem alteração local (FR-008)", () => {
+  it("o evento do arquivo aberto traz o texto do disco ao editor, sem diálogo", async () => {
+    let disk = { text: FILES["main.typ"]!, version: 1 };
+    const { core, root, ws } = setup({ open_file: () => disk });
+    await ws.ready;
+    await ws.showProject(INFO);
+    const status = root.querySelector(".ws-status")!.textContent;
+    const trees = core.calls("list_tree").length;
+    disk = { text: "= Do disco\n\n" + "linha\n".repeat(136), version: 2 };
+    core.emit("external_change_reloaded", { path: "main.typ", version: 2 });
+    await settle();
+    const editor = ws.editor()!;
+    expect(editor.view.state.doc.toString()).toBe(disk.text);
+    expect(editor.view.state.doc.lines).toBe(139);
+    expect(editor.version()).toBe(2);
+    expect(root.querySelector("[role=alertdialog]")).toBeNull();
+    expect(root.querySelector(".ws-status")!.textContent).toBe(status);
+    expect(core.calls("list_tree")).toHaveLength(trees);
+    expect(core.calls("edit_file")).toHaveLength(0);
+  });
+
+  it("a próxima edição vai com a versão nova", async () => {
+    let disk = { text: "abc", version: 1 };
+    const { core, ws } = setup({ open_file: () => disk, edit_file: (a) => ({ version: (a.version as number) + 1 }) });
+    await ws.ready;
+    await ws.showProject(INFO);
+    disk = { text: "abc do disco", version: 4 };
+    core.emit("external_change_reloaded", { path: "main.typ", version: 4 });
+    await settle();
+    const view = ws.editor()!.view;
+    view.dispatch({ changes: { from: view.state.doc.length, insert: "!" }, userEvent: "input.type" });
+    await ws.editor()!.flush();
+    expect(core.calls("edit_file").at(-1)?.args).toMatchObject({ path: "main.typ", version: 4 });
+  });
+
+  it("evento de outro arquivo não mexe no editor aberto", async () => {
+    const { core, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    const opened = core.calls("open_file").length;
+    core.emit("external_change_reloaded", { path: "capitulos/metodo.typ", version: 2 });
+    await settle();
+    expect(core.calls("open_file")).toHaveLength(opened);
+    expect(ws.editor()!.view.state.doc.toString()).toBe(FILES["main.typ"]);
+  });
+
+  it("evento com versão que o editor já tem não busca de novo", async () => {
+    const { core, ws } = setup();
+    await ws.ready;
+    await ws.showProject(INFO);
+    const opened = core.calls("open_file").length;
+    core.emit("external_change_reloaded", { path: "main.typ", version: 1 });
+    await settle();
+    expect(core.calls("open_file")).toHaveLength(opened);
+  });
+});
+
+// ---------------------------------------------------------------- painéis (T092; FR-013b)
+
+describe("painéis ajustáveis", () => {
+  afterEach(() => {
+    try {
+      localStorage.clear();
+    } catch {
+      // sem armazenamento no ambiente: nada a limpar
+    }
+  });
+  const byLabel = (root: ParentNode, label: string) => root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+
+  it("cada painel tem o seu botão de recolher; o da prévia fica na barra da prévia", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    expect(root.querySelector(".ws-col-tree .ws-pane-h button[aria-label='Recolher árvore de arquivos']")).not.toBeNull();
+    expect(root.querySelector(".ws-col-editor .ws-pane-h button[aria-label='Recolher editor']")).not.toBeNull();
+    expect(root.querySelector(".pvbar button[aria-label='Recolher prévia']")).not.toBeNull();
+    expect(root.querySelector(".ws-top [aria-label='Painéis visíveis']")).not.toBeNull();
+  });
+
+  it("ao abrir projeto (prévia montada de novo) o botão da prévia continua na barra dela", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    expect(root.querySelector(".pvbar button[aria-label='Recolher prévia']")).not.toBeNull();
+    expect(root.querySelectorAll("button[aria-label='Recolher prévia']")).toHaveLength(1);
+  });
+
+  it("só a prévia: o editor vira trilho e volta com o mesmo texto", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    byLabel(root, "Recolher editor")!.click();
+    expect(root.querySelector<HTMLElement>(".ws-col-editor")!.hidden).toBe(true);
+    expect(byLabel(root, "Expandir editor")!.hidden).toBe(false);
+    byLabel(root, "Expandir editor")!.click();
+    expect(ws.editor()?.view.state.doc.toString()).toBe(FILES["main.typ"]);
+  });
+
+  it("⌘2 com o foco no editor mostra só a prévia (o editor não usa esse atalho)", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    const content = ws.editor()!.view.contentDOM;
+    const ev = new KeyboardEvent("keydown", { key: "2", metaKey: true, bubbles: true, cancelable: true });
+    content.dispatchEvent(ev);
+    expect(root.querySelector<HTMLElement>(".ws-col-editor")!.hidden).toBe(true);
+    expect(root.querySelector<HTMLElement>(".ws-col-preview")!.hidden).toBe(false);
+  });
+
+  it("o arranjo fica lembrado pelo projeto", async () => {
+    const a = setup();
+    await a.ws.ready;
+    button(a.root, /Abrir projeto/)!.click();
+    await settle();
+    byLabel(a.root, "Recolher árvore de arquivos")!.click();
+    const b = setup();
+    await b.ws.ready;
+    expect(b.root.querySelector<HTMLElement>(".ws-col-tree")!.hidden).toBe(false);
+    button(b.root, /Abrir projeto/)!.click();
+    await settle();
+    expect(b.root.querySelector<HTMLElement>(".ws-col-tree")!.hidden).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------- zoom do editor (T094; FR-013c)
+
+describe("zoom do editor na área de trabalho", () => {
+  afterEach(() => {
+    try {
+      localStorage.clear();
+    } catch {
+      // sem armazenamento no ambiente: nada a limpar
+    }
+  });
+  const press = (target: HTMLElement, key: string) => {
+    const ev = new KeyboardEvent("keydown", { key, metaKey: true, bubbles: true, cancelable: true });
+    target.dispatchEvent(ev);
+    return ev;
+  };
+
+  it("o cabeçalho do editor tem o grupo de zoom", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    expect(root.querySelector(".ws-col-editor .ws-pane-h [aria-label='Zoom do editor']")).not.toBeNull();
+  });
+
+  it("⌘+ vale para o painel com o foco: editor ou prévia", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    const edPct = () => root.querySelector(".ed-zoom-pct")!.textContent;
+    const pvLevel = () => root.querySelector(".pv-zoom-fit")!.getAttribute("aria-pressed");
+    expect(press(ws.editor()!.view.contentDOM, "=").defaultPrevented).toBe(true);
+    expect(edPct()).toBe("110%");
+    expect(pvLevel()).toBe("true");
+    press(root.querySelector<HTMLElement>(".pv-pages")!, "=");
+    expect(edPct()).toBe("110%");
+    expect(pvLevel()).toBe("false");
+  });
+
+  it("o zoom do editor continua ao abrir outro arquivo", async () => {
+    const { root, ws } = setup();
+    await ws.ready;
+    button(root, /Abrir projeto/)!.click();
+    await settle();
+    byLabelZoom(root, "Aumentar zoom do editor").click();
+    byLabelZoom(root, "Aumentar zoom do editor").click();
+    await ws.openFile("capitulos/metodo.typ");
+    expect(parseFloat(ws.editor()!.view.dom.style.fontSize)).toBeCloseTo(12.5 * 1.25);
+  });
+});
+
+function byLabelZoom(root: ParentNode, label: string) {
+  return root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+}
