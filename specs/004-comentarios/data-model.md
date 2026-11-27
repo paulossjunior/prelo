@@ -18,6 +18,7 @@ research.md R5). Nenhum dado desta feature é gravado dentro de um `.typ` (Princ
 |---|---|---|
 | `schema` | inteiro | `1`. Maior → só leitura (FR-034); ausente/outro → inválido |
 | `threads` | objeto id → Thread | ≤ 5.000; chave `^[0-9a-f]{32}$` |
+| `tombstones` | objeto id → `{ by, at }` | conversas excluídas (excluir conversa e excluir resolvidos); ≤ 20.000; mesma regra de id, nome e data de Thread. Emenda de 2026-11-27 pedida pela spec 005 (FR-024): a mesclagem entre coautores precisa saber que a exclusão prevalece. Id em `tombstones` MUST NOT estar em `threads` |
 | outros campos | qualquer | preservados ao regravar, nunca interpretados |
 
 Arquivo > 16 MiB, JSON inválido, não UTF-8, link simbólico ou não-arquivo → `review_json_invalid`
@@ -63,7 +64,7 @@ Responder não muda o estado (FR-003).
 | `at` | string | RFC 3339 UTC |
 | `body` | string | 1–10.000 caracteres após `trim` (FR-021); `""` só se `deleted` |
 | `mentions` | string[] | ≤ 50; cada um é nome conhecido no momento da gravação (FR-004) |
-| `deleted` | bool | `true` → `body` vazio e `mentions` vazio (FR-017) |
+| `deleted` | bool | `true` → `body` vazio e `mentions` vazio (FR-017). A mensagem apagada fica na lista com o `id`: funciona como lápide da mensagem na mesclagem da 005 |
 
 ## CrdtState — `.prelo/crdt/<id>.yjs`
 
